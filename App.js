@@ -59,7 +59,9 @@ const BASE_URL    = 'https://www.ai-evolution.com.au';
 const WS_URL      = 'wss://www.ai-evolution.com.au/chat';
 const JWT_KEY     = 'nano_jwt';
 const USER_KEY    = 'nano_user';
-const BIO_KEY     = 'nano_bio_enabled';
+const BIO_KEY      = 'nano_bio_enabled';
+const BIO_EMAIL_KEY = 'nano_bio_email';
+const BIO_PASS_KEY  = 'nano_bio_pass';
 
 const KAV_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
 
@@ -124,6 +126,17 @@ async function loadBioEnabled() {
 }
 async function clearBio() {
   await SecureStore.deleteItemAsync(BIO_KEY);
+  await SecureStore.deleteItemAsync(BIO_EMAIL_KEY);
+  await SecureStore.deleteItemAsync(BIO_PASS_KEY);
+}
+async function saveBioCreds(email, password) {
+  await SecureStore.setItemAsync(BIO_EMAIL_KEY, email);
+  await SecureStore.setItemAsync(BIO_PASS_KEY, password);
+}
+async function loadBioCreds() {
+  const email    = await SecureStore.getItemAsync(BIO_EMAIL_KEY);
+  const password = await SecureStore.getItemAsync(BIO_PASS_KEY);
+  return email && password ? { email, password } : null;
 }
 async function isBiometricReady() {
   const hw  = await LocalAuthentication.hasHardwareAsync();
@@ -278,6 +291,17 @@ function AuthScreen({ onAuth }) {
   const [joinReason, setJoinReason]   = useState('');
   const [loading, setLoading]         = useState(false);
   const [err, setErr]                 = useState('');
+  const [bioReady, setBioReady]       = useState(false);
+  const [bioLoading, setBioLoading]   = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const enabled = await loadBioEnabled();
+      const ready   = await isBiometricReady();
+      const creds   = await loadBioCreds();
+      setBioReady(enabled && ready && !!creds);
+    })();
+  }, []);
 
   const reset = () => {
     setUsername('');
@@ -291,6 +315,33 @@ function AuthScreen({ onAuth }) {
   const handleTabSwitch = (t) => {
     setTab(t);
     reset();
+  };
+
+  const handleBioLogin = async () => {
+    setBioLoading(true);
+    setErr('');
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage:         'Login to nano-SYNAPSYS',
+        fallbackLabel:         'Use Password',
+        disableDeviceFallback: false,
+      });
+      if (!result.success) {
+        setErr(result.error === 'user_cancel' ? '' : 'Face ID failed. Use password instead.');
+        setBioLoading(false);
+        return;
+      }
+      const creds = await loadBioCreds();
+      if (!creds) { setErr('No stored credentials. Please log in with password.'); setBioLoading(false); return; }
+      const data = await api('/auth/login', 'POST', { email: creds.email, password: creds.password });
+      await saveToken(data.token);
+      await saveUser(data.user);
+      onAuth(data.token, data.user);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBioLoading(false);
+    }
   };
 
   const handleLogin = async () => {
@@ -454,6 +505,19 @@ function AuthScreen({ onAuth }) {
                 </Text>
               )}
             </TouchableOpacity>
+
+            {tab === 'LOGIN' && bioReady && (
+              <TouchableOpacity
+                style={[styles.bioLoginBtn, bioLoading && styles.primaryBtnDisabled]}
+                onPress={handleBioLogin}
+                disabled={bioLoading}
+              >
+                {bioLoading
+                  ? <Spinner />
+                  : <Text style={styles.bioLoginBtnText}>{'\uD83D\uDD12'}  FACE ID LOGIN</Text>
+                }
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -1187,6 +1251,7 @@ function ProfileTab({ token, currentUser, onLogout }) {
       // Verify the password against the backend
       await api('/auth/login', 'POST', { email: currentUser.email, password: bioPassword });
       await saveBioEnabled(true);
+      await saveBioCreds(currentUser.email, bioPassword);
       setBioEnabled(true);
       setShowBioModal(false);
       setBioPassword('');
@@ -2121,6 +2186,23 @@ const styles = StyleSheet.create({
     fontSize:      14,
     fontWeight:    '700',
     color:         C.red,
+    letterSpacing: 2,
+  },
+
+  // Face ID login button on AuthScreen
+  bioLoginBtn: {
+    backgroundColor: 'transparent',
+    borderWidth:     1,
+    borderColor:     C.accent,
+    alignItems:      'center',
+    paddingVertical: 14,
+    marginTop:       4,
+  },
+  bioLoginBtnText: {
+    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontSize:      14,
+    fontWeight:    '700',
+    color:         C.accent,
     letterSpacing: 2,
   },
 
