@@ -222,14 +222,14 @@ function AuthScreen({ onAuth }) {
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {
-      setErr('Username and password are required.');
+      setErr('Email and password are required.');
       return;
     }
     setLoading(true);
     setErr('');
     try {
       const data = await api('/auth/login', 'POST', {
-        username: username.trim(),
+        email: username.trim(),
         password,
       });
       await saveToken(data.token);
@@ -309,12 +309,13 @@ function AuthScreen({ onAuth }) {
           <View style={styles.authForm}>
             <TextInput
               style={styles.input}
-              placeholder="USERNAME"
+              placeholder={tab === 'LOGIN' ? 'EMAIL' : 'USERNAME'}
               placeholderTextColor={C.muted}
               value={username}
               onChangeText={setUsername}
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType={tab === 'LOGIN' ? 'email-address' : 'default'}
             />
 
             {tab === 'REGISTER' && (
