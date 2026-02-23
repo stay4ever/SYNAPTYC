@@ -15,6 +15,14 @@
       "package": "com.aievolution.nanosynapsys",
       "versionCode": 1
     },
-    "plugins": ["expo-secure-store"]
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "nano-SYNAPSYS uses Face ID to protect your secure messages."
+        }
+      ]
+    ]
   }
 }

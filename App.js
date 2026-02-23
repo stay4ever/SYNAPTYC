@@ -16,6 +16,7 @@ import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -30,6 +31,7 @@ import {
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 // ---------------------------------------------------------------------------
 // COLOUR PALETTE
@@ -53,10 +55,11 @@ const C = {
 // ---------------------------------------------------------------------------
 // CONSTANTS
 // ---------------------------------------------------------------------------
-const BASE_URL = 'https://www.ai-evolution.com.au';
-const WS_URL   = 'wss://www.ai-evolution.com.au/chat';
-const JWT_KEY  = 'nano_jwt';
-const USER_KEY = 'nano_user';
+const BASE_URL    = 'https://www.ai-evolution.com.au';
+const WS_URL      = 'wss://www.ai-evolution.com.au/chat';
+const JWT_KEY     = 'nano_jwt';
+const USER_KEY    = 'nano_user';
+const BIO_KEY     = 'nano_bio_enabled';
 
 const KAV_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
 
@@ -111,6 +114,21 @@ async function loadUser() {
 }
 async function clearUser() {
   await SecureStore.deleteItemAsync(USER_KEY);
+}
+async function saveBioEnabled(v) {
+  await SecureStore.setItemAsync(BIO_KEY, v ? '1' : '0');
+}
+async function loadBioEnabled() {
+  const v = await SecureStore.getItemAsync(BIO_KEY);
+  return v === '1';
+}
+async function clearBio() {
+  await SecureStore.deleteItemAsync(BIO_KEY);
+}
+async function isBiometricReady() {
+  const hw  = await LocalAuthentication.hasHardwareAsync();
+  const enr = await LocalAuthentication.isEnrolledAsync();
+  return hw && enr;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +208,61 @@ function TabBar({ active, onChange }) {
         );
       })}
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BIOMETRIC UNLOCK SCREEN
+// ---------------------------------------------------------------------------
+function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr]         = useState('');
+
+  const tryBiometric = useCallback(async () => {
+    setLoading(true);
+    setErr('');
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage:         'Unlock nano-SYNAPSYS',
+        fallbackLabel:         'Use Password',
+        disableDeviceFallback: false,
+      });
+      if (result.success) {
+        onUnlock();
+      } else {
+        setErr(result.error === 'user_cancel' ? '' : 'Authentication failed. Try again.');
+      }
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [onUnlock]);
+
+  useEffect(() => { tryBiometric(); }, []);
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+      <View style={styles.centerFill}>
+        <Text style={styles.logoText}>nano-SYNAPSYS</Text>
+        <Text style={styles.logoSub}>AI EVOLUTION SECURE MESH</Text>
+        <View style={{ height: 48 }} />
+        <Text style={styles.bioFaceIcon}>{'\uD83D\uDD12'}</Text>
+        <View style={{ height: 24 }} />
+        <TouchableOpacity
+          style={[styles.primaryBtn, styles.bioBtn, loading && styles.primaryBtnDisabled]}
+          onPress={tryBiometric}
+          disabled={loading}
+        >
+          {loading ? <Spinner /> : <Text style={styles.primaryBtnText}>FACE ID LOGIN</Text>}
+        </TouchableOpacity>
+        <ErrText msg={err} />
+        <TouchableOpacity style={styles.bioFallbackBtn} onPress={onUsePassword}>
+          <Text style={styles.bioFallbackText}>USE PASSWORD INSTEAD</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -1087,9 +1160,53 @@ function TypingDots() {
 // PROFILE TAB
 // ---------------------------------------------------------------------------
 function ProfileTab({ token, currentUser, onLogout }) {
-  const [loading, setLoading]   = useState(false);
-  const [inviteUrl, setInviteUrl] = useState('');
-  const [inviteErr, setInviteErr] = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [inviteUrl, setInviteUrl]   = useState('');
+  const [inviteErr, setInviteErr]   = useState('');
+
+  // Biometric state
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnabled, setBioEnabled]     = useState(false);
+  const [showBioModal, setShowBioModal] = useState(false);
+  const [bioPassword, setBioPassword]   = useState('');
+  const [bioLoading, setBioLoading]     = useState(false);
+  const [bioErr, setBioErr]             = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setBioAvailable(await isBiometricReady());
+      setBioEnabled(await loadBioEnabled());
+    })();
+  }, []);
+
+  const handleEnableBio = async () => {
+    if (!bioPassword.trim()) { setBioErr('Password is required.'); return; }
+    setBioLoading(true);
+    setBioErr('');
+    try {
+      // Verify the password against the backend
+      await api('/auth/login', 'POST', { email: currentUser.email, password: bioPassword });
+      await saveBioEnabled(true);
+      setBioEnabled(true);
+      setShowBioModal(false);
+      setBioPassword('');
+      Alert.alert('FACE ID ENABLED', 'Face ID will unlock the app on your next launch.');
+    } catch (e) {
+      setBioErr(e.message || 'Incorrect password.');
+    } finally {
+      setBioLoading(false);
+    }
+  };
+
+  const handleDisableBio = () => {
+    Alert.alert('DISABLE FACE ID', 'Face ID login will be turned off.', [
+      { text: 'CANCEL', style: 'cancel' },
+      {
+        text: 'DISABLE', style: 'destructive',
+        onPress: async () => { await clearBio(); setBioEnabled(false); },
+      },
+    ]);
+  };
 
   const handleInvite = async () => {
     setLoading(true);
@@ -1189,9 +1306,67 @@ function ProfileTab({ token, currentUser, onLogout }) {
 
       <View style={styles.profileDivider} />
 
+      {/* Face ID section */}
+      {bioAvailable && (
+        bioEnabled ? (
+          <TouchableOpacity style={styles.bioDisableBtn} onPress={handleDisableBio}>
+            <Text style={styles.bioDisableBtnText}>DISABLE FACE ID LOGIN</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowBioModal(true)}>
+            <Text style={styles.primaryBtnText}>ENABLE FACE ID LOGIN</Text>
+          </TouchableOpacity>
+        )
+      )}
+
+      <View style={styles.profileDivider} />
+
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutBtnText}>LOGOUT</Text>
       </TouchableOpacity>
+
+      {/* Password confirmation modal for Face ID enrollment */}
+      <Modal
+        visible={showBioModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowBioModal(false); setBioPassword(''); setBioErr(''); }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>ENABLE FACE ID</Text>
+            <Text style={styles.modalSub}>
+              Enter your password to authorise Face ID login
+            </Text>
+            <TextInput
+              style={[styles.input, { marginTop: 16 }]}
+              placeholder="PASSWORD"
+              placeholderTextColor={C.muted}
+              value={bioPassword}
+              onChangeText={setBioPassword}
+              secureTextEntry
+              autoFocus
+              onSubmitEditing={handleEnableBio}
+            />
+            <ErrText msg={bioErr} />
+            <View style={[styles.formBtnRow, { marginTop: 12 }]}>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { flex: 1, marginRight: 8 }, (bioLoading || !bioPassword.trim()) && styles.primaryBtnDisabled]}
+                onPress={handleEnableBio}
+                disabled={bioLoading || !bioPassword.trim()}
+              >
+                {bioLoading ? <Spinner /> : <Text style={styles.primaryBtnText}>CONFIRM</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.ghostBtn, { flex: 1 }]}
+                onPress={() => { setShowBioModal(false); setBioPassword(''); setBioErr(''); }}
+              >
+                <Text style={styles.ghostBtnText}>CANCEL</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1326,7 +1501,7 @@ function HomeScreen({ token, currentUser, onLogout }) {
 // ROOT APP
 // ---------------------------------------------------------------------------
 export default function App() {
-  const [appState, setAppState] = useState('loading'); // loading | auth | home
+  const [appState, setAppState] = useState('loading'); // loading | biometric | auth | home
   const [token, setToken]       = useState(null);
   const [currentUser, setUser]  = useState(null);
 
@@ -1343,7 +1518,10 @@ export default function App() {
         await saveUser(user);
         setToken(storedToken);
         setUser(user);
-        setAppState('home');
+        // Check if biometric lock is active
+        const bioEnabled = await loadBioEnabled();
+        const bioReady   = await isBiometricReady();
+        setAppState(bioEnabled && bioReady ? 'biometric' : 'home');
       } catch {
         await clearToken();
         await clearUser();
@@ -1374,6 +1552,21 @@ export default function App() {
         <Text style={styles.splashSub}>AI EVOLUTION</Text>
         <Spinner size="large" />
       </View>
+    );
+  }
+
+  if (appState === 'biometric') {
+    return (
+      <BiometricUnlockScreen
+        onUnlock={() => setAppState('home')}
+        onUsePassword={async () => {
+          await clearToken();
+          await clearUser();
+          setToken(null);
+          setUser(null);
+          setAppState('auth');
+        }}
+      />
     );
   }
 
@@ -1929,5 +2122,73 @@ const styles = StyleSheet.create({
     fontWeight:    '700',
     color:         C.red,
     letterSpacing: 2,
+  },
+
+  // Biometric unlock screen
+  bioFaceIcon: {
+    fontSize:   52,
+    textAlign:  'center',
+  },
+  bioBtn: {
+    width:       240,
+    alignSelf:   'center',
+  },
+  bioFallbackBtn: {
+    marginTop:   28,
+    paddingVertical: 8,
+  },
+  bioFallbackText: {
+    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontSize:      12,
+    color:         C.dim,
+    letterSpacing: 1,
+    textDecorationLine: 'underline',
+  },
+
+  // Face ID profile buttons
+  bioDisableBtn: {
+    backgroundColor: 'transparent',
+    borderWidth:     1,
+    borderColor:     C.amber,
+    paddingVertical: 14,
+    alignItems:      'center',
+  },
+  bioDisableBtnText: {
+    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontSize:      14,
+    fontWeight:    '700',
+    color:         C.amber,
+    letterSpacing: 2,
+  },
+
+  // Modal
+  modalOverlay: {
+    flex:            1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent:  'center',
+    alignItems:      'center',
+    padding:         24,
+  },
+  modalBox: {
+    backgroundColor: C.surface,
+    borderWidth:     1,
+    borderColor:     C.borderBright,
+    padding:         24,
+    width:           '100%',
+    maxWidth:        380,
+  },
+  modalTitle: {
+    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontSize:      16,
+    fontWeight:    '800',
+    color:         C.accent,
+    letterSpacing: 2,
+    marginBottom:  8,
+  },
+  modalSub: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontSize:   12,
+    color:      C.dim,
+    lineHeight: 18,
   },
 });
