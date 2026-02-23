@@ -291,15 +291,17 @@ function AuthScreen({ onAuth }) {
   const [joinReason, setJoinReason]   = useState('');
   const [loading, setLoading]         = useState(false);
   const [err, setErr]                 = useState('');
-  const [bioReady, setBioReady]       = useState(false);
-  const [bioLoading, setBioLoading]   = useState(false);
+  const [bioSupported, setBioSupported] = useState(false); // device has Face ID hardware
+  const [bioReady, setBioReady]         = useState(false); // fully enrolled (can login)
+  const [bioLoading, setBioLoading]     = useState(false);
 
   useEffect(() => {
     (async () => {
-      const enabled = await loadBioEnabled();
-      const ready   = await isBiometricReady();
-      const creds   = await loadBioCreds();
-      setBioReady(enabled && ready && !!creds);
+      const supported = await isBiometricReady();
+      const enabled   = await loadBioEnabled();
+      const creds     = await loadBioCreds();
+      setBioSupported(supported);
+      setBioReady(supported && enabled && !!creds);
     })();
   }, []);
 
@@ -506,10 +508,11 @@ function AuthScreen({ onAuth }) {
               )}
             </TouchableOpacity>
 
-            {tab === 'LOGIN' && bioReady && (
+            {tab === 'LOGIN' && bioSupported && (
               <TouchableOpacity
                 style={[styles.bioLoginBtn, bioLoading && styles.primaryBtnDisabled]}
-                onPress={handleBioLogin}
+                onPress={bioReady ? handleBioLogin : () =>
+                  Alert.alert('FACE ID NOT SET UP', 'Go to Profile tab and tap "ENABLE FACE ID LOGIN" to set up biometric login.')}
                 disabled={bioLoading}
               >
                 {bioLoading
