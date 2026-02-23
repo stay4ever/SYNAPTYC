@@ -50,3 +50,33 @@ backend/*.db-wal
 
 # SwiftLint
 .swiftlint/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Expo
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# macOS
+.DS_Store
+*.swp
+*.dmg
+
+# Zip / archives
+*.zip
+
+# Secrets
+ngrok_recovery_codes.txt
+.env
+.env.local
+e2a0f31 (feat: add React Native Expo app (nano-SYNAPSYS))

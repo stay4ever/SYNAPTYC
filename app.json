@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "nano-SYNAPSYS",
+    "slug": "nano-synapsys",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#050f05",
+    "ios": {
+      "bundleIdentifier": "com.aievolution.nanosynapsys",
+      "buildNumber": "1",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.aievolution.nanosynapsys",
+      "versionCode": 1
+    },
+    "plugins": ["expo-secure-store"]
+  }
+}
