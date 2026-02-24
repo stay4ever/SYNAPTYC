@@ -757,13 +757,18 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
         promptMessage:         'Unlock nano-SYNAPSYS',
         disableDeviceFallback: true,
       });
-      if (result.success) { onUnlock(); }
-      else if (result.error === 'lockout' || result.error === 'lockout_permanent') {
-        setErr('Face ID locked. Tap "USE PASSWORD INSTEAD" below.');
-      } else { setErr(result.error === 'user_cancel' ? '' : 'Authentication failed. Try again.'); }
-    } catch (e) { setErr(e.message); }
+      if (result.success) {
+        onUnlock();
+      } else if (result.error === 'user_cancel' || result.error === 'system_cancel' || result.error === 'app_cancel') {
+        // User deliberately cancelled — stay on this screen so they can retry
+        setErr('');
+      } else {
+        // Face ID unavailable, locked, or failed — route to password login
+        onUsePassword();
+      }
+    } catch (e) { onUsePassword(); }
     finally { setLoading(false); }
-  }, [onUnlock]);
+  }, [onUnlock, onUsePassword]);
 
   useEffect(() => { tryBiometric(); }, []);
 
