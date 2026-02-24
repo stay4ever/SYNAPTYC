@@ -9,16 +9,18 @@ import React, {
   useEffect,
   useRef,
   useCallback,
-  useMemo,
+  useContext,
+  createContext,
 } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
+  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -32,11 +34,12 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import * as LocalAuthentication from 'expo-local-authentication';
+import * as ImagePicker from 'expo-image-picker';
 
 // ---------------------------------------------------------------------------
-// COLOUR PALETTE
+// COLOUR PALETTES
 // ---------------------------------------------------------------------------
-const C = {
+const GREEN_C = {
   bg:          '#050f05',
   surface:     '#0a1a0a',
   panel:       '#0d200d',
@@ -52,6 +55,360 @@ const C = {
   red:         '#ef4444',
 };
 
+const TACTICAL_C = {
+  bg:          '#0c0c0e',
+  surface:     '#141418',
+  panel:       '#1a1a22',
+  border:      '#28283a',
+  borderBright:'#6878a050',
+  text:        '#9090a8',
+  bright:      '#d8d8ec',
+  dim:         '#505068',
+  muted:       '#2c2c3c',
+  accent:      '#a8b8cc',
+  green:       '#6888a0',
+  amber:       '#b89060',
+  red:         '#c04848',
+};
+
+// ---------------------------------------------------------------------------
+// STYLES FACTORY  (called once per palette → two static StyleSheet objects)
+// ---------------------------------------------------------------------------
+function makeRawStyles(C) {
+  const mono = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+  return {
+    flex:       { flex: 1 },
+    safeArea:   { flex: 1, backgroundColor: C.bg },
+    centerFill: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+    splashScreen: {
+      flex: 1, backgroundColor: C.bg,
+      alignItems: 'center', justifyContent: 'center', gap: 16,
+    },
+    splashTitle: {
+      fontFamily: mono, fontSize: 28, fontWeight: '700',
+      color: C.accent, letterSpacing: 2,
+      textShadowColor: C.accent, textShadowRadius: 8,
+      textShadowOffset: { width: 0, height: 0 },
+    },
+    splashSub: { fontFamily: mono, fontSize: 12, color: C.dim, letterSpacing: 4 },
+
+    appHeader: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      backgroundColor: C.surface,
+      borderBottomWidth: 1, borderBottomColor: C.border,
+      paddingHorizontal: 12, paddingVertical: 10,
+    },
+    appHeaderTitle: {
+      fontFamily: mono, fontSize: 16, fontWeight: '700',
+      color: C.bright, letterSpacing: 1, textAlign: 'center',
+    },
+    backBtn:     { paddingVertical: 4, paddingRight: 8 },
+    backBtnText: { fontFamily: mono, fontSize: 13, color: C.accent },
+
+    homeHeader: {
+      backgroundColor: C.surface,
+      borderBottomWidth: 1, borderBottomColor: C.border,
+      paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center',
+    },
+    homeTitle: {
+      fontFamily: mono, fontSize: 22, fontWeight: '800',
+      color: C.accent, letterSpacing: 2,
+      textShadowColor: C.accent, textShadowRadius: 6,
+      textShadowOffset: { width: 0, height: 0 },
+    },
+    homeSubtitle: { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 4, marginTop: 2 },
+
+    tabBar: {
+      flexDirection: 'row', backgroundColor: C.surface,
+      borderTopWidth: 1, borderTopColor: C.border,
+    },
+    tabItem:    { flex: 1, alignItems: 'center', paddingVertical: 11, position: 'relative' },
+    tabText:    { fontFamily: mono, fontSize: 9, color: C.dim, letterSpacing: 0.5 },
+    tabTextActive: { color: C.accent, fontWeight: '700' },
+    tabIndicator: {
+      position: 'absolute', top: 0, left: '20%', right: '20%',
+      height: 2, backgroundColor: C.accent,
+    },
+
+    authScroll: {
+      flexGrow: 1, backgroundColor: C.bg, padding: 24, justifyContent: 'center',
+    },
+    logoBlock: { alignItems: 'center', marginBottom: 40 },
+    logoText: {
+      fontFamily: mono, fontSize: 26, fontWeight: '800',
+      color: C.accent, letterSpacing: 2,
+      textShadowColor: C.accent, textShadowRadius: 10,
+      textShadowOffset: { width: 0, height: 0 },
+    },
+    logoSub: { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 4, marginTop: 6 },
+    authTabRow: {
+      flexDirection: 'row', borderWidth: 1, borderColor: C.border,
+      marginBottom: 24, backgroundColor: C.surface,
+    },
+    authTab:       { flex: 1, paddingVertical: 10, alignItems: 'center' },
+    authTabActive: { backgroundColor: C.panel, borderBottomWidth: 2, borderBottomColor: C.accent },
+    authTabText:       { fontFamily: mono, fontSize: 13, color: C.dim, letterSpacing: 1 },
+    authTabTextActive: { color: C.accent, fontWeight: '700' },
+    authForm: { gap: 12 },
+
+    input: {
+      backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+      color: C.bright, paddingHorizontal: 14, paddingVertical: 12,
+      fontFamily: mono, fontSize: 14, letterSpacing: 1,
+    },
+    inputMultiline: { minHeight: 90, textAlignVertical: 'top', paddingTop: 12 },
+
+    primaryBtn: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
+      alignItems: 'center', paddingVertical: 14,
+    },
+    primaryBtnDisabled: { borderColor: C.muted, opacity: 0.6 },
+    primaryBtnText: {
+      fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.accent, letterSpacing: 2,
+    },
+    ghostBtn: {
+      backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border,
+      alignItems: 'center', paddingVertical: 14,
+    },
+    ghostBtnText: { fontFamily: mono, fontSize: 13, color: C.dim, letterSpacing: 1 },
+
+    errText: {
+      color: C.red, fontFamily: mono, fontSize: 12,
+      paddingHorizontal: 16, paddingVertical: 8,
+    },
+    emptyText: {
+      color: C.muted, fontFamily: mono, fontSize: 13,
+      textAlign: 'center', marginTop: 40, letterSpacing: 2,
+    },
+
+    separator: { height: 1, backgroundColor: C.border },
+    userRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 16, paddingVertical: 14, backgroundColor: C.surface,
+    },
+    userRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    userRowInfo: { flex: 1, marginLeft: 10 },
+    userRowName: { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '600' },
+    userRowMeta: { fontFamily: mono, fontSize: 11, color: C.dim, marginTop: 2, letterSpacing: 1 },
+    chevron:     { color: C.dim, fontFamily: mono, fontSize: 16, marginLeft: 8 },
+
+    dot: { width: 8, height: 8, borderRadius: 4, marginLeft: 4 },
+
+    msgList:      { padding: 12, paddingBottom: 20 },
+    msgRow:       { marginVertical: 4, flexDirection: 'row' },
+    msgRowMine:   { justifyContent: 'flex-end' },
+    msgRowTheirs: { justifyContent: 'flex-start' },
+    msgBubble: {
+      maxWidth: '78%', paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1,
+    },
+    bubbleMine: {
+      backgroundColor: C.panel, borderColor: C.borderBright, borderRadius: 0,
+    },
+    bubbleTheirs: {
+      backgroundColor: C.surface, borderColor: C.border, borderRadius: 0,
+    },
+    bubbleBotMsg: {
+      backgroundColor: C.panel, borderColor: C.borderBright, borderRadius: 0,
+    },
+    msgText:    { fontFamily: mono, fontSize: 14, color: C.text, lineHeight: 20 },
+    botMsgText: { color: C.bright },
+    msgSender: {
+      fontFamily: mono, fontSize: 10, color: C.accent,
+      letterSpacing: 1, marginBottom: 4, fontWeight: '700',
+    },
+    botLabel: {
+      fontFamily: mono, fontSize: 10, color: C.accent,
+      letterSpacing: 2, fontWeight: '700', marginBottom: 4,
+    },
+    msgMeta: {
+      flexDirection: 'row', alignItems: 'center', marginTop: 4, justifyContent: 'flex-end',
+    },
+    msgTime: { fontFamily: mono, fontSize: 10, color: C.muted, marginTop: 4 },
+    msgRead: { fontFamily: mono, fontSize: 10, color: C.green },
+
+    imageMsg: { width: 200, height: 150, marginVertical: 4 },
+
+    inputRow: {
+      flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.border,
+      backgroundColor: C.surface, padding: 8, alignItems: 'flex-end',
+    },
+    attachBtn: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
+      width: 38, height: 38, justifyContent: 'center', alignItems: 'center', marginRight: 6,
+    },
+    attachBtnText: { fontFamily: mono, fontSize: 22, color: C.accent, lineHeight: 26 },
+    chatInput: {
+      flex: 1, color: C.bright, backgroundColor: C.panel,
+      borderWidth: 1, borderColor: C.border,
+      paddingHorizontal: 12, paddingVertical: 10,
+      fontFamily: mono, fontSize: 14, maxHeight: 120, marginRight: 8,
+    },
+    sendBtn: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
+      paddingHorizontal: 14, paddingVertical: 10,
+      justifyContent: 'center', alignItems: 'center', minWidth: 60,
+    },
+    sendBtnDisabled: { borderColor: C.muted, opacity: 0.5 },
+    sendBtnText: {
+      fontFamily: mono, fontSize: 12, color: C.accent, fontWeight: '700', letterSpacing: 1,
+    },
+
+    createGroupBtn: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
+      margin: 16, paddingVertical: 12, alignItems: 'center',
+    },
+    createGroupBtnText: {
+      fontFamily: mono, fontSize: 13, color: C.accent, fontWeight: '700', letterSpacing: 2,
+    },
+    createGroupForm: {
+      backgroundColor: C.surface, borderBottomWidth: 1, borderBottomColor: C.border,
+      padding: 16, gap: 10,
+    },
+    formLabel: { fontFamily: mono, fontSize: 12, color: C.accent, letterSpacing: 2, marginBottom: 4 },
+    formBtnRow: { flexDirection: 'row', marginTop: 4 },
+
+    botHeader: {
+      flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface,
+      borderBottomWidth: 1, borderBottomColor: C.border,
+      paddingHorizontal: 16, paddingVertical: 10,
+    },
+    botHeaderText: {
+      fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.accent, letterSpacing: 3,
+    },
+
+    profileScroll:  { padding: 16, paddingBottom: 60 },
+    profileCard: {
+      backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+      padding: 14, marginBottom: 8,
+    },
+    profileLabel: { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 2, marginBottom: 4 },
+    profileValue: { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '600' },
+    profileDivider: { height: 1, backgroundColor: C.border, marginVertical: 20 },
+    inviteUrlBox: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.borderBright,
+      padding: 14, marginTop: 12, gap: 8,
+    },
+    inviteUrlLabel: { fontFamily: mono, fontSize: 10, color: C.accent, letterSpacing: 2 },
+    inviteUrlText:  { fontFamily: mono, fontSize: 12, color: C.text, lineHeight: 18 },
+    copyBtn: {
+      backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+      paddingVertical: 8, alignItems: 'center', marginTop: 4,
+    },
+    copyBtnText: { fontFamily: mono, fontSize: 11, color: C.accent, letterSpacing: 1 },
+    logoutBtn: {
+      backgroundColor: 'transparent', borderWidth: 1, borderColor: C.red,
+      paddingVertical: 14, alignItems: 'center',
+    },
+    logoutBtnText: {
+      fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.red, letterSpacing: 2,
+    },
+
+    // ── Settings / Skin ──────────────────────────────────────────────────
+    settingsHeader: {
+      fontFamily: mono, fontSize: 11, color: C.accent,
+      letterSpacing: 3, marginBottom: 12, marginTop: 4,
+    },
+    skinRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
+    skinBtn: {
+      flex: 1, backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
+      paddingVertical: 14, alignItems: 'center', gap: 4,
+    },
+    skinBtnActive:     { borderColor: C.accent },
+    skinDot:           { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
+    skinBtnLabel:      { fontFamily: mono, fontSize: 9, color: C.dim, letterSpacing: 2 },
+    skinBtnName:       { fontFamily: mono, fontSize: 13, fontWeight: '700', color: C.dim },
+    skinBtnNameActive: { color: C.accent },
+
+    // ── Disappearing messages ─────────────────────────────────────────────
+    disappearWrap:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    disappearOpt: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
+      paddingVertical: 8, paddingHorizontal: 12,
+    },
+    disappearOptActive:      { borderColor: C.accent },
+    disappearOptText:        { fontFamily: mono, fontSize: 11, color: C.dim, letterSpacing: 1 },
+    disappearOptTextActive:  { color: C.accent, fontWeight: '700' },
+
+    // ── Face ID ───────────────────────────────────────────────────────────
+    bioLoginBtn: {
+      backgroundColor: 'transparent', borderWidth: 1, borderColor: C.accent,
+      alignItems: 'center', paddingVertical: 14, marginTop: 4,
+    },
+    bioLoginBtnText: {
+      fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.accent, letterSpacing: 2,
+    },
+    bioFaceIcon:    { fontSize: 52, textAlign: 'center' },
+    bioBtn:         { width: 240, alignSelf: 'center' },
+    bioFallbackBtn: { marginTop: 28, paddingVertical: 8 },
+    bioFallbackText: {
+      fontFamily: mono, fontSize: 12, color: C.dim,
+      letterSpacing: 1, textDecorationLine: 'underline',
+    },
+    bioDisableBtn: {
+      backgroundColor: 'transparent', borderWidth: 1, borderColor: C.amber,
+      paddingVertical: 14, alignItems: 'center',
+    },
+    bioDisableBtnText: {
+      fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.amber, letterSpacing: 2,
+    },
+
+    // ── Modal ─────────────────────────────────────────────────────────────
+    modalOverlay: {
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.8)',
+      justifyContent: 'center', alignItems: 'center', padding: 24,
+    },
+    modalBox: {
+      backgroundColor: C.surface, borderWidth: 1, borderColor: C.borderBright,
+      padding: 24, width: '100%', maxWidth: 380,
+    },
+    modalTitle: {
+      fontFamily: mono, fontSize: 16, fontWeight: '800',
+      color: C.accent, letterSpacing: 2, marginBottom: 8,
+    },
+    modalSub: { fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 18 },
+  };
+}
+
+// Two pre-built StyleSheets — swap by skin name
+const STYLES = {
+  green:    StyleSheet.create(makeRawStyles(GREEN_C)),
+  tactical: StyleSheet.create(makeRawStyles(TACTICAL_C)),
+};
+
+// ---------------------------------------------------------------------------
+// SKIN CONTEXT
+// ---------------------------------------------------------------------------
+const SkinContext = createContext({ skin: 'green', setSkin: () => {} });
+
+function SkinProvider({ children }) {
+  const [skin, setSkinState] = useState('green');
+
+  useEffect(() => {
+    SecureStore.getItemAsync(SKIN_KEY).then(v => {
+      if (v === 'tactical') setSkinState('tactical');
+    });
+  }, []);
+
+  const setSkin = useCallback(async (s) => {
+    setSkinState(s);
+    await SecureStore.setItemAsync(SKIN_KEY, s);
+  }, []);
+
+  return (
+    <SkinContext.Provider value={{ skin, setSkin }}>
+      {children}
+    </SkinContext.Provider>
+  );
+}
+
+function useSkin() {
+  const { skin, setSkin } = useContext(SkinContext);
+  const C      = skin === 'tactical' ? TACTICAL_C : GREEN_C;
+  const styles = STYLES[skin] ?? STYLES.green;
+  return { skin, C, styles, setSkin };
+}
+
 // ---------------------------------------------------------------------------
 // CONSTANTS
 // ---------------------------------------------------------------------------
@@ -59,9 +416,21 @@ const BASE_URL    = 'https://www.ai-evolution.com.au';
 const WS_URL      = 'wss://www.ai-evolution.com.au/chat';
 const JWT_KEY     = 'nano_jwt';
 const USER_KEY    = 'nano_user';
-const BIO_KEY      = 'nano_bio_enabled';
+const BIO_KEY     = 'nano_bio_enabled';
 const BIO_EMAIL_KEY = 'nano_bio_email';
 const BIO_PASS_KEY  = 'nano_bio_pass';
+const SKIN_KEY    = 'nano_skin';
+const DISAPPEAR_KEY = 'nano_disappear';
+
+const DISAPPEAR_OPTIONS = [
+  { label: 'OFF',     value: null   },
+  { label: '1 MIN',   value: 60     },
+  { label: '5 MIN',   value: 300    },
+  { label: '10 MIN',  value: 600    },
+  { label: '5 DAYS',  value: 432000 },
+  { label: '10 DAYS', value: 864000 },
+  { label: '30 DAYS', value: 2592000},
+];
 
 const KAV_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
 
@@ -71,25 +440,15 @@ const KAV_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
 async function api(path, method = 'GET', body = null, token = null) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-
   const res = await fetch(`${BASE_URL}${path}`, opts);
   let data;
-  try {
-    data = await res.json();
-  } catch {
-    data = {};
-  }
-
+  try { data = await res.json(); } catch { data = {}; }
   if (!res.ok) {
     const msg =
-      data?.detail ||
-      data?.message ||
-      data?.error ||
-      (typeof data === 'string' ? data : null) ||
-      `HTTP ${res.status}`;
+      data?.detail || data?.message || data?.error ||
+      (typeof data === 'string' ? data : null) || `HTTP ${res.status}`;
     throw new Error(msg);
   }
   return data;
@@ -98,32 +457,15 @@ async function api(path, method = 'GET', body = null, token = null) {
 // ---------------------------------------------------------------------------
 // SECURE STORE HELPERS
 // ---------------------------------------------------------------------------
-async function saveToken(t) {
-  await SecureStore.setItemAsync(JWT_KEY, t);
-}
-async function loadToken() {
-  return SecureStore.getItemAsync(JWT_KEY);
-}
-async function clearToken() {
-  await SecureStore.deleteItemAsync(JWT_KEY);
-}
-async function saveUser(u) {
-  await SecureStore.setItemAsync(USER_KEY, JSON.stringify(u));
-}
-async function loadUser() {
-  const raw = await SecureStore.getItemAsync(USER_KEY);
-  return raw ? JSON.parse(raw) : null;
-}
-async function clearUser() {
-  await SecureStore.deleteItemAsync(USER_KEY);
-}
-async function saveBioEnabled(v) {
-  await SecureStore.setItemAsync(BIO_KEY, v ? '1' : '0');
-}
-async function loadBioEnabled() {
-  const v = await SecureStore.getItemAsync(BIO_KEY);
-  return v === '1';
-}
+async function saveToken(t) { await SecureStore.setItemAsync(JWT_KEY, t); }
+async function loadToken()  { return SecureStore.getItemAsync(JWT_KEY); }
+async function clearToken() { await SecureStore.deleteItemAsync(JWT_KEY); }
+async function saveUser(u)  { await SecureStore.setItemAsync(USER_KEY, JSON.stringify(u)); }
+
+async function clearUser()  { await SecureStore.deleteItemAsync(USER_KEY); }
+
+async function saveBioEnabled(v) { await SecureStore.setItemAsync(BIO_KEY, v ? '1' : '0'); }
+async function loadBioEnabled()  { return (await SecureStore.getItemAsync(BIO_KEY)) === '1'; }
 async function clearBio() {
   await SecureStore.deleteItemAsync(BIO_KEY);
   await SecureStore.deleteItemAsync(BIO_EMAIL_KEY);
@@ -143,6 +485,15 @@ async function isBiometricReady() {
   const enr = await LocalAuthentication.isEnrolledAsync();
   return hw && enr;
 }
+async function saveDisappear(v) {
+  await SecureStore.setItemAsync(DISAPPEAR_KEY, v === null ? '' : String(v));
+}
+async function loadDisappear() {
+  const v = await SecureStore.getItemAsync(DISAPPEAR_KEY);
+  if (!v) return null;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : n;
+}
 
 // ---------------------------------------------------------------------------
 // FORMAT HELPERS
@@ -157,31 +508,72 @@ function fmtDate(iso) {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
 }
+function isImageContent(c) { return typeof c === 'string' && c.startsWith('data:image'); }
+
+// ---------------------------------------------------------------------------
+// THEMED WRAPPERS
+// ---------------------------------------------------------------------------
+function ThemedSafeArea({ style, children }) {
+  const { skin, C } = useSkin();
+  if (skin === 'tactical') {
+    return (
+      <ImageBackground
+        source={require('./magpulbackground.webp')}
+        style={{ flex: 1, backgroundColor: C.bg }}
+        imageStyle={{ opacity: 0.07 }}
+        resizeMode="repeat"
+      >
+        <SafeAreaView style={[{ flex: 1, backgroundColor: 'transparent' }, style]}>
+          {children}
+        </SafeAreaView>
+      </ImageBackground>
+    );
+  }
+  return (
+    <SafeAreaView style={[{ flex: 1, backgroundColor: C.bg }, style]}>
+      {children}
+    </SafeAreaView>
+  );
+}
+
+function ThemedView({ style, children }) {
+  const { skin, C } = useSkin();
+  if (skin === 'tactical') {
+    return (
+      <ImageBackground
+        source={require('./magpulbackground.webp')}
+        style={[{ flex: 1, backgroundColor: C.bg }, style]}
+        imageStyle={{ opacity: 0.07 }}
+        resizeMode="repeat"
+      >
+        {children}
+      </ImageBackground>
+    );
+  }
+  return <View style={[{ flex: 1, backgroundColor: C.bg }, style]}>{children}</View>;
+}
 
 // ---------------------------------------------------------------------------
 // SHARED UI ATOMS
 // ---------------------------------------------------------------------------
 function Spinner({ size = 'small' }) {
+  const { C } = useSkin();
   return <ActivityIndicator color={C.accent} size={size} />;
 }
 
 function ErrText({ msg }) {
+  const { styles } = useSkin();
   if (!msg) return null;
   return <Text style={styles.errText}>{msg}</Text>;
 }
 
 function OnlineDot({ online }) {
-  return (
-    <View
-      style={[
-        styles.dot,
-        { backgroundColor: online ? C.green : C.muted },
-      ]}
-    />
-  );
+  const { C } = useSkin();
+  return <View style={[{ width: 8, height: 8, borderRadius: 4, marginLeft: 4 }, { backgroundColor: online ? C.green : C.muted }]} />;
 }
 
 function AppHeader({ title, onBack }) {
+  const { styles } = useSkin();
   return (
     <View style={styles.appHeader}>
       {onBack ? (
@@ -198,24 +590,19 @@ function AppHeader({ title, onBack }) {
 }
 
 // ---------------------------------------------------------------------------
-// BOTTOM TAB BAR
+// BOTTOM TAB BAR  (5 tabs)
 // ---------------------------------------------------------------------------
-const TABS = ['CHATS', 'GROUPS', 'BOT', 'PROFILE'];
+const TABS = ['CHATS', 'GROUPS', 'BOT', 'PROFILE', 'SETTINGS'];
 
 function TabBar({ active, onChange }) {
+  const { styles } = useSkin();
   return (
     <View style={styles.tabBar}>
       {TABS.map((tab) => {
         const isActive = tab === active;
         return (
-          <TouchableOpacity
-            key={tab}
-            style={styles.tabItem}
-            onPress={() => onChange(tab)}
-          >
-            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-              {tab}
-            </Text>
+          <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => onChange(tab)}>
+            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab}</Text>
             {isActive && <View style={styles.tabIndicator} />}
           </TouchableOpacity>
         );
@@ -228,34 +615,28 @@ function TabBar({ active, onChange }) {
 // BIOMETRIC UNLOCK SCREEN
 // ---------------------------------------------------------------------------
 function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
+  const { styles, C } = useSkin();
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState('');
 
   const tryBiometric = useCallback(async () => {
-    setLoading(true);
-    setErr('');
+    setLoading(true); setErr('');
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage:         'Unlock nano-SYNAPSYS',
         fallbackLabel:         'Use Password',
         disableDeviceFallback: false,
       });
-      if (result.success) {
-        onUnlock();
-      } else {
-        setErr(result.error === 'user_cancel' ? '' : 'Authentication failed. Try again.');
-      }
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+      if (result.success) { onUnlock(); }
+      else { setErr(result.error === 'user_cancel' ? '' : 'Authentication failed. Try again.'); }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
   }, [onUnlock]);
 
   useEffect(() => { tryBiometric(); }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ThemedSafeArea>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <View style={styles.centerFill}>
         <Text style={styles.logoText}>nano-SYNAPSYS</Text>
@@ -265,8 +646,7 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
         <View style={{ height: 24 }} />
         <TouchableOpacity
           style={[styles.primaryBtn, styles.bioBtn, loading && styles.primaryBtnDisabled]}
-          onPress={tryBiometric}
-          disabled={loading}
+          onPress={tryBiometric} disabled={loading}
         >
           {loading ? <Spinner /> : <Text style={styles.primaryBtnText}>FACE ID LOGIN</Text>}
         </TouchableOpacity>
@@ -275,7 +655,7 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
           <Text style={styles.bioFallbackText}>USE PASSWORD INSTEAD</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </ThemedSafeArea>
   );
 }
 
@@ -283,16 +663,17 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
 // AUTH SCREEN
 // ---------------------------------------------------------------------------
 function AuthScreen({ onAuth }) {
-  const [tab, setTab]               = useState('LOGIN');
-  const [username, setUsername]     = useState('');
-  const [email, setEmail]           = useState('');
-  const [password, setPassword]     = useState('');
+  const { styles, C } = useSkin();
+  const [tab, setTab]                 = useState('LOGIN');
+  const [username, setUsername]       = useState('');
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
   const [inviteCode, setInviteCode]   = useState('');
   const [joinReason, setJoinReason]   = useState('');
   const [loading, setLoading]         = useState(false);
   const [err, setErr]                 = useState('');
-  const [bioSupported, setBioSupported] = useState(false); // device has Face ID hardware
-  const [bioReady, setBioReady]         = useState(false); // fully enrolled (can login)
+  const [bioSupported, setBioSupported] = useState(false);
+  const [bioReady, setBioReady]         = useState(false);
   const [bioLoading, setBioLoading]     = useState(false);
 
   useEffect(() => {
@@ -305,297 +686,147 @@ function AuthScreen({ onAuth }) {
     })();
   }, []);
 
-  const reset = () => {
-    setUsername('');
-    setEmail('');
-    setPassword('');
-    setInviteCode('');
-    setJoinReason('');
-    setErr('');
-  };
-
-  const handleTabSwitch = (t) => {
-    setTab(t);
-    reset();
-  };
+  const reset = () => { setUsername(''); setEmail(''); setPassword(''); setInviteCode(''); setJoinReason(''); setErr(''); };
+  const handleTabSwitch = (t) => { setTab(t); reset(); };
 
   const handleBioLogin = async () => {
-    setBioLoading(true);
-    setErr('');
+    setBioLoading(true); setErr('');
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage:         'Login to nano-SYNAPSYS',
-        fallbackLabel:         'Use Password',
-        disableDeviceFallback: false,
+        promptMessage: 'Login to nano-SYNAPSYS', fallbackLabel: 'Use Password', disableDeviceFallback: false,
       });
-      if (!result.success) {
-        setErr(result.error === 'user_cancel' ? '' : 'Face ID failed. Use password instead.');
-        setBioLoading(false);
-        return;
-      }
+      if (!result.success) { setErr(result.error === 'user_cancel' ? '' : 'Face ID failed. Use password instead.'); return; }
       const creds = await loadBioCreds();
-      if (!creds) { setErr('No stored credentials. Please log in with password.'); setBioLoading(false); return; }
+      if (!creds) { setErr('No stored credentials. Please log in with password.'); return; }
       const data = await api('/auth/login', 'POST', { email: creds.email, password: creds.password });
-      await saveToken(data.token);
-      await saveUser(data.user);
+      await saveToken(data.token); await saveUser(data.user);
       onAuth(data.token, data.user);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setBioLoading(false);
-    }
+    } catch (e) { setErr(e.message); }
+    finally { setBioLoading(false); }
   };
 
   const handleLogin = async () => {
-    if (!username.trim() || !password.trim()) {
-      setErr('Email and password are required.');
-      return;
-    }
-    setLoading(true);
-    setErr('');
+    if (!username.trim() || !password.trim()) { setErr('Email and password are required.'); return; }
+    setLoading(true); setErr('');
     try {
-      const data = await api('/auth/login', 'POST', {
-        email: username.trim(),
-        password,
-      });
-      await saveToken(data.token);
-      await saveUser(data.user);
+      const data = await api('/auth/login', 'POST', { email: username.trim(), password });
+      await saveToken(data.token); await saveUser(data.user);
       onAuth(data.token, data.user);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
   };
 
   const handleRegister = async () => {
-    if (!username.trim() || !email.trim() || !password.trim()) {
-      setErr('Username, email and password are required.');
-      return;
-    }
-    setLoading(true);
-    setErr('');
+    if (!username.trim() || !email.trim() || !password.trim()) { setErr('Username, email and password are required.'); return; }
+    setLoading(true); setErr('');
     try {
-      const body = {
-        username:   username.trim(),
-        email:      email.trim(),
-        password,
-        join_reason: joinReason.trim(),
-      };
+      const body = { username: username.trim(), email: email.trim(), password, join_reason: joinReason.trim() };
       if (inviteCode.trim()) body.invite_code = inviteCode.trim();
       const data = await api('/auth/register', 'POST', body);
-      await saveToken(data.token);
-      await saveUser(data.user);
+      await saveToken(data.token); await saveUser(data.user);
       onAuth(data.token, data.user);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ThemedSafeArea>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={KAV_BEHAVIOR}
-      >
-        <ScrollView
-          contentContainerStyle={styles.authScroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* Logo */}
+      <KeyboardAvoidingView style={styles.flex} behavior={KAV_BEHAVIOR}>
+        <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
           <View style={styles.logoBlock}>
             <Text style={styles.logoText}>nano-SYNAPSYS</Text>
             <Text style={styles.logoSub}>AI EVOLUTION SECURE MESH</Text>
           </View>
-
-          {/* Tab switcher */}
           <View style={styles.authTabRow}>
             {['LOGIN', 'REGISTER'].map((t) => (
-              <TouchableOpacity
-                key={t}
-                style={[styles.authTab, tab === t && styles.authTabActive]}
-                onPress={() => handleTabSwitch(t)}
-              >
-                <Text
-                  style={[
-                    styles.authTabText,
-                    tab === t && styles.authTabTextActive,
-                  ]}
-                >
-                  {t}
-                </Text>
+              <TouchableOpacity key={t} style={[styles.authTab, tab === t && styles.authTabActive]} onPress={() => handleTabSwitch(t)}>
+                <Text style={[styles.authTabText, tab === t && styles.authTabTextActive]}>{t}</Text>
               </TouchableOpacity>
             ))}
           </View>
-
-          {/* Fields */}
           <View style={styles.authForm}>
             <TextInput
               style={styles.input}
               placeholder={tab === 'LOGIN' ? 'EMAIL' : 'USERNAME'}
               placeholderTextColor={C.muted}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
+              value={username} onChangeText={setUsername}
+              autoCapitalize="none" autoCorrect={false}
               keyboardType={tab === 'LOGIN' ? 'email-address' : 'default'}
             />
-
             {tab === 'REGISTER' && (
-              <TextInput
-                style={styles.input}
-                placeholder="EMAIL"
-                placeholderTextColor={C.muted}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoCorrect={false}
-              />
+              <TextInput style={styles.input} placeholder="EMAIL" placeholderTextColor={C.muted}
+                value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoCorrect={false} />
             )}
-
-            <TextInput
-              style={styles.input}
-              placeholder="PASSWORD"
-              placeholderTextColor={C.muted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
+            <TextInput style={styles.input} placeholder="PASSWORD" placeholderTextColor={C.muted}
+              value={password} onChangeText={setPassword} secureTextEntry />
             {tab === 'REGISTER' && (
-              <TextInput
-                style={styles.input}
-                placeholder="INVITE CODE (OPTIONAL)"
-                placeholderTextColor={C.muted}
-                value={inviteCode}
-                onChangeText={setInviteCode}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+              <TextInput style={styles.input} placeholder="INVITE CODE (OPTIONAL)" placeholderTextColor={C.muted}
+                value={inviteCode} onChangeText={setInviteCode} autoCapitalize="none" autoCorrect={false} />
             )}
-
             {tab === 'REGISTER' && (
-              <TextInput
-                style={[styles.input, styles.inputMultiline]}
-                placeholder="WHY DO YOU WANT TO JOIN? (REQUIRED)"
-                placeholderTextColor={C.muted}
-                value={joinReason}
-                onChangeText={setJoinReason}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-                autoCorrect={false}
-              />
+              <TextInput style={[styles.input, styles.inputMultiline]}
+                placeholder="WHY DO YOU WANT TO JOIN? (REQUIRED)" placeholderTextColor={C.muted}
+                value={joinReason} onChangeText={setJoinReason}
+                multiline numberOfLines={3} textAlignVertical="top" autoCorrect={false} />
             )}
-
             <ErrText msg={err} />
-
-            <TouchableOpacity
-              style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
-              onPress={tab === 'LOGIN' ? handleLogin : handleRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <Spinner />
-              ) : (
-                <Text style={styles.primaryBtnText}>
-                  {tab === 'LOGIN' ? 'LOGIN' : 'CREATE ACCOUNT'}
-                </Text>
-              )}
+            <TouchableOpacity style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+              onPress={tab === 'LOGIN' ? handleLogin : handleRegister} disabled={loading}>
+              {loading ? <Spinner /> : <Text style={styles.primaryBtnText}>{tab === 'LOGIN' ? 'LOGIN' : 'CREATE ACCOUNT'}</Text>}
             </TouchableOpacity>
-
             {tab === 'LOGIN' && bioSupported && (
-              <TouchableOpacity
-                style={[styles.bioLoginBtn, bioLoading && styles.primaryBtnDisabled]}
-                onPress={bioReady ? handleBioLogin : () =>
-                  Alert.alert('FACE ID NOT SET UP', 'Go to Profile tab and tap "ENABLE FACE ID LOGIN" to set up biometric login.')}
-                disabled={bioLoading}
-              >
-                {bioLoading
-                  ? <Spinner />
-                  : <Text style={styles.bioLoginBtnText}>{'\uD83D\uDD12'}  FACE ID LOGIN</Text>
-                }
+              <TouchableOpacity style={[styles.bioLoginBtn, bioLoading && styles.primaryBtnDisabled]}
+                onPress={bioReady ? handleBioLogin : () => Alert.alert('FACE ID NOT SET UP', 'Go to Profile tab and tap "ENABLE FACE ID LOGIN" to set up biometric login.')}
+                disabled={bioLoading}>
+                {bioLoading ? <Spinner /> : <Text style={styles.bioLoginBtnText}>{'\uD83D\uDD12'}  FACE ID LOGIN</Text>}
               </TouchableOpacity>
             )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ThemedSafeArea>
   );
 }
 
 // ---------------------------------------------------------------------------
-// CHATS TAB — User list
+// CHATS TAB
 // ---------------------------------------------------------------------------
 function ChatsTab({ token, currentUser, onOpenDM }) {
+  const { styles, C } = useSkin();
   const [users, setUsers]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [err, setErr]             = useState('');
 
   const fetchUsers = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     setErr('');
     try {
       const data = await api('/api/users', 'GET', null, token);
       setUsers(data.filter((u) => u.id !== currentUser.id));
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); setRefreshing(false); }
   }, [token, currentUser.id]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  if (loading) {
-    return (
-      <View style={styles.centerFill}>
-        <Spinner size="large" />
-      </View>
-    );
-  }
+  if (loading) return <View style={styles.centerFill}><Spinner size="large" /></View>;
 
   return (
     <View style={styles.flex}>
       <ErrText msg={err} />
       <FlatList
-        data={users}
-        keyExtractor={(u) => String(u.id)}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchUsers(true)}
-            tintColor={C.accent}
-          />
-        }
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>NO USERS FOUND</Text>
-        }
+        data={users} keyExtractor={(u) => String(u.id)}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchUsers(true)} tintColor={C.accent} />}
+        ListEmptyComponent={<Text style={styles.emptyText}>NO USERS FOUND</Text>}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.userRow}
-            onPress={() => onOpenDM(item)}
-          >
+          <TouchableOpacity style={styles.userRow} onPress={() => onOpenDM(item)}>
             <View style={styles.userRowLeft}>
               <OnlineDot online={item.online} />
               <View style={styles.userRowInfo}>
-                <Text style={styles.userRowName}>
-                  {item.display_name || item.username}
-                </Text>
-                <Text style={styles.userRowMeta}>
-                  {item.online
-                    ? 'ONLINE'
-                    : item.last_seen
-                    ? `LAST SEEN ${fmtDate(item.last_seen)}`
-                    : 'OFFLINE'}
-                </Text>
+                <Text style={styles.userRowName}>{item.display_name || item.username}</Text>
+                <Text style={styles.userRowMeta}>{item.online ? 'ONLINE' : item.last_seen ? `LAST SEEN ${fmtDate(item.last_seen)}` : 'OFFLINE'}</Text>
               </View>
             </View>
             <Text style={styles.chevron}>{'>'}</Text>
@@ -610,138 +841,128 @@ function ChatsTab({ token, currentUser, onOpenDM }) {
 // ---------------------------------------------------------------------------
 // DM CHAT SCREEN
 // ---------------------------------------------------------------------------
-function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg }) {
-  const [messages, setMessages]   = useState([]);
-  const [text, setText]           = useState('');
-  const [loading, setLoading]     = useState(true);
-  const [sending, setSending]     = useState(false);
-  const [err, setErr]             = useState('');
-  const listRef                   = useRef(null);
+function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, disappear }) {
+  const { styles, C } = useSkin();
+  const [messages, setMessages] = useState([]);
+  const [text, setText]         = useState('');
+  const [loading, setLoading]   = useState(true);
+  const [sending, setSending]   = useState(false);
+  const [err, setErr]           = useState('');
+  const listRef                 = useRef(null);
 
   const fetchHistory = useCallback(async () => {
-    setLoading(true);
-    setErr('');
+    setLoading(true); setErr('');
     try {
       const data = await api(`/api/messages/${peer.id}`, 'GET', null, token);
       setMessages(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
   }, [token, peer.id]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  // Handle incoming WebSocket message
   useEffect(() => {
-    if (!incomingMsg) return;
-    if (incomingMsg.type === 'chat_message') {
-      const fromId =
-        incomingMsg.from_user?.id ?? incomingMsg.from_user;
-      if (
-        String(fromId) === String(peer.id) ||
-        String(fromId) === String(currentUser.id)
-      ) {
-        setMessages((prev) => {
-          const exists = prev.some((m) => m.id === incomingMsg.id);
-          return exists ? prev : [...prev, incomingMsg];
-        });
-      }
+    if (!incomingMsg || incomingMsg.type !== 'chat_message') return;
+    const fromId = incomingMsg.from_user?.id ?? incomingMsg.from_user;
+    if (String(fromId) === String(peer.id) || String(fromId) === String(currentUser.id)) {
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === incomingMsg.id);
+        return exists ? prev : [...prev, incomingMsg];
+      });
     }
   }, [incomingMsg, peer.id, currentUser.id]);
 
-  // Auto-scroll
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-    }
+    if (messages.length > 0) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages]);
 
-  const sendMessage = async () => {
-    const content = text.trim();
+  const sendMessage = useCallback(async (overrideContent = null) => {
+    const content = overrideContent ?? text.trim();
     if (!content) return;
+    if (!overrideContent) setText('');
     setSending(true);
-    setText('');
     try {
+      const msgPayload = { type: 'chat_message', to: peer.id, content };
+      if (disappear) msgPayload.disappear_after = disappear;
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({ type: 'chat_message', to: peer.id, content })
-        );
-        // Optimistic
-        const optimistic = {
-          id:         Date.now(),
-          content,
-          from_user:  currentUser.id,
-          to_user:    peer.id,
-          created_at: new Date().toISOString(),
-          read:       false,
-        };
-        setMessages((prev) => [...prev, optimistic]);
+        wsRef.current.send(JSON.stringify(msgPayload));
+        setMessages((prev) => [...prev, {
+          id: Date.now(), content, from_user: currentUser.id,
+          to_user: peer.id, created_at: new Date().toISOString(), read: false,
+        }]);
       } else {
-        // Fallback REST
-        const msg = await api('/api/messages', 'POST', { to: peer.id, content }, token);
+        const msg = await api('/api/messages', 'POST', { to: peer.id, content, disappear_after: disappear }, token);
         setMessages((prev) => [...prev, msg]);
       }
-    } catch (e) {
-      setErr(e.message);
-      setText(content);
-    } finally {
-      setSending(false);
-    }
-  };
+    } catch (e) { setErr(e.message); if (!overrideContent) setText(content); }
+    finally { setSending(false); }
+  }, [text, peer.id, currentUser.id, wsRef, token, disappear]);
 
-  const isMine = (msg) => {
-    const fid = msg.from_user?.id ?? msg.from_user;
-    return String(fid) === String(currentUser.id);
-  };
+  const handleAttachment = useCallback(async () => {
+    Alert.alert('ATTACH', 'Select source', [
+      {
+        text: 'CAMERA',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Camera access required.'); return; }
+          const res = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+          if (!res.canceled && res.assets?.[0]) {
+            const a = res.assets[0];
+            sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
+          }
+        },
+      },
+      {
+        text: 'PHOTO LIBRARY',
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Photo library access required.'); return; }
+          const res = await ImagePicker.launchImageLibraryAsync({
+            quality: 0.5, base64: true, mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          });
+          if (!res.canceled && res.assets?.[0]) {
+            const a = res.assets[0];
+            sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
+          }
+        },
+      },
+      { text: 'CANCEL', style: 'cancel' },
+    ]);
+  }, [sendMessage]);
+
+  const isMine = (msg) => String(msg.from_user?.id ?? msg.from_user) === String(currentUser.id);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ThemedSafeArea>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <AppHeader
-        title={peer.display_name || peer.username}
-        onBack={onBack}
-      />
+      <AppHeader title={peer.display_name || peer.username} onBack={onBack} />
+      {disappear && (
+        <View style={{ backgroundColor: C.panel, paddingHorizontal: 14, paddingVertical: 4, alignItems: 'center' }}>
+          <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.amber, letterSpacing: 1 }}>
+            {'\u23F1'} MESSAGES DISAPPEAR AFTER {DISAPPEAR_OPTIONS.find(o => o.value === disappear)?.label ?? ''}
+          </Text>
+        </View>
+      )}
       <KeyboardAvoidingView style={styles.flex} behavior={KAV_BEHAVIOR}>
-        {loading ? (
-          <View style={styles.centerFill}><Spinner size="large" /></View>
-        ) : (
+        {loading ? <View style={styles.centerFill}><Spinner size="large" /></View> : (
           <>
             <ErrText msg={err} />
             <FlatList
-              ref={listRef}
-              data={messages}
-              keyExtractor={(m) => String(m.id)}
+              ref={listRef} data={messages} keyExtractor={(m) => String(m.id)}
               contentContainerStyle={styles.msgList}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>NO MESSAGES YET</Text>
-              }
+              ListEmptyComponent={<Text style={styles.emptyText}>NO MESSAGES YET</Text>}
               renderItem={({ item }) => {
                 const mine = isMine(item);
                 return (
-                  <View
-                    style={[
-                      styles.msgRow,
-                      mine ? styles.msgRowMine : styles.msgRowTheirs,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.msgBubble,
-                        mine ? styles.bubbleMine : styles.bubbleTheirs,
-                      ]}
-                    >
-                      <Text style={styles.msgText}>{item.content}</Text>
+                  <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
+                    <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                      {isImageContent(item.content)
+                        ? <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
+                        : <Text style={styles.msgText}>{item.content}</Text>
+                      }
                       <View style={styles.msgMeta}>
-                        <Text style={styles.msgTime}>
-                          {fmtTime(item.created_at)}
-                        </Text>
-                        {mine && (
-                          <Text style={styles.msgRead}>
-                            {item.read ? ' ✓✓' : ' ✓'}
-                          </Text>
-                        )}
+                        <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
+                        {mine && <Text style={styles.msgRead}>{item.read ? ' \u2713\u2713' : ' \u2713'}</Text>}
                       </View>
                     </View>
                   </View>
@@ -749,27 +970,20 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg }) 
               }}
             />
             <View style={styles.inputRow}>
-              <TextInput
-                style={styles.chatInput}
-                placeholder="MESSAGE..."
-                placeholderTextColor={C.muted}
-                value={text}
-                onChangeText={setText}
-                multiline
-                maxLength={2000}
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-                onPress={sendMessage}
-                disabled={!text.trim() || sending}
-              >
+              <TouchableOpacity style={styles.attachBtn} onPress={handleAttachment}>
+                <Text style={styles.attachBtnText}>+</Text>
+              </TouchableOpacity>
+              <TextInput style={styles.chatInput} placeholder="MESSAGE..." placeholderTextColor={C.muted}
+                value={text} onChangeText={setText} multiline maxLength={2000} />
+              <TouchableOpacity style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
+                onPress={() => sendMessage()} disabled={!text.trim() || sending}>
                 {sending ? <Spinner /> : <Text style={styles.sendBtnText}>SEND</Text>}
               </TouchableOpacity>
             </View>
           </>
         )}
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ThemedSafeArea>
   );
 }
 
@@ -777,6 +991,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg }) 
 // GROUPS TAB
 // ---------------------------------------------------------------------------
 function GroupsTab({ token, onOpenGroup }) {
+  const { styles, C } = useSkin();
   const [groups, setGroups]         = useState([]);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -788,125 +1003,65 @@ function GroupsTab({ token, onOpenGroup }) {
   const [showForm, setShowForm]     = useState(false);
 
   const fetchGroups = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    if (isRefresh) setRefreshing(true); else setLoading(true);
     setErr('');
     try {
       const data = await api('/api/groups', 'GET', null, token);
       setGroups(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); setRefreshing(false); }
   }, [token]);
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
   const createGroup = async () => {
     if (!newName.trim()) { setCreateErr('Group name is required.'); return; }
-    setCreating(true);
-    setCreateErr('');
+    setCreating(true); setCreateErr('');
     try {
-      const g = await api('/api/groups', 'POST', {
-        name:        newName.trim(),
-        description: newDesc.trim(),
-      }, token);
-      setGroups((prev) => [g, ...prev]);
-      setShowForm(false);
-      setNewName('');
-      setNewDesc('');
-    } catch (e) {
-      setCreateErr(e.message);
-    } finally {
-      setCreating(false);
-    }
+      const g = await api('/api/groups', 'POST', { name: newName.trim(), description: newDesc.trim() }, token);
+      setGroups((prev) => [g, ...prev]); setShowForm(false); setNewName(''); setNewDesc('');
+    } catch (e) { setCreateErr(e.message); }
+    finally { setCreating(false); }
   };
 
-  if (loading) {
-    return <View style={styles.centerFill}><Spinner size="large" /></View>;
-  }
+  if (loading) return <View style={styles.centerFill}><Spinner size="large" /></View>;
 
   return (
     <View style={styles.flex}>
       <ErrText msg={err} />
-
       {showForm && (
         <View style={styles.createGroupForm}>
           <Text style={styles.formLabel}>NEW GROUP</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="GROUP NAME"
-            placeholderTextColor={C.muted}
-            value={newName}
-            onChangeText={setNewName}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="DESCRIPTION (OPTIONAL)"
-            placeholderTextColor={C.muted}
-            value={newDesc}
-            onChangeText={setNewDesc}
-          />
+          <TextInput style={styles.input} placeholder="GROUP NAME" placeholderTextColor={C.muted} value={newName} onChangeText={setNewName} />
+          <TextInput style={styles.input} placeholder="DESCRIPTION (OPTIONAL)" placeholderTextColor={C.muted} value={newDesc} onChangeText={setNewDesc} />
           <ErrText msg={createErr} />
           <View style={styles.formBtnRow}>
-            <TouchableOpacity
-              style={[styles.primaryBtn, { flex: 1, marginRight: 8 }]}
-              onPress={createGroup}
-              disabled={creating}
-            >
+            <TouchableOpacity style={[styles.primaryBtn, { flex: 1, marginRight: 8 }]} onPress={createGroup} disabled={creating}>
               {creating ? <Spinner /> : <Text style={styles.primaryBtnText}>CREATE</Text>}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.ghostBtn, { flex: 1 }]}
-              onPress={() => { setShowForm(false); setCreateErr(''); }}
-            >
+            <TouchableOpacity style={[styles.ghostBtn, { flex: 1 }]} onPress={() => { setShowForm(false); setCreateErr(''); }}>
               <Text style={styles.ghostBtnText}>CANCEL</Text>
             </TouchableOpacity>
           </View>
         </View>
       )}
-
       <FlatList
-        data={groups}
-        keyExtractor={(g) => String(g.id)}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchGroups(true)}
-            tintColor={C.accent}
-          />
-        }
-        ListHeaderComponent={
-          !showForm ? (
-            <TouchableOpacity
-              style={styles.createGroupBtn}
-              onPress={() => setShowForm(true)}
-            >
-              <Text style={styles.createGroupBtnText}>+ NEW GROUP</Text>
-            </TouchableOpacity>
-          ) : null
-        }
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>NO GROUPS YET</Text>
-        }
+        data={groups} keyExtractor={(g) => String(g.id)}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchGroups(true)} tintColor={C.accent} />}
+        ListHeaderComponent={!showForm ? (
+          <TouchableOpacity style={styles.createGroupBtn} onPress={() => setShowForm(true)}>
+            <Text style={styles.createGroupBtnText}>+ NEW GROUP</Text>
+          </TouchableOpacity>
+        ) : null}
+        ListEmptyComponent={<Text style={styles.emptyText}>NO GROUPS YET</Text>}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.userRow}
-            onPress={() => onOpenGroup(item)}
-          >
+          <TouchableOpacity style={styles.userRow} onPress={() => onOpenGroup(item)}>
             <View style={styles.userRowInfo}>
               <Text style={styles.userRowName}>{item.name}</Text>
-              {item.description ? (
-                <Text style={styles.userRowMeta} numberOfLines={1}>
-                  {item.description}
-                </Text>
-              ) : (
-                <Text style={styles.userRowMeta}>
-                  CREATED {fmtDate(item.created_at)}
-                </Text>
-              )}
+              {item.description
+                ? <Text style={styles.userRowMeta} numberOfLines={1}>{item.description}</Text>
+                : <Text style={styles.userRowMeta}>CREATED {fmtDate(item.created_at)}</Text>
+              }
             </View>
             <Text style={styles.chevron}>{'>'}</Text>
           </TouchableOpacity>
@@ -921,34 +1076,29 @@ function GroupsTab({ token, onOpenGroup }) {
 // GROUP CHAT SCREEN
 // ---------------------------------------------------------------------------
 function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg }) {
-  const [messages, setMessages]   = useState([]);
-  const [text, setText]           = useState('');
-  const [loading, setLoading]     = useState(true);
-  const [sending, setSending]     = useState(false);
-  const [err, setErr]             = useState('');
-  const listRef                   = useRef(null);
+  const { styles, C } = useSkin();
+  const [messages, setMessages] = useState([]);
+  const [text, setText]         = useState('');
+  const [loading, setLoading]   = useState(true);
+  const [sending, setSending]   = useState(false);
+  const [err, setErr]           = useState('');
+  const listRef                 = useRef(null);
 
   const fetchHistory = useCallback(async () => {
-    setLoading(true);
-    setErr('');
+    setLoading(true); setErr('');
     try {
       const data = await api(`/api/groups/${group.id}/messages`, 'GET', null, token);
       setMessages(Array.isArray(data) ? data : []);
-    } catch (e) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); }
   }, [token, group.id]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
   useEffect(() => {
     if (!incomingMsg) return;
-    if (
-      incomingMsg.type === 'group_message' &&
-      String(incomingMsg.group?.id ?? incomingMsg.group_id) === String(group.id)
-    ) {
+    if (incomingMsg.type === 'group_message' &&
+        String(incomingMsg.group?.id ?? incomingMsg.group_id) === String(group.id)) {
       setMessages((prev) => {
         const exists = prev.some((m) => m.id === incomingMsg.id);
         return exists ? prev : [...prev, incomingMsg];
@@ -957,116 +1107,104 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   }, [incomingMsg, group.id]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-    }
+    if (messages.length > 0) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages]);
 
-  const sendMessage = async () => {
-    const content = text.trim();
+  const sendMessage = useCallback(async (overrideContent = null) => {
+    const content = overrideContent ?? text.trim();
     if (!content) return;
+    if (!overrideContent) setText('');
     setSending(true);
-    setText('');
     try {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(
-          JSON.stringify({ type: 'group_message', group_id: group.id, content })
-        );
-        const optimistic = {
-          id:         Date.now(),
-          content,
-          from_user:  currentUser,
-          group_id:   group.id,
-          created_at: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, optimistic]);
+        wsRef.current.send(JSON.stringify({ type: 'group_message', group_id: group.id, content }));
+        setMessages((prev) => [...prev, {
+          id: Date.now(), content, from_user: currentUser,
+          group_id: group.id, created_at: new Date().toISOString(),
+        }]);
       }
-    } catch (e) {
-      setErr(e.message);
-      setText(content);
-    } finally {
-      setSending(false);
-    }
-  };
+    } catch (e) { setErr(e.message); if (!overrideContent) setText(content); }
+    finally { setSending(false); }
+  }, [text, group.id, currentUser, wsRef]);
 
-  const isMine = (msg) => {
-    const fid = msg.from_user?.id ?? msg.from_user;
-    return String(fid) === String(currentUser.id);
-  };
+  const handleAttachment = useCallback(async () => {
+    Alert.alert('ATTACH', 'Select source', [
+      {
+        text: 'CAMERA',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Camera access required.'); return; }
+          const res = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+          if (!res.canceled && res.assets?.[0]) {
+            const a = res.assets[0];
+            sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
+          }
+        },
+      },
+      {
+        text: 'PHOTO LIBRARY',
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Photo library access required.'); return; }
+          const res = await ImagePicker.launchImageLibraryAsync({
+            quality: 0.5, base64: true, mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          });
+          if (!res.canceled && res.assets?.[0]) {
+            const a = res.assets[0];
+            sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
+          }
+        },
+      },
+      { text: 'CANCEL', style: 'cancel' },
+    ]);
+  }, [sendMessage]);
+
+  const isMine = (msg) => String(msg.from_user?.id ?? msg.from_user) === String(currentUser.id);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ThemedSafeArea>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <AppHeader title={group.name} onBack={onBack} />
       <KeyboardAvoidingView style={styles.flex} behavior={KAV_BEHAVIOR}>
-        {loading ? (
-          <View style={styles.centerFill}><Spinner size="large" /></View>
-        ) : (
+        {loading ? <View style={styles.centerFill}><Spinner size="large" /></View> : (
           <>
             <ErrText msg={err} />
             <FlatList
-              ref={listRef}
-              data={messages}
-              keyExtractor={(m) => String(m.id)}
+              ref={listRef} data={messages} keyExtractor={(m) => String(m.id)}
               contentContainerStyle={styles.msgList}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>NO MESSAGES YET</Text>
-              }
+              ListEmptyComponent={<Text style={styles.emptyText}>NO MESSAGES YET</Text>}
               renderItem={({ item }) => {
                 const mine = isMine(item);
-                const senderName =
-                  mine
-                    ? 'YOU'
-                    : item.from_user?.display_name ||
-                      item.from_user?.username ||
-                      'UNKNOWN';
+                const senderName = mine ? 'YOU' : (item.from_user?.display_name || item.from_user?.username || 'UNKNOWN');
                 return (
-                  <View
-                    style={[
-                      styles.msgRow,
-                      mine ? styles.msgRowMine : styles.msgRowTheirs,
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.msgBubble,
-                        mine ? styles.bubbleMine : styles.bubbleTheirs,
-                      ]}
-                    >
-                      {!mine && (
-                        <Text style={styles.msgSender}>{senderName}</Text>
-                      )}
-                      <Text style={styles.msgText}>{item.content}</Text>
-                      <Text style={styles.msgTime}>
-                        {fmtTime(item.created_at)}
-                      </Text>
+                  <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
+                    <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                      {!mine && <Text style={styles.msgSender}>{senderName}</Text>}
+                      {isImageContent(item.content)
+                        ? <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
+                        : <Text style={styles.msgText}>{item.content}</Text>
+                      }
+                      <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
                     </View>
                   </View>
                 );
               }}
             />
             <View style={styles.inputRow}>
-              <TextInput
-                style={styles.chatInput}
-                placeholder="MESSAGE..."
-                placeholderTextColor={C.muted}
-                value={text}
-                onChangeText={setText}
-                multiline
-                maxLength={2000}
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-                onPress={sendMessage}
-                disabled={!text.trim() || sending}
-              >
+              <TouchableOpacity style={styles.attachBtn} onPress={handleAttachment}>
+                <Text style={styles.attachBtnText}>+</Text>
+              </TouchableOpacity>
+              <TextInput style={styles.chatInput} placeholder="MESSAGE..." placeholderTextColor={C.muted}
+                value={text} onChangeText={setText} multiline maxLength={2000} />
+              <TouchableOpacity style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
+                onPress={() => sendMessage()} disabled={!text.trim() || sending}>
                 {sending ? <Spinner /> : <Text style={styles.sendBtnText}>SEND</Text>}
               </TouchableOpacity>
             </View>
           </>
         )}
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ThemedSafeArea>
   );
 }
 
@@ -1074,137 +1212,74 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
 // BOT TAB
 // ---------------------------------------------------------------------------
 function BotTab({ token }) {
-  const [messages, setMessages] = useState([
-    {
-      id:      0,
-      role:    'bot',
-      content: 'BANNER AI ONLINE. How can I assist you today?',
-      ts:      new Date().toISOString(),
-    },
-  ]);
-  const [text, setText]         = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [err, setErr]           = useState('');
-  const listRef                 = useRef(null);
-
-  // Typing indicator state
-  const [typing, setTyping]     = useState(false);
-  const typingTimer             = useRef(null);
+  const { styles, C } = useSkin();
+  const [messages, setMessages] = useState([{
+    id: 0, role: 'bot', content: 'BANNER AI ONLINE. How can I assist you today?', ts: new Date().toISOString(),
+  }]);
+  const [text, setText]       = useState('');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr]         = useState('');
+  const [typing, setTyping]   = useState(false);
+  const listRef               = useRef(null);
+  const typingTimer           = useRef(null);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-    }
+    if (messages.length > 0) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages, typing]);
 
   const sendToBot = async () => {
     const content = text.trim();
     if (!content || loading) return;
-    setText('');
-    setErr('');
-
-    const userMsg = {
-      id:      Date.now(),
-      role:    'user',
-      content,
-      ts:      new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setTyping(true);
-    setLoading(true);
-
-    // Simulate streaming feel with a minimum typing delay
+    setText(''); setErr('');
+    setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content, ts: new Date().toISOString() }]);
+    setTyping(true); setLoading(true);
     typingTimer.current = setTimeout(async () => {
       try {
         const data = await api('/api/bot/chat', 'POST', { message: content }, token);
-        const botMsg = {
-          id:      Date.now() + 1,
-          role:    'bot',
-          content: data.reply || '...',
-          ts:      new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, botMsg]);
-      } catch (e) {
-        setErr(e.message);
-      } finally {
-        setTyping(false);
-        setLoading(false);
-      }
+        setMessages((prev) => [...prev, { id: Date.now() + 1, role: 'bot', content: data.reply || '...', ts: new Date().toISOString() }]);
+      } catch (e) { setErr(e.message); }
+      finally { setTyping(false); setLoading(false); }
     }, 400);
   };
 
-  useEffect(() => {
-    return () => { if (typingTimer.current) clearTimeout(typingTimer.current); };
-  }, []);
+  useEffect(() => { return () => { if (typingTimer.current) clearTimeout(typingTimer.current); }; }, []);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={KAV_BEHAVIOR}>
       <View style={styles.botHeader}>
         <Text style={styles.botHeaderText}>BANNER AI</Text>
-        <View style={[styles.dot, { backgroundColor: C.green, marginLeft: 8 }]} />
+        <View style={[{ width: 8, height: 8, borderRadius: 4, marginLeft: 8 }, { backgroundColor: C.green }]} />
       </View>
-
       <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(m) => String(m.id)}
+        ref={listRef} data={messages} keyExtractor={(m) => String(m.id)}
         contentContainerStyle={styles.msgList}
         renderItem={({ item }) => {
           const isBot = item.role === 'bot';
           return (
-            <View
-              style={[
-                styles.msgRow,
-                isBot ? styles.msgRowTheirs : styles.msgRowMine,
-              ]}
-            >
-              <View
-                style={[
-                  styles.msgBubble,
-                  isBot ? styles.bubbleBotMsg : styles.bubbleMine,
-                ]}
-              >
-                {isBot && (
-                  <Text style={styles.botLabel}>BANNER</Text>
-                )}
-                <Text style={[styles.msgText, isBot && styles.botMsgText]}>
-                  {item.content}
-                </Text>
+            <View style={[styles.msgRow, isBot ? styles.msgRowTheirs : styles.msgRowMine]}>
+              <View style={[styles.msgBubble, isBot ? styles.bubbleBotMsg : styles.bubbleMine]}>
+                {isBot && <Text style={styles.botLabel}>BANNER</Text>}
+                <Text style={[styles.msgText, isBot && styles.botMsgText]}>{item.content}</Text>
                 <Text style={styles.msgTime}>{fmtTime(item.ts)}</Text>
               </View>
             </View>
           );
         }}
-        ListFooterComponent={
-          typing ? (
-            <View style={[styles.msgRow, styles.msgRowTheirs]}>
-              <View style={[styles.msgBubble, styles.bubbleBotMsg]}>
-                <Text style={styles.botLabel}>BANNER</Text>
-                <TypingDots />
-              </View>
+        ListFooterComponent={typing ? (
+          <View style={[styles.msgRow, styles.msgRowTheirs]}>
+            <View style={[styles.msgBubble, styles.bubbleBotMsg]}>
+              <Text style={styles.botLabel}>BANNER</Text>
+              <TypingDots />
             </View>
-          ) : null
-        }
+          </View>
+        ) : null}
       />
-
       <ErrText msg={err} />
-
       <View style={styles.inputRow}>
-        <TextInput
-          style={styles.chatInput}
-          placeholder="ASK BANNER AI..."
-          placeholderTextColor={C.muted}
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={2000}
-          onSubmitEditing={sendToBot}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, (!text.trim() || loading) && styles.sendBtnDisabled]}
-          onPress={sendToBot}
-          disabled={!text.trim() || loading}
-        >
+        <TextInput style={styles.chatInput} placeholder="ASK BANNER AI..." placeholderTextColor={C.muted}
+          value={text} onChangeText={setText} multiline maxLength={2000} onSubmitEditing={sendToBot} />
+        <TouchableOpacity style={[styles.sendBtn, (!text.trim() || loading) && styles.sendBtnDisabled]}
+          onPress={sendToBot} disabled={!text.trim() || loading}>
           {loading ? <Spinner /> : <Text style={styles.sendBtnText}>SEND</Text>}
         </TouchableOpacity>
       </View>
@@ -1212,26 +1287,24 @@ function BotTab({ token }) {
   );
 }
 
-// Animated typing dots
 function TypingDots() {
+  const { C } = useSkin();
   const [frame, setFrame] = useState(0);
   useEffect(() => {
     const iv = setInterval(() => setFrame((f) => (f + 1) % 4), 350);
     return () => clearInterval(iv);
   }, []);
-  const dots = '.'.repeat(frame);
-  return <Text style={[styles.msgText, { color: C.accent }]}>{dots || ' '}</Text>;
+  return <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 14, color: C.accent }}>{'.'.repeat(frame) || ' '}</Text>;
 }
 
 // ---------------------------------------------------------------------------
 // PROFILE TAB
 // ---------------------------------------------------------------------------
 function ProfileTab({ token, currentUser, onLogout }) {
-  const [loading, setLoading]       = useState(false);
-  const [inviteUrl, setInviteUrl]   = useState('');
-  const [inviteErr, setInviteErr]   = useState('');
-
-  // Biometric state
+  const { styles, C } = useSkin();
+  const [loading, setLoading]     = useState(false);
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [inviteErr, setInviteErr] = useState('');
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioEnabled, setBioEnabled]     = useState(false);
   const [showBioModal, setShowBioModal] = useState(false);
@@ -1248,71 +1321,43 @@ function ProfileTab({ token, currentUser, onLogout }) {
 
   const handleEnableBio = async () => {
     if (!bioPassword.trim()) { setBioErr('Password is required.'); return; }
-    setBioLoading(true);
-    setBioErr('');
+    setBioLoading(true); setBioErr('');
     try {
-      // Verify the password against the backend
       await api('/auth/login', 'POST', { email: currentUser.email, password: bioPassword });
       await saveBioEnabled(true);
       await saveBioCreds(currentUser.email, bioPassword);
-      setBioEnabled(true);
-      setShowBioModal(false);
-      setBioPassword('');
+      setBioEnabled(true); setShowBioModal(false); setBioPassword('');
       Alert.alert('FACE ID ENABLED', 'Face ID will unlock the app on your next launch.');
-    } catch (e) {
-      setBioErr(e.message || 'Incorrect password.');
-    } finally {
-      setBioLoading(false);
-    }
+    } catch (e) { setBioErr(e.message || 'Incorrect password.'); }
+    finally { setBioLoading(false); }
   };
 
   const handleDisableBio = () => {
     Alert.alert('DISABLE FACE ID', 'Face ID login will be turned off.', [
       { text: 'CANCEL', style: 'cancel' },
-      {
-        text: 'DISABLE', style: 'destructive',
-        onPress: async () => { await clearBio(); setBioEnabled(false); },
-      },
+      { text: 'DISABLE', style: 'destructive', onPress: async () => { await clearBio(); setBioEnabled(false); } },
     ]);
   };
 
   const handleInvite = async () => {
-    setLoading(true);
-    setInviteErr('');
+    setLoading(true); setInviteErr('');
     try {
       const data = await api('/api/invites', 'POST', {}, token);
       const url = data.invite_url || data.url || '';
       setInviteUrl(url);
-      Alert.alert(
-        'INVITE LINK GENERATED',
-        url,
-        [
-          {
-            text: 'COPY',
-            onPress: async () => {
-              await Clipboard.setStringAsync(url);
-              Alert.alert('COPIED', 'Invite URL copied to clipboard.');
-            },
-          },
-          { text: 'OK' },
-        ]
-      );
-    } catch (e) {
-      setInviteErr(e.message);
-    } finally {
-      setLoading(false);
-    }
+      Alert.alert('INVITE LINK GENERATED', url, [
+        { text: 'COPY', onPress: async () => { await Clipboard.setStringAsync(url); Alert.alert('COPIED', 'Invite URL copied to clipboard.'); } },
+        { text: 'OK' },
+      ]);
+    } catch (e) { setInviteErr(e.message); }
+    finally { setLoading(false); }
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'LOGOUT',
-      'Disconnect from nano-SYNAPSYS?',
-      [
-        { text: 'CANCEL', style: 'cancel' },
-        { text: 'LOGOUT', style: 'destructive', onPress: onLogout },
-      ]
-    );
+    Alert.alert('LOGOUT', 'Disconnect from nano-SYNAPSYS?', [
+      { text: 'CANCEL', style: 'cancel' },
+      { text: 'LOGOUT', style: 'destructive', onPress: onLogout },
+    ]);
   };
 
   return (
@@ -1321,52 +1366,32 @@ function ProfileTab({ token, currentUser, onLogout }) {
         <Text style={styles.profileLabel}>USERNAME</Text>
         <Text style={styles.profileValue}>{currentUser.username}</Text>
       </View>
-
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>EMAIL</Text>
         <Text style={styles.profileValue}>{currentUser.email || '—'}</Text>
       </View>
-
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>DISPLAY NAME</Text>
         <Text style={styles.profileValue}>{currentUser.display_name || currentUser.username}</Text>
       </View>
-
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>ACCOUNT STATUS</Text>
-        <Text
-          style={[
-            styles.profileValue,
-            { color: currentUser.is_approved ? C.green : C.amber },
-          ]}
-        >
+        <Text style={[styles.profileValue, { color: currentUser.is_approved ? C.green : C.amber }]}>
           {currentUser.is_approved ? 'APPROVED' : 'PENDING APPROVAL'}
         </Text>
       </View>
 
       <View style={styles.profileDivider} />
 
-      <TouchableOpacity
-        style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
-        onPress={handleInvite}
-        disabled={loading}
-      >
+      <TouchableOpacity style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]} onPress={handleInvite} disabled={loading}>
         {loading ? <Spinner /> : <Text style={styles.primaryBtnText}>GENERATE INVITE LINK</Text>}
       </TouchableOpacity>
-
       <ErrText msg={inviteErr} />
-
       {inviteUrl ? (
         <View style={styles.inviteUrlBox}>
           <Text style={styles.inviteUrlLabel}>INVITE URL</Text>
           <Text style={styles.inviteUrlText} selectable>{inviteUrl}</Text>
-          <TouchableOpacity
-            style={styles.copyBtn}
-            onPress={async () => {
-              await Clipboard.setStringAsync(inviteUrl);
-              Alert.alert('COPIED', 'Invite URL copied to clipboard.');
-            }}
-          >
+          <TouchableOpacity style={styles.copyBtn} onPress={async () => { await Clipboard.setStringAsync(inviteUrl); Alert.alert('COPIED', 'Invite URL copied to clipboard.'); }}>
             <Text style={styles.copyBtnText}>COPY TO CLIPBOARD</Text>
           </TouchableOpacity>
         </View>
@@ -1374,17 +1399,10 @@ function ProfileTab({ token, currentUser, onLogout }) {
 
       <View style={styles.profileDivider} />
 
-      {/* Face ID section */}
       {bioAvailable && (
-        bioEnabled ? (
-          <TouchableOpacity style={styles.bioDisableBtn} onPress={handleDisableBio}>
-            <Text style={styles.bioDisableBtnText}>DISABLE FACE ID LOGIN</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowBioModal(true)}>
-            <Text style={styles.primaryBtnText}>ENABLE FACE ID LOGIN</Text>
-          </TouchableOpacity>
-        )
+        bioEnabled
+          ? <TouchableOpacity style={styles.bioDisableBtn} onPress={handleDisableBio}><Text style={styles.bioDisableBtnText}>DISABLE FACE ID LOGIN</Text></TouchableOpacity>
+          : <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowBioModal(true)}><Text style={styles.primaryBtnText}>ENABLE FACE ID LOGIN</Text></TouchableOpacity>
       )}
 
       <View style={styles.profileDivider} />
@@ -1393,42 +1411,21 @@ function ProfileTab({ token, currentUser, onLogout }) {
         <Text style={styles.logoutBtnText}>LOGOUT</Text>
       </TouchableOpacity>
 
-      {/* Password confirmation modal for Face ID enrollment */}
-      <Modal
-        visible={showBioModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setShowBioModal(false); setBioPassword(''); setBioErr(''); }}
-      >
+      <Modal visible={showBioModal} transparent animationType="fade"
+        onRequestClose={() => { setShowBioModal(false); setBioPassword(''); setBioErr(''); }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>ENABLE FACE ID</Text>
-            <Text style={styles.modalSub}>
-              Enter your password to authorise Face ID login
-            </Text>
-            <TextInput
-              style={[styles.input, { marginTop: 16 }]}
-              placeholder="PASSWORD"
-              placeholderTextColor={C.muted}
-              value={bioPassword}
-              onChangeText={setBioPassword}
-              secureTextEntry
-              autoFocus
-              onSubmitEditing={handleEnableBio}
-            />
+            <Text style={styles.modalSub}>Enter your password to authorise Face ID login</Text>
+            <TextInput style={[styles.input, { marginTop: 16 }]} placeholder="PASSWORD" placeholderTextColor={C.muted}
+              value={bioPassword} onChangeText={setBioPassword} secureTextEntry autoFocus onSubmitEditing={handleEnableBio} />
             <ErrText msg={bioErr} />
             <View style={[styles.formBtnRow, { marginTop: 12 }]}>
-              <TouchableOpacity
-                style={[styles.primaryBtn, { flex: 1, marginRight: 8 }, (bioLoading || !bioPassword.trim()) && styles.primaryBtnDisabled]}
-                onPress={handleEnableBio}
-                disabled={bioLoading || !bioPassword.trim()}
-              >
+              <TouchableOpacity style={[styles.primaryBtn, { flex: 1, marginRight: 8 }, (bioLoading || !bioPassword.trim()) && styles.primaryBtnDisabled]}
+                onPress={handleEnableBio} disabled={bioLoading || !bioPassword.trim()}>
                 {bioLoading ? <Spinner /> : <Text style={styles.primaryBtnText}>CONFIRM</Text>}
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.ghostBtn, { flex: 1 }]}
-                onPress={() => { setShowBioModal(false); setBioPassword(''); setBioErr(''); }}
-              >
+              <TouchableOpacity style={[styles.ghostBtn, { flex: 1 }]} onPress={() => { setShowBioModal(false); setBioPassword(''); setBioErr(''); }}>
                 <Text style={styles.ghostBtnText}>CANCEL</Text>
               </TouchableOpacity>
             </View>
@@ -1440,45 +1437,123 @@ function ProfileTab({ token, currentUser, onLogout }) {
 }
 
 // ---------------------------------------------------------------------------
-// HOME SCREEN (tabs + routing)
+// SETTINGS TAB
+// ---------------------------------------------------------------------------
+function SettingsTab() {
+  const { styles, C, skin, setSkin } = useSkin();
+  const [disappear, setDisappearState] = useState(null);
+
+  useEffect(() => {
+    loadDisappear().then(v => setDisappearState(v));
+  }, []);
+
+  const handleSetDisappear = async (v) => {
+    setDisappearState(v);
+    await saveDisappear(v);
+  };
+
+  const SKIN_OPTS = [
+    { key: 'green',    label: 'PHANTOM', sub: 'GREEN',  dot: '#00FF41', desc: 'Classic matrix terminal' },
+    { key: 'tactical', label: 'TACTICAL', sub: 'STEEL', dot: '#a8b8cc', desc: 'Metallic Magpul texture' },
+  ];
+
+  return (
+    <ScrollView style={styles.flex} contentContainerStyle={styles.profileScroll}>
+
+      {/* ── SKIN ──────────────────────────────────────────────── */}
+      <Text style={styles.settingsHeader}>INTERFACE SKIN</Text>
+      <View style={styles.skinRow}>
+        {SKIN_OPTS.map(({ key, label, sub, dot }) => (
+          <TouchableOpacity
+            key={key}
+            style={[styles.skinBtn, skin === key && styles.skinBtnActive]}
+            onPress={() => setSkin(key)}
+          >
+            <View style={[styles.skinDot, { backgroundColor: dot }]} />
+            <Text style={styles.skinBtnLabel}>{label}</Text>
+            <Text style={[styles.skinBtnName, skin === key && styles.skinBtnNameActive]}>{sub}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.dim, marginTop: 8, letterSpacing: 1 }}>
+        {skin === 'tactical' ? 'TACTICAL: gunmetal + Magpul texture overlay' : 'PHANTOM: classic green terminal matrix'}
+      </Text>
+
+      <View style={styles.profileDivider} />
+
+      {/* ── DISAPPEARING MESSAGES ────────────────────────────── */}
+      <Text style={styles.settingsHeader}>DISAPPEARING MESSAGES</Text>
+      <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.dim, marginBottom: 12, letterSpacing: 1, lineHeight: 16 }}>
+        New messages will be deleted automatically after the selected time.
+      </Text>
+      <View style={styles.disappearWrap}>
+        {DISAPPEAR_OPTIONS.map((opt) => (
+          <TouchableOpacity
+            key={String(opt.value)}
+            style={[styles.disappearOpt, disappear === opt.value && styles.disappearOptActive]}
+            onPress={() => handleSetDisappear(opt.value)}
+          >
+            <Text style={[styles.disappearOptText, disappear === opt.value && styles.disappearOptTextActive]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {disappear && (
+        <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.amber, marginTop: 10, letterSpacing: 1 }}>
+          {'\u26A0'} Messages will disappear after {DISAPPEAR_OPTIONS.find(o => o.value === disappear)?.label}
+        </Text>
+      )}
+
+      <View style={styles.profileDivider} />
+
+      {/* ── APP INFO ─────────────────────────────────────────── */}
+      <Text style={styles.settingsHeader}>APP INFO</Text>
+      <View style={styles.profileCard}>
+        <Text style={styles.profileLabel}>VERSION</Text>
+        <Text style={styles.profileValue}>1.0.0</Text>
+      </View>
+      <View style={styles.profileCard}>
+        <Text style={styles.profileLabel}>NETWORK</Text>
+        <Text style={styles.profileValue}>AI EVOLUTION SECURE MESH</Text>
+      </View>
+      <View style={styles.profileCard}>
+        <Text style={styles.profileLabel}>ENCRYPTION</Text>
+        <Text style={[styles.profileValue, { color: C.green }]}>E2E + JWT</Text>
+      </View>
+    </ScrollView>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HOME SCREEN  (tabs + routing)
 // ---------------------------------------------------------------------------
 function HomeScreen({ token, currentUser, onLogout }) {
+  const { styles, C } = useSkin();
   const [activeTab, setActiveTab]     = useState('CHATS');
   const [dmPeer, setDmPeer]           = useState(null);
   const [groupChat, setGroupChat]     = useState(null);
   const [incomingMsg, setIncomingMsg] = useState(null);
+  const [disappear, setDisappear]     = useState(null);
 
   const wsRef        = useRef(null);
   const reconnectRef = useRef(null);
   const backoffRef   = useRef(1000);
 
-  // ------- WebSocket connection -------
-  const connectWS = useCallback(() => {
-    if (reconnectRef.current) {
-      clearTimeout(reconnectRef.current);
-      reconnectRef.current = null;
-    }
+  useEffect(() => {
+    loadDisappear().then(v => setDisappear(v));
+  }, []);
 
+  const connectWS = useCallback(() => {
+    if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null; }
     const ws = new WebSocket(`${WS_URL}?token=${token}`);
     wsRef.current = ws;
-
-    ws.onopen = () => {
-      backoffRef.current = 1000;
-    };
-
+    ws.onopen = () => { backoffRef.current = 1000; };
     ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        setIncomingMsg(msg);
-      } catch {
-        // ignore malformed
-      }
+      try { setIncomingMsg(JSON.parse(event.data)); } catch {}
     };
-
-    ws.onerror = () => {};
-
-    ws.onclose = () => {
-      // Exponential backoff up to 30s
+    ws.onerror  = () => {};
+    ws.onclose  = () => {
       const delay = Math.min(backoffRef.current, 30000);
       backoffRef.current = Math.min(backoffRef.current * 2, 30000);
       reconnectRef.current = setTimeout(connectWS, delay);
@@ -1489,26 +1564,15 @@ function HomeScreen({ token, currentUser, onLogout }) {
     connectWS();
     return () => {
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
-      if (wsRef.current) {
-        wsRef.current.onclose = null; // prevent reconnect on unmount
-        wsRef.current.close();
-      }
+      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
     };
   }, [connectWS]);
 
-  // ------- Online user presence -------
-  // (incomingMsg of type online_users can be consumed by ChatsTab in the future)
-
-  // ------- Navigation -------
   if (dmPeer) {
     return (
       <DMChatScreen
-        token={token}
-        currentUser={currentUser}
-        peer={dmPeer}
-        onBack={() => setDmPeer(null)}
-        wsRef={wsRef}
-        incomingMsg={incomingMsg}
+        token={token} currentUser={currentUser} peer={dmPeer}
+        onBack={() => setDmPeer(null)} wsRef={wsRef} incomingMsg={incomingMsg} disappear={disappear}
       />
     );
   }
@@ -1516,60 +1580,37 @@ function HomeScreen({ token, currentUser, onLogout }) {
   if (groupChat) {
     return (
       <GroupChatScreen
-        token={token}
-        currentUser={currentUser}
-        group={groupChat}
-        onBack={() => setGroupChat(null)}
-        wsRef={wsRef}
-        incomingMsg={incomingMsg}
+        token={token} currentUser={currentUser} group={groupChat}
+        onBack={() => setGroupChat(null)} wsRef={wsRef} incomingMsg={incomingMsg} disappear={disappear}
       />
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <ThemedSafeArea>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
       <View style={styles.homeHeader}>
         <Text style={styles.homeTitle}>nano-SYNAPSYS</Text>
         <Text style={styles.homeSubtitle}>AI EVOLUTION MESH</Text>
       </View>
-
       <View style={styles.flex}>
-        {activeTab === 'CHATS' && (
-          <ChatsTab
-            token={token}
-            currentUser={currentUser}
-            onOpenDM={(peer) => setDmPeer(peer)}
-          />
-        )}
-        {activeTab === 'GROUPS' && (
-          <GroupsTab
-            token={token}
-            onOpenGroup={(g) => setGroupChat(g)}
-          />
-        )}
-        {activeTab === 'BOT' && (
-          <BotTab token={token} />
-        )}
-        {activeTab === 'PROFILE' && (
-          <ProfileTab
-            token={token}
-            currentUser={currentUser}
-            onLogout={onLogout}
-          />
-        )}
+        {activeTab === 'CHATS'    && <ChatsTab token={token} currentUser={currentUser} onOpenDM={(peer) => setDmPeer(peer)} />}
+        {activeTab === 'GROUPS'   && <GroupsTab token={token} onOpenGroup={(g) => setGroupChat(g)} />}
+        {activeTab === 'BOT'      && <BotTab token={token} />}
+        {activeTab === 'PROFILE'  && <ProfileTab token={token} currentUser={currentUser} onLogout={onLogout} />}
+        {activeTab === 'SETTINGS' && <SettingsTab />}
       </View>
-
       <TabBar active={activeTab} onChange={setActiveTab} />
-    </SafeAreaView>
+    </ThemedSafeArea>
   );
 }
 
 // ---------------------------------------------------------------------------
 // ROOT APP
 // ---------------------------------------------------------------------------
-export default function App() {
-  const [appState, setAppState] = useState('loading'); // loading | biometric | auth | home
+function AppInner() {
+  const { styles, C } = useSkin();
+  const [appState, setAppState] = useState('loading');
   const [token, setToken]       = useState(null);
   const [currentUser, setUser]  = useState(null);
 
@@ -1577,49 +1618,34 @@ export default function App() {
     (async () => {
       try {
         const storedToken = await loadToken();
-        if (!storedToken) {
-          setAppState('auth');
-          return;
-        }
-        // Validate token
+        if (!storedToken) { setAppState('auth'); return; }
         const user = await api('/auth/me', 'GET', null, storedToken);
         await saveUser(user);
-        setToken(storedToken);
-        setUser(user);
-        // Check if biometric lock is active
+        setToken(storedToken); setUser(user);
         const bioEnabled = await loadBioEnabled();
         const bioReady   = await isBiometricReady();
         setAppState(bioEnabled && bioReady ? 'biometric' : 'home');
       } catch {
-        await clearToken();
-        await clearUser();
+        await clearToken(); await clearUser();
         setAppState('auth');
       }
     })();
   }, []);
 
-  const handleAuth = useCallback((t, u) => {
-    setToken(t);
-    setUser(u);
-    setAppState('home');
-  }, []);
-
+  const handleAuth = useCallback((t, u) => { setToken(t); setUser(u); setAppState('home'); }, []);
   const handleLogout = useCallback(async () => {
-    await clearToken();
-    await clearUser();
-    setToken(null);
-    setUser(null);
-    setAppState('auth');
+    await clearToken(); await clearUser();
+    setToken(null); setUser(null); setAppState('auth');
   }, []);
 
   if (appState === 'loading') {
     return (
-      <View style={styles.splashScreen}>
+      <ThemedView style={styles.splashScreen}>
         <StatusBar barStyle="light-content" backgroundColor={C.bg} />
         <Text style={styles.splashTitle}>nano-SYNAPSYS</Text>
         <Text style={styles.splashSub}>AI EVOLUTION</Text>
         <Spinner size="large" />
-      </View>
+      </ThemedView>
     );
   }
 
@@ -1627,653 +1653,20 @@ export default function App() {
     return (
       <BiometricUnlockScreen
         onUnlock={() => setAppState('home')}
-        onUsePassword={async () => {
-          await clearToken();
-          await clearUser();
-          setToken(null);
-          setUser(null);
-          setAppState('auth');
-        }}
+        onUsePassword={async () => { await clearToken(); await clearUser(); setToken(null); setUser(null); setAppState('auth'); }}
       />
     );
   }
 
-  if (appState === 'auth') {
-    return <AuthScreen onAuth={handleAuth} />;
-  }
+  if (appState === 'auth') return <AuthScreen onAuth={handleAuth} />;
 
-  return (
-    <HomeScreen
-      token={token}
-      currentUser={currentUser}
-      onLogout={handleLogout}
-    />
-  );
+  return <HomeScreen token={token} currentUser={currentUser} onLogout={handleLogout} />;
 }
 
-// ---------------------------------------------------------------------------
-// STYLES
-// ---------------------------------------------------------------------------
-const styles = StyleSheet.create({
-  // Layout
-  flex:        { flex: 1 },
-  safeArea:    { flex: 1, backgroundColor: C.bg },
-  centerFill:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-  // Splash
-  splashScreen: {
-    flex:            1,
-    backgroundColor: C.bg,
-    alignItems:      'center',
-    justifyContent:  'center',
-    gap:             16,
-  },
-  splashTitle: {
-    fontFamily:  Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:    28,
-    fontWeight:  '700',
-    color:       C.accent,
-    letterSpacing: 2,
-    textShadowColor: C.accent,
-    textShadowRadius: 8,
-    textShadowOffset: { width: 0, height: 0 },
-  },
-  splashSub: {
-    fontFamily:  Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:    12,
-    color:       C.dim,
-    letterSpacing: 4,
-  },
-
-  // AppHeader
-  appHeader: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    justifyContent:  'space-between',
-    backgroundColor: C.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    paddingHorizontal: 12,
-    paddingVertical:   10,
-  },
-  appHeaderTitle: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      16,
-    fontWeight:    '700',
-    color:         C.bright,
-    letterSpacing: 1,
-    textAlign:     'center',
-  },
-  backBtn: { paddingVertical: 4, paddingRight: 8 },
-  backBtnText: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   13,
-    color:      C.accent,
-  },
-
-  // Home header
-  homeHeader: {
-    backgroundColor: C.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical:   12,
-    alignItems:        'center',
-  },
-  homeTitle: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      22,
-    fontWeight:    '800',
-    color:         C.accent,
-    letterSpacing: 2,
-    textShadowColor: C.accent,
-    textShadowRadius: 6,
-    textShadowOffset: { width: 0, height: 0 },
-  },
-  homeSubtitle: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      10,
-    color:         C.dim,
-    letterSpacing: 4,
-    marginTop:     2,
-  },
-
-  // Tab bar
-  tabBar: {
-    flexDirection:   'row',
-    backgroundColor: C.surface,
-    borderTopWidth:  1,
-    borderTopColor:  C.border,
-  },
-  tabItem: {
-    flex:           1,
-    alignItems:     'center',
-    paddingVertical: 12,
-    position:       'relative',
-  },
-  tabText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      10,
-    color:         C.dim,
-    letterSpacing: 1,
-  },
-  tabTextActive: {
-    color:      C.accent,
-    fontWeight: '700',
-  },
-  tabIndicator: {
-    position:        'absolute',
-    top:             0,
-    left:            '20%',
-    right:           '20%',
-    height:          2,
-    backgroundColor: C.accent,
-  },
-
-  // Auth
-  authScroll: {
-    flexGrow:        1,
-    backgroundColor: C.bg,
-    padding:         24,
-    justifyContent:  'center',
-  },
-  logoBlock: {
-    alignItems:   'center',
-    marginBottom: 40,
-  },
-  logoText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      26,
-    fontWeight:    '800',
-    color:         C.accent,
-    letterSpacing: 2,
-    textShadowColor: C.accent,
-    textShadowRadius: 10,
-    textShadowOffset: { width: 0, height: 0 },
-  },
-  logoSub: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      10,
-    color:         C.dim,
-    letterSpacing: 4,
-    marginTop:     6,
-  },
-  authTabRow: {
-    flexDirection:   'row',
-    borderWidth:     1,
-    borderColor:     C.border,
-    marginBottom:    24,
-    backgroundColor: C.surface,
-  },
-  authTab: {
-    flex:           1,
-    paddingVertical: 10,
-    alignItems:     'center',
-  },
-  authTabActive: {
-    backgroundColor: C.panel,
-    borderBottomWidth: 2,
-    borderBottomColor: C.accent,
-  },
-  authTabText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      13,
-    color:         C.dim,
-    letterSpacing: 1,
-  },
-  authTabTextActive: {
-    color:      C.accent,
-    fontWeight: '700',
-  },
-  authForm: { gap: 12 },
-
-  // Inputs
-  input: {
-    backgroundColor: C.surface,
-    borderWidth:     1,
-    borderColor:     C.border,
-    color:           C.bright,
-    paddingHorizontal: 14,
-    paddingVertical:   12,
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      14,
-    letterSpacing: 1,
-  },
-  inputMultiline: {
-    minHeight:       90,
-    textAlignVertical: 'top',
-    paddingTop:      12,
-  },
-
-  // Buttons
-  primaryBtn: {
-    backgroundColor: C.panel,
-    borderWidth:     1,
-    borderColor:     C.green,
-    alignItems:      'center',
-    paddingVertical: 14,
-  },
-  primaryBtnDisabled: {
-    borderColor: C.muted,
-    opacity:     0.6,
-  },
-  primaryBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      14,
-    fontWeight:    '700',
-    color:         C.accent,
-    letterSpacing: 2,
-  },
-  ghostBtn: {
-    backgroundColor: 'transparent',
-    borderWidth:     1,
-    borderColor:     C.border,
-    alignItems:      'center',
-    paddingVertical: 14,
-  },
-  ghostBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      13,
-    color:         C.dim,
-    letterSpacing: 1,
-  },
-
-  // Errors & empty
-  errText: {
-    color:      C.red,
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   12,
-    paddingHorizontal: 16,
-    paddingVertical:    8,
-  },
-  emptyText: {
-    color:      C.muted,
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   13,
-    textAlign:  'center',
-    marginTop:  40,
-    letterSpacing: 2,
-  },
-
-  // Lists
-  separator: {
-    height:          1,
-    backgroundColor: C.border,
-    marginHorizontal: 0,
-  },
-  userRow: {
-    flexDirection:    'row',
-    alignItems:       'center',
-    justifyContent:   'space-between',
-    paddingHorizontal: 16,
-    paddingVertical:   14,
-    backgroundColor:  C.surface,
-  },
-  userRowLeft: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    flex:          1,
-  },
-  userRowInfo: { flex: 1, marginLeft: 10 },
-  userRowName: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      15,
-    color:         C.bright,
-    fontWeight:    '600',
-  },
-  userRowMeta: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   11,
-    color:      C.dim,
-    marginTop:  2,
-    letterSpacing: 1,
-  },
-  chevron: {
-    color:      C.dim,
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   16,
-    marginLeft: 8,
-  },
-
-  // Online dot
-  dot: {
-    width:        8,
-    height:       8,
-    borderRadius: 4,
-    marginLeft:   4,
-  },
-
-  // Messages
-  msgList: {
-    padding:        12,
-    paddingBottom:  20,
-  },
-  msgRow: {
-    marginVertical: 4,
-    flexDirection:  'row',
-  },
-  msgRowMine:   { justifyContent: 'flex-end' },
-  msgRowTheirs: { justifyContent: 'flex-start' },
-  msgBubble: {
-    maxWidth:       '78%',
-    paddingHorizontal: 12,
-    paddingVertical:    8,
-    borderWidth:    1,
-  },
-  bubbleMine: {
-    backgroundColor: '#0d2b0d',
-    borderColor:     '#00C83230',
-    borderRadius:    0,
-  },
-  bubbleTheirs: {
-    backgroundColor: C.surface,
-    borderColor:     C.border,
-    borderRadius:    0,
-  },
-  bubbleBotMsg: {
-    backgroundColor: '#071407',
-    borderColor:     C.borderBright,
-    borderRadius:    0,
-  },
-  msgText: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   14,
-    color:      C.text,
-    lineHeight: 20,
-  },
-  botMsgText: { color: C.bright },
-  msgSender: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      10,
-    color:         C.accent,
-    letterSpacing: 1,
-    marginBottom:  4,
-    fontWeight:    '700',
-  },
-  botLabel: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      10,
-    color:         C.accent,
-    letterSpacing: 2,
-    fontWeight:    '700',
-    marginBottom:  4,
-  },
-  msgMeta: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    marginTop:     4,
-    justifyContent: 'flex-end',
-  },
-  msgTime: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   10,
-    color:      C.muted,
-    marginTop:  4,
-  },
-  msgRead: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   10,
-    color:      C.green,
-  },
-
-  // Chat input
-  inputRow: {
-    flexDirection:   'row',
-    borderTopWidth:  1,
-    borderTopColor:  C.border,
-    backgroundColor: C.surface,
-    padding:         8,
-    alignItems:      'flex-end',
-  },
-  chatInput: {
-    flex:            1,
-    color:           C.bright,
-    backgroundColor: C.panel,
-    borderWidth:     1,
-    borderColor:     C.border,
-    paddingHorizontal: 12,
-    paddingVertical:   10,
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      14,
-    maxHeight:     120,
-    marginRight:   8,
-  },
-  sendBtn: {
-    backgroundColor: C.panel,
-    borderWidth:     1,
-    borderColor:     C.green,
-    paddingHorizontal: 14,
-    paddingVertical:   10,
-    justifyContent:   'center',
-    alignItems:       'center',
-    minWidth:         60,
-  },
-  sendBtnDisabled: {
-    borderColor: C.muted,
-    opacity:     0.5,
-  },
-  sendBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      12,
-    color:         C.accent,
-    fontWeight:    '700',
-    letterSpacing: 1,
-  },
-
-  // Groups
-  createGroupBtn: {
-    backgroundColor: C.panel,
-    borderWidth:     1,
-    borderColor:     C.green,
-    margin:          16,
-    paddingVertical: 12,
-    alignItems:      'center',
-  },
-  createGroupBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      13,
-    color:         C.accent,
-    fontWeight:    '700',
-    letterSpacing: 2,
-  },
-  createGroupForm: {
-    backgroundColor: C.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    padding:          16,
-    gap:              10,
-  },
-  formLabel: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      12,
-    color:         C.accent,
-    letterSpacing: 2,
-    marginBottom:  4,
-  },
-  formBtnRow: {
-    flexDirection: 'row',
-    marginTop:     4,
-  },
-
-  // Bot
-  botHeader: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    backgroundColor: C.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: C.border,
-    paddingHorizontal: 16,
-    paddingVertical:   10,
-  },
-  botHeaderText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      14,
-    fontWeight:    '700',
-    color:         C.accent,
-    letterSpacing: 3,
-  },
-
-  // Profile
-  profileScroll: {
-    padding:    16,
-    paddingBottom: 40,
-  },
-  profileCard: {
-    backgroundColor: C.surface,
-    borderWidth:     1,
-    borderColor:     C.border,
-    padding:         14,
-    marginBottom:    8,
-  },
-  profileLabel: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      10,
-    color:         C.dim,
-    letterSpacing: 2,
-    marginBottom:  4,
-  },
-  profileValue: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   15,
-    color:      C.bright,
-    fontWeight: '600',
-  },
-  profileDivider: {
-    height:          1,
-    backgroundColor: C.border,
-    marginVertical:  20,
-  },
-  inviteUrlBox: {
-    backgroundColor: C.panel,
-    borderWidth:     1,
-    borderColor:     C.borderBright,
-    padding:         14,
-    marginTop:       12,
-    gap:             8,
-  },
-  inviteUrlLabel: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      10,
-    color:         C.accent,
-    letterSpacing: 2,
-  },
-  inviteUrlText: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   12,
-    color:      C.text,
-    lineHeight: 18,
-  },
-  copyBtn: {
-    backgroundColor: C.surface,
-    borderWidth:     1,
-    borderColor:     C.border,
-    paddingVertical: 8,
-    alignItems:      'center',
-    marginTop:       4,
-  },
-  copyBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      11,
-    color:         C.accent,
-    letterSpacing: 1,
-  },
-  logoutBtn: {
-    backgroundColor: 'transparent',
-    borderWidth:     1,
-    borderColor:     C.red,
-    paddingVertical: 14,
-    alignItems:      'center',
-  },
-  logoutBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      14,
-    fontWeight:    '700',
-    color:         C.red,
-    letterSpacing: 2,
-  },
-
-  // Face ID login button on AuthScreen
-  bioLoginBtn: {
-    backgroundColor: 'transparent',
-    borderWidth:     1,
-    borderColor:     C.accent,
-    alignItems:      'center',
-    paddingVertical: 14,
-    marginTop:       4,
-  },
-  bioLoginBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      14,
-    fontWeight:    '700',
-    color:         C.accent,
-    letterSpacing: 2,
-  },
-
-  // Biometric unlock screen
-  bioFaceIcon: {
-    fontSize:   52,
-    textAlign:  'center',
-  },
-  bioBtn: {
-    width:       240,
-    alignSelf:   'center',
-  },
-  bioFallbackBtn: {
-    marginTop:   28,
-    paddingVertical: 8,
-  },
-  bioFallbackText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      12,
-    color:         C.dim,
-    letterSpacing: 1,
-    textDecorationLine: 'underline',
-  },
-
-  // Face ID profile buttons
-  bioDisableBtn: {
-    backgroundColor: 'transparent',
-    borderWidth:     1,
-    borderColor:     C.amber,
-    paddingVertical: 14,
-    alignItems:      'center',
-  },
-  bioDisableBtnText: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      14,
-    fontWeight:    '700',
-    color:         C.amber,
-    letterSpacing: 2,
-  },
-
-  // Modal
-  modalOverlay: {
-    flex:            1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent:  'center',
-    alignItems:      'center',
-    padding:         24,
-  },
-  modalBox: {
-    backgroundColor: C.surface,
-    borderWidth:     1,
-    borderColor:     C.borderBright,
-    padding:         24,
-    width:           '100%',
-    maxWidth:        380,
-  },
-  modalTitle: {
-    fontFamily:    Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:      16,
-    fontWeight:    '800',
-    color:         C.accent,
-    letterSpacing: 2,
-    marginBottom:  8,
-  },
-  modalSub: {
-    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
-    fontSize:   12,
-    color:      C.dim,
-    lineHeight: 18,
-  },
-});
+export default function App() {
+  return (
+    <SkinProvider>
+      <AppInner />
+    </SkinProvider>
+  );
+}
