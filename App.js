@@ -1130,6 +1130,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           const res = await ImagePicker.launchCameraAsync(pickerOpts);
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
+            if (!a.base64) { Alert.alert('ERROR', 'Could not read image data.'); return; }
             sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
           }
         },
@@ -1144,6 +1145,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           });
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
+            if (!a.base64) { Alert.alert('ERROR', 'Could not read image data.'); return; }
             sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
           }
         },
@@ -1392,6 +1394,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           const res = await ImagePicker.launchCameraAsync(pickerOpts);
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
+            if (!a.base64) { Alert.alert('ERROR', 'Could not read image data.'); return; }
             sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
           }
         },
@@ -1406,6 +1409,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           });
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
+            if (!a.base64) { Alert.alert('ERROR', 'Could not read image data.'); return; }
             sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
           }
         },
