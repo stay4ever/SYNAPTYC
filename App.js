@@ -799,27 +799,47 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
   const tryBiometric = useCallback(async (isAutoTrigger = false) => {
     setLoading(true); setErr('');
     try {
+      // Pre-check: verify Face ID hardware and enrollment before prompting
+      const hw  = await LocalAuthentication.hasHardwareAsync();
+      const enr = await LocalAuthentication.isEnrolledAsync();
+      if (!hw) {
+        if (!isAutoTrigger) setErr('Face ID hardware not found on this device.');
+        return;
+      }
+      if (!enr) {
+        if (!isAutoTrigger) setErr('Face ID is not set up. Go to iOS Settings → Face ID & Passcode.');
+        return;
+      }
+
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage:         'Unlock nano-SYNAPSYS',
         disableDeviceFallback: true,
+        cancelLabel:           'Cancel',
       });
       if (result.success) {
         onUnlock();
       } else if (result.error === 'user_cancel' || result.error === 'system_cancel' || result.error === 'app_cancel') {
-        setErr('');
+        // User dismissed — leave screen as-is
+      } else if (result.error === 'lockout' || result.error === 'lockout_permanent') {
+        if (!isAutoTrigger) setErr('Face ID locked after too many attempts. Enter your device passcode first to re-enable it.');
+      } else if (result.error === 'not_available' || result.error === 'biometric_not_available') {
+        if (!isAutoTrigger) setErr('Face ID is not available. Check Settings → Face ID & Passcode.');
       } else if (isAutoTrigger) {
-        // Silent failure on auto-trigger (device not ready yet) — just show the button
-        setErr('');
+        // Silent failure on auto-trigger — just show the button
       } else {
-        setErr('Face ID failed. Try again or use password.');
+        setErr(`Face ID failed (${result.error || 'error'}). Try again or use password.`);
       }
-    } catch (e) { setErr(''); }
-    finally { setLoading(false); }
+    } catch (e) {
+      // Show actual exception for manual taps so the user knows what happened
+      if (!isAutoTrigger) setErr(`Face ID error: ${e.message || 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
   }, [onUnlock]);
 
-  // Delay auto-trigger so iOS has time to make the biometric system ready
+  // Longer delay: gives iOS biometric subsystem more time to initialise on cold start
   useEffect(() => {
-    const t = setTimeout(() => tryBiometric(true), 400);
+    const t = setTimeout(() => tryBiometric(true), 800);
     return () => clearTimeout(t);
   }, []);
 
@@ -882,16 +902,29 @@ function AuthScreen({ onAuth }) {
   const handleBioLogin = async () => {
     setBioLoading(true); setErr('');
     try {
+      const hw  = await LocalAuthentication.hasHardwareAsync();
+      const enr = await LocalAuthentication.isEnrolledAsync();
+      if (!hw)  { setErr('Face ID hardware not found on this device.'); return; }
+      if (!enr) { setErr('Face ID is not set up. Go to iOS Settings → Face ID & Passcode.'); return; }
+
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Login to nano-SYNAPSYS', disableDeviceFallback: true,
+        promptMessage: 'Login to nano-SYNAPSYS', disableDeviceFallback: true, cancelLabel: 'Cancel',
       });
-      if (!result.success) { setErr(result.error === 'user_cancel' ? '' : 'Face ID failed. Use password instead.'); return; }
+      if (!result.success) {
+        if (result.error === 'user_cancel' || result.error === 'system_cancel') { return; }
+        if (result.error === 'lockout' || result.error === 'lockout_permanent') {
+          setErr('Face ID locked. Enter your device passcode first to re-enable it.');
+        } else {
+          setErr(`Face ID failed (${result.error || 'error'}). Use password instead.`);
+        }
+        return;
+      }
       const creds = await loadBioCreds();
       if (!creds) { setErr('No stored credentials. Please log in with password.'); return; }
       const data = await api('/auth/login', 'POST', { email: creds.email, password: creds.password });
       await saveToken(data.token); await saveUser(data.user);
       onAuth(data.token, data.user);
-    } catch (e) { setErr(e.message); }
+    } catch (e) { setErr(e.message || 'Face ID error. Please try again.'); }
     finally { setBioLoading(false); }
   };
 
