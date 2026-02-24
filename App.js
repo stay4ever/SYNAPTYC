@@ -743,6 +743,52 @@ function TabBar({ active, onChange }) {
 }
 
 // ---------------------------------------------------------------------------
+// FACE ID ICON  (drawn with Views — no external icon library needed)
+// ---------------------------------------------------------------------------
+function FaceIDIcon({ size = 68, color }) {
+  const { C } = useSkin();
+  const c  = color || C.accent;
+  const lw = Math.max(2, Math.round(size * 0.055)); // line thickness
+  const arm = Math.round(size * 0.23);              // bracket arm length
+  const r   = Math.round(size * 0.11);              // corner radius
+
+  const bracket = (pos) => ({
+    position: 'absolute',
+    width: arm, height: arm,
+    borderColor: c,
+    borderTopWidth:    pos.t ? lw : 0,
+    borderBottomWidth: pos.b ? lw : 0,
+    borderLeftWidth:   pos.l ? lw : 0,
+    borderRightWidth:  pos.r ? lw : 0,
+    borderTopLeftRadius:     (pos.t && pos.l) ? r : 0,
+    borderTopRightRadius:    (pos.t && pos.r) ? r : 0,
+    borderBottomLeftRadius:  (pos.b && pos.l) ? r : 0,
+    borderBottomRightRadius: (pos.b && pos.r) ? r : 0,
+    top:    pos.t ? 0 : undefined,
+    bottom: pos.b ? 0 : undefined,
+    left:   pos.l ? 0 : undefined,
+    right:  pos.r ? 0 : undefined,
+  });
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <View style={bracket({ t: true,  l: true  })} />
+      <View style={bracket({ t: true,  r: true  })} />
+      <View style={bracket({ b: true,  l: true  })} />
+      <View style={bracket({ b: true,  r: true  })} />
+      {/* Left eye */}
+      <View style={{ position: 'absolute', top: size * 0.30, left:  size * 0.26, width: lw, height: size * 0.17, backgroundColor: c, borderRadius: lw }} />
+      {/* Right eye */}
+      <View style={{ position: 'absolute', top: size * 0.30, right: size * 0.26, width: lw, height: size * 0.17, backgroundColor: c, borderRadius: lw }} />
+      {/* Nose */}
+      <View style={{ position: 'absolute', top: size * 0.49, left: size / 2 - lw / 2, width: lw, height: size * 0.11, backgroundColor: c, borderRadius: lw }} />
+      {/* Mouth */}
+      <View style={{ position: 'absolute', bottom: size * 0.22, left: size * 0.30, right: size * 0.30, height: lw, backgroundColor: c, borderRadius: lw }} />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // BIOMETRIC UNLOCK SCREEN
 // ---------------------------------------------------------------------------
 function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
@@ -750,7 +796,7 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr]         = useState('');
 
-  const tryBiometric = useCallback(async () => {
+  const tryBiometric = useCallback(async (isAutoTrigger = false) => {
     setLoading(true); setErr('');
     try {
       const result = await LocalAuthentication.authenticateAsync({
@@ -760,17 +806,22 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
       if (result.success) {
         onUnlock();
       } else if (result.error === 'user_cancel' || result.error === 'system_cancel' || result.error === 'app_cancel') {
-        // User deliberately cancelled — stay on this screen so they can retry
+        setErr('');
+      } else if (isAutoTrigger) {
+        // Silent failure on auto-trigger (device not ready yet) — just show the button
         setErr('');
       } else {
-        // Face ID unavailable, locked, or failed — route to password login
-        onUsePassword();
+        setErr('Face ID failed. Try again or use password.');
       }
-    } catch (e) { onUsePassword(); }
+    } catch (e) { setErr(''); }
     finally { setLoading(false); }
-  }, [onUnlock, onUsePassword]);
+  }, [onUnlock]);
 
-  useEffect(() => { tryBiometric(); }, []);
+  // Delay auto-trigger so iOS has time to make the biometric system ready
+  useEffect(() => {
+    const t = setTimeout(() => tryBiometric(true), 400);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <ThemedSafeArea>
@@ -779,13 +830,15 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
         <Text style={styles.logoText}>nano-SYNAPSYS</Text>
         <Text style={styles.logoSub}>AI EVOLUTION SECURE MESH</Text>
         <View style={{ height: 48 }} />
-        <Text style={styles.bioFaceIcon}>{'\uD83D\uDD12'}</Text>
+        <TouchableOpacity onPress={() => tryBiometric(false)} disabled={loading} activeOpacity={0.7}>
+          <FaceIDIcon size={72} />
+        </TouchableOpacity>
         <View style={{ height: 24 }} />
         <TouchableOpacity
           style={[styles.primaryBtn, styles.bioBtn, loading && styles.primaryBtnDisabled]}
-          onPress={tryBiometric} disabled={loading}
+          onPress={() => tryBiometric(false)} disabled={loading}
         >
-          {loading ? <Spinner /> : <Text style={styles.primaryBtnText}>FACE ID LOGIN</Text>}
+          {loading ? <Spinner /> : <Text style={styles.primaryBtnText}>FACE ID</Text>}
         </TouchableOpacity>
         <ErrText msg={err} />
         <TouchableOpacity style={styles.bioFallbackBtn} onPress={onUsePassword}>
