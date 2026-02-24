@@ -928,57 +928,60 @@ const _SWIPE_W = 76; // width of the revealed action button
 
 function SwipeableRow({ children, rightLabel = 'DELETE', rightColor, onAction, disabled = false }) {
   const { C } = useSkin();
-  const mono       = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
-  const color      = rightColor || C.red;
-  const translateX = useRef(new Animated.Value(0)).current;
-  const isOpen     = useRef(false);
+  const mono  = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+  const color = rightColor || C.red;
 
-  const snapTo = (toValue) => {
-    Animated.spring(translateX, {
-      toValue, useNativeDriver: true, tension: 65, friction: 9,
-    }).start(() => { isOpen.current = toValue !== 0; });
-  };
+  // Single Animated.Value tracks the row's X position (0 = closed, -_SWIPE_W = open).
+  // We never use setOffset/flattenOffset — those cause jumps when a new gesture starts
+  // mid-animation. Instead we capture the real position via stopAnimation() at grant time.
+  const position  = useRef(new Animated.Value(0)).current;
+  const dragStart = useRef(0); // actual position when the finger goes down
+
+  const snapTo = useCallback((toValue) => {
+    Animated.spring(position, {
+      toValue,
+      useNativeDriver: true,
+      bounciness: 0,   // no oscillation — clean mechanical snap
+      speed: 20,
+    }).start();
+  }, [position]);
 
   const pan = useRef(PanResponder.create({
-    // Claim gesture only for clear horizontal swipes
-    onMoveShouldSetPanResponder: (_, g) =>
-      !disabled && Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.3,
+    // Only claim clearly horizontal gestures so vertical list scroll is unaffected
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, { dx, dy }) =>
+      !disabled && Math.abs(dx) > 5 && Math.abs(dx) > Math.abs(dy) * 1.5,
 
     onPanResponderGrant: () => {
-      // Offset by current open position so motion feels continuous
-      translateX.setOffset(isOpen.current ? -_SWIPE_W : 0);
-      translateX.setValue(0);
+      // Stop any running snap animation and read the exact current pixel position
+      position.stopAnimation((val) => { dragStart.current = val; });
     },
 
     onPanResponderMove: (_, { dx }) => {
-      // Clamp: don't slide further left than ACTION_W, don't slide right of 0
-      translateX.setValue(Math.max(-_SWIPE_W, Math.min(0, dx)));
+      position.setValue(Math.max(-_SWIPE_W, Math.min(0, dragStart.current + dx)));
     },
 
-    onPanResponderRelease: (_, { dx }) => {
-      translateX.flattenOffset();
-      // Determine final logical position
-      const base = isOpen.current ? -_SWIPE_W : 0;
-      const pos  = base + Math.max(-_SWIPE_W, Math.min(0, dx));
-      snapTo(pos < -_SWIPE_W / 2 ? -_SWIPE_W : 0);
+    onPanResponderRelease: (_, { dx, vx }) => {
+      const cur = Math.max(-_SWIPE_W, Math.min(0, dragStart.current + dx));
+      // Fast leftward flick OR crossed the halfway mark → open; otherwise close
+      if (vx < -0.3 || cur < -(_SWIPE_W / 2)) {
+        snapTo(-_SWIPE_W);
+      } else {
+        snapTo(0);
+      }
     },
 
-    onPanResponderTerminate: () => {
-      translateX.flattenOffset();
-      snapTo(0);
-    },
+    onPanResponderTerminate: () => snapTo(0),
   })).current;
 
   const handleAction = () => {
-    // Close row, then fire callback (callback normally shows an Alert)
-    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 65, friction: 9 }).start();
-    isOpen.current = false;
+    snapTo(0);
     onAction && onAction();
   };
 
   return (
     <View style={{ overflow: 'hidden' }}>
-      {/* Action button sits behind the row */}
+      {/* Action button revealed behind the sliding row */}
       <View style={{
         position: 'absolute', right: 0, top: 0, bottom: 0,
         width: _SWIPE_W, backgroundColor: color,
@@ -994,8 +997,8 @@ function SwipeableRow({ children, rightLabel = 'DELETE', rightColor, onAction, d
         </TouchableOpacity>
       </View>
 
-      {/* Animated row content */}
-      <Animated.View style={{ transform: [{ translateX }] }} {...pan.panHandlers}>
+      {/* Sliding content */}
+      <Animated.View style={{ transform: [{ translateX: position }] }} {...pan.panHandlers}>
         {children}
       </Animated.View>
     </View>
@@ -1094,17 +1097,20 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
     if (!content) return;
     if (!overrideContent) setText('');
     setSending(true);
+    const isImage = typeof content === 'string' && content.startsWith('data:');
     try {
-      const msgPayload = { type: 'chat_message', to: peer.id, content };
-      if (disappear) msgPayload.disappear_after = disappear;
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // Images always go via REST (too large for the WebSocket frame limit).
+      // Text goes via WebSocket for real-time delivery; falls back to REST when WS is down.
+      if (!isImage && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        const msgPayload = { type: 'chat_message', to: peer.id, content };
+        if (disappear) msgPayload.disappear_after = disappear;
         wsRef.current.send(JSON.stringify(msgPayload));
         setMessages((prev) => [...prev, {
           id: Date.now(), content, from_user: currentUser.id,
           to_user: peer.id, created_at: new Date().toISOString(), read: false,
         }]);
       } else {
-        const msg = await api('/api/messages', 'POST', { to: peer.id, content, disappear_after: disappear }, token);
+        const msg = await api('/api/messages', 'POST', { to: peer.id, content }, token);
         setMessages((prev) => [...prev, msg]);
       }
     } catch (e) { setErr(e.message); if (!overrideContent) setText(content); }
@@ -1112,13 +1118,16 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   }, [text, peer.id, currentUser.id, wsRef, token, disappear]);
 
   const handleAttachment = useCallback(async () => {
+    // Images are sent via REST (not WebSocket) so size is not a concern at the
+    // transport layer, but we still compress to save DB space and load time.
+    const pickerOpts = { quality: 0.25, base64: true, exif: false };
     Alert.alert('ATTACH', 'Select source', [
       {
         text: 'CAMERA',
         onPress: async () => {
           const perm = await ImagePicker.requestCameraPermissionsAsync();
           if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Camera access required.'); return; }
-          const res = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+          const res = await ImagePicker.launchCameraAsync(pickerOpts);
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
             sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
@@ -1131,7 +1140,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Photo library access required.'); return; }
           const res = await ImagePicker.launchImageLibraryAsync({
-            quality: 0.5, base64: true, mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            ...pickerOpts, mediaTypes: 'images',
           });
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
@@ -1356,26 +1365,31 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     if (!content) return;
     if (!overrideContent) setText('');
     setSending(true);
+    const isImage = typeof content === 'string' && content.startsWith('data:');
     try {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      if (!isImage && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'group_message', group_id: group.id, content }));
         setMessages((prev) => [...prev, {
           id: Date.now(), content, from_user: currentUser,
           group_id: group.id, created_at: new Date().toISOString(),
         }]);
+      } else {
+        const msg = await api(`/api/groups/${group.id}/messages`, 'POST', { content }, token);
+        setMessages((prev) => [...prev, msg]);
       }
     } catch (e) { setErr(e.message); if (!overrideContent) setText(content); }
     finally { setSending(false); }
-  }, [text, group.id, currentUser, wsRef]);
+  }, [text, group.id, currentUser, wsRef, token]);
 
   const handleAttachment = useCallback(async () => {
+    const pickerOpts = { quality: 0.25, base64: true, exif: false };
     Alert.alert('ATTACH', 'Select source', [
       {
         text: 'CAMERA',
         onPress: async () => {
           const perm = await ImagePicker.requestCameraPermissionsAsync();
           if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Camera access required.'); return; }
-          const res = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+          const res = await ImagePicker.launchCameraAsync(pickerOpts);
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
             sendMessage(`data:${a.mimeType ?? 'image/jpeg'};base64,${a.base64}`);
@@ -1388,7 +1402,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Photo library access required.'); return; }
           const res = await ImagePicker.launchImageLibraryAsync({
-            quality: 0.5, base64: true, mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            ...pickerOpts, mediaTypes: 'images',
           });
           if (!res.canceled && res.assets?.[0]) {
             const a = res.assets[0];
