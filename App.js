@@ -755,11 +755,12 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage:         'Unlock nano-SYNAPSYS',
-        fallbackLabel:         'Use Password',
-        disableDeviceFallback: false,
+        disableDeviceFallback: true,
       });
       if (result.success) { onUnlock(); }
-      else { setErr(result.error === 'user_cancel' ? '' : 'Authentication failed. Try again.'); }
+      else if (result.error === 'lockout' || result.error === 'lockout_permanent') {
+        setErr('Face ID locked. Tap "USE PASSWORD INSTEAD" below.');
+      } else { setErr(result.error === 'user_cancel' ? '' : 'Authentication failed. Try again.'); }
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); }
   }, [onUnlock]);
@@ -824,7 +825,7 @@ function AuthScreen({ onAuth }) {
     setBioLoading(true); setErr('');
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Login to nano-SYNAPSYS', fallbackLabel: 'Use Password', disableDeviceFallback: false,
+        promptMessage: 'Login to nano-SYNAPSYS', disableDeviceFallback: true,
       });
       if (!result.success) { setErr(result.error === 'user_cancel' ? '' : 'Face ID failed. Use password instead.'); return; }
       const creds = await loadBioCreds();
@@ -1079,7 +1080,8 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
 
   useEffect(() => {
     if (!incomingMsg || incomingMsg.type !== 'chat_message') return;
-    const fromId = String(incomingMsg.from_user?.id ?? incomingMsg.from_user);
+    // Handle both new snake_case (from_user) and legacy camelCase (from) field names
+    const fromId = String(incomingMsg.from_user?.id ?? incomingMsg.from_user ?? incomingMsg.from);
     const toId   = String(incomingMsg.to);
     const peerId = String(peer.id);
     const meId   = String(currentUser.id);
@@ -1418,7 +1420,11 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     ]);
   }, [sendMessage]);
 
-  const isMine = (msg) => String(msg.from_user?.id ?? msg.from_user) === String(currentUser.id);
+  // Handle both new snake_case (from_user) and legacy camelCase (from) field names
+  const isMine = (msg) => {
+    const id = msg.from_user?.id ?? msg.from_user ?? msg.from;
+    return String(id) === String(currentUser.id);
+  };
 
   return (
     <ThemedSafeArea>
@@ -1434,7 +1440,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
               ListEmptyComponent={<Text style={styles.emptyText}>NO MESSAGES YET</Text>}
               renderItem={({ item }) => {
                 const mine = isMine(item);
-                const senderName = mine ? 'YOU' : (item.from_display || item.from_username || 'UNKNOWN');
+                const senderName = mine ? 'YOU' : (item.from_display || item.fromDisplay || item.from_username || item.fromUsername || 'UNKNOWN');
                 return (
                   <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
                     <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
