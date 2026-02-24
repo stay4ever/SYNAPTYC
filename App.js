@@ -809,9 +809,14 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
       });
       if (result.success) {
         onUnlock();
+      } else if (result.error === 'missing_usage_description') {
+        // NSFaceIDUsageDescription absent (Expo Go or non-native build).
+        // Clear stored bio settings so user is not stuck on this screen.
+        await clearBio();
+        onUsePassword();
       }
-      // All failure cases (user_cancel, lockout, not_available) are handled by
-      // iOS natively — we only need to act on success.
+      // All other failure cases (user_cancel, lockout, not_available) are
+      // handled by iOS natively — no action needed from our side.
     } catch (e) {
       if (!isAutoTrigger) setErr('Could not start Face ID. Please use password instead.');
     } finally {
@@ -896,6 +901,12 @@ function AuthScreen({ onAuth }) {
         if (result.error === 'user_cancel' || result.error === 'system_cancel') { return; }
         if (result.error === 'lockout' || result.error === 'lockout_permanent') {
           setErr('Face ID locked. Enter your device passcode first to re-enable it.');
+        } else if (result.error === 'missing_usage_description') {
+          // NSFaceIDUsageDescription absent — Expo Go or non-native build.
+          // Auto-clear so the button disappears and user isn't confused.
+          await clearBio();
+          setBioSupported(false); setBioReady(false);
+          setErr('Face ID requires a native build. Use password login for now.');
         } else {
           setErr(`Face ID failed (${result.error || 'error'}). Use password instead.`);
         }

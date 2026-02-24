@@ -9,7 +9,10 @@
     "ios": {
       "bundleIdentifier": "com.aievolution.nanosynapsys",
       "buildNumber": "1",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "nano-SYNAPSYS uses Face ID to protect your secure messages."
+      }
     },
     "android": {
       "package": "com.aievolution.nanosynapsys",
@@ -28,6 +31,13 @@
         {
           "photosPermission": "nano-SYNAPSYS accesses your photos to send images in chat.",
           "cameraPermission": "nano-SYNAPSYS uses the camera to capture images for chat."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "nano-SYNAPSYS uses your location to attach GPS coordinates to your profile.",
+          "locationWhenInUsePermission": "nano-SYNAPSYS uses your location to attach GPS coordinates to your profile."
         }
       ]
     ]
