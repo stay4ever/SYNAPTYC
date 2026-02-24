@@ -1079,8 +1079,14 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
 
   useEffect(() => {
     if (!incomingMsg || incomingMsg.type !== 'chat_message') return;
-    const fromId = incomingMsg.from_user?.id ?? incomingMsg.from_user;
-    if (String(fromId) === String(peer.id) || String(fromId) === String(currentUser.id)) {
+    const fromId = String(incomingMsg.from_user?.id ?? incomingMsg.from_user);
+    const toId   = String(incomingMsg.to);
+    const peerId = String(peer.id);
+    const meId   = String(currentUser.id);
+    // Show only messages that belong to THIS conversation
+    const belongs = (fromId === peerId && toId === meId) ||
+                    (fromId === meId   && toId === peerId);
+    if (belongs) {
       setMessages((prev) => {
         const exists = prev.some((m) => m.id === incomingMsg.id);
         return exists ? prev : [...prev, incomingMsg];
@@ -1105,13 +1111,10 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
         const msgPayload = { type: 'chat_message', to: peer.id, content };
         if (disappear) msgPayload.disappear_after = disappear;
         wsRef.current.send(JSON.stringify(msgPayload));
-        setMessages((prev) => [...prev, {
-          id: Date.now(), content, from_user: currentUser.id,
-          to_user: peer.id, created_at: new Date().toISOString(), read: false,
-        }]);
+        // No optimistic push — the server echoes the message back via WS which adds it
       } else {
         const msg = await api('/api/messages', 'POST', { to: peer.id, content }, token);
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
       }
     } catch (e) { setErr(e.message); if (!overrideContent) setText(content); }
     finally { setSending(false); }
@@ -1371,13 +1374,10 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     try {
       if (!isImage && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: 'group_message', group_id: group.id, content }));
-        setMessages((prev) => [...prev, {
-          id: Date.now(), content, from_user: currentUser,
-          group_id: group.id, created_at: new Date().toISOString(),
-        }]);
+        // No optimistic push — the server echoes the message back via WS which adds it
       } else {
         const msg = await api(`/api/groups/${group.id}/messages`, 'POST', { content }, token);
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
       }
     } catch (e) { setErr(e.message); if (!overrideContent) setText(content); }
     finally { setSending(false); }
@@ -1434,7 +1434,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
               ListEmptyComponent={<Text style={styles.emptyText}>NO MESSAGES YET</Text>}
               renderItem={({ item }) => {
                 const mine = isMine(item);
-                const senderName = mine ? 'YOU' : (item.from_user?.display_name || item.from_user?.username || 'UNKNOWN');
+                const senderName = mine ? 'YOU' : (item.from_display || item.from_username || 'UNKNOWN');
                 return (
                   <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
                     <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
