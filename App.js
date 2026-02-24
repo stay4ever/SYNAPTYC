@@ -799,47 +799,29 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
   const tryBiometric = useCallback(async (isAutoTrigger = false) => {
     setLoading(true); setErr('');
     try {
-      // Pre-check: verify Face ID hardware and enrollment before prompting
-      const hw  = await LocalAuthentication.hasHardwareAsync();
-      const enr = await LocalAuthentication.isEnrolledAsync();
-      if (!hw) {
-        if (!isAutoTrigger) setErr('Face ID hardware not found on this device.');
-        return;
-      }
-      if (!enr) {
-        if (!isAutoTrigger) setErr('Face ID is not set up. Go to iOS Settings → Face ID & Passcode.');
-        return;
-      }
-
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage:         'Unlock nano-SYNAPSYS',
-        disableDeviceFallback: true,
+        // Allow device passcode as fallback so iOS can clear any Face ID lockout
+        // caused by repeated failed attempts. iOS tries Face ID first; if it
+        // fails or is locked it shows the device passcode prompt automatically.
+        disableDeviceFallback: false,
         cancelLabel:           'Cancel',
       });
       if (result.success) {
         onUnlock();
-      } else if (result.error === 'user_cancel' || result.error === 'system_cancel' || result.error === 'app_cancel') {
-        // User dismissed — leave screen as-is
-      } else if (result.error === 'lockout' || result.error === 'lockout_permanent') {
-        if (!isAutoTrigger) setErr('Face ID locked after too many attempts. Enter your device passcode first to re-enable it.');
-      } else if (result.error === 'not_available' || result.error === 'biometric_not_available') {
-        if (!isAutoTrigger) setErr('Face ID is not available. Check Settings → Face ID & Passcode.');
-      } else if (isAutoTrigger) {
-        // Silent failure on auto-trigger — just show the button
-      } else {
-        setErr(`Face ID failed (${result.error || 'error'}). Try again or use password.`);
       }
+      // All failure cases (user_cancel, lockout, not_available) are handled by
+      // iOS natively — we only need to act on success.
     } catch (e) {
-      // Show actual exception for manual taps so the user knows what happened
-      if (!isAutoTrigger) setErr(`Face ID error: ${e.message || 'Unknown error'}`);
+      if (!isAutoTrigger) setErr('Could not start Face ID. Please use password instead.');
     } finally {
       setLoading(false);
     }
   }, [onUnlock]);
 
-  // Longer delay: gives iOS biometric subsystem more time to initialise on cold start
+  // Auto-trigger after mount so the Face ID prompt appears without a tap
   useEffect(() => {
-    const t = setTimeout(() => tryBiometric(true), 800);
+    const t = setTimeout(() => tryBiometric(true), 500);
     return () => clearTimeout(t);
   }, []);
 
