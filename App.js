@@ -15,11 +15,13 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   FlatList,
   Image,
   ImageBackground,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   RefreshControl,
   SafeAreaView,
@@ -919,6 +921,88 @@ function AuthScreen({ onAuth }) {
 }
 
 // ---------------------------------------------------------------------------
+// SWIPEABLE ROW  (pure Animated + PanResponder — no extra packages)
+// Swipe left to reveal a destructive action button. Swipe right to close.
+// ---------------------------------------------------------------------------
+const _SWIPE_W = 76; // width of the revealed action button
+
+function SwipeableRow({ children, rightLabel = 'DELETE', rightColor, onAction, disabled = false }) {
+  const { C } = useSkin();
+  const mono       = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+  const color      = rightColor || C.red;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const isOpen     = useRef(false);
+
+  const snapTo = (toValue) => {
+    Animated.spring(translateX, {
+      toValue, useNativeDriver: true, tension: 65, friction: 9,
+    }).start(() => { isOpen.current = toValue !== 0; });
+  };
+
+  const pan = useRef(PanResponder.create({
+    // Claim gesture only for clear horizontal swipes
+    onMoveShouldSetPanResponder: (_, g) =>
+      !disabled && Math.abs(g.dx) > 6 && Math.abs(g.dx) > Math.abs(g.dy) * 1.3,
+
+    onPanResponderGrant: () => {
+      // Offset by current open position so motion feels continuous
+      translateX.setOffset(isOpen.current ? -_SWIPE_W : 0);
+      translateX.setValue(0);
+    },
+
+    onPanResponderMove: (_, { dx }) => {
+      // Clamp: don't slide further left than ACTION_W, don't slide right of 0
+      translateX.setValue(Math.max(-_SWIPE_W, Math.min(0, dx)));
+    },
+
+    onPanResponderRelease: (_, { dx }) => {
+      translateX.flattenOffset();
+      // Determine final logical position
+      const base = isOpen.current ? -_SWIPE_W : 0;
+      const pos  = base + Math.max(-_SWIPE_W, Math.min(0, dx));
+      snapTo(pos < -_SWIPE_W / 2 ? -_SWIPE_W : 0);
+    },
+
+    onPanResponderTerminate: () => {
+      translateX.flattenOffset();
+      snapTo(0);
+    },
+  })).current;
+
+  const handleAction = () => {
+    // Close row, then fire callback (callback normally shows an Alert)
+    Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 65, friction: 9 }).start();
+    isOpen.current = false;
+    onAction && onAction();
+  };
+
+  return (
+    <View style={{ overflow: 'hidden' }}>
+      {/* Action button sits behind the row */}
+      <View style={{
+        position: 'absolute', right: 0, top: 0, bottom: 0,
+        width: _SWIPE_W, backgroundColor: color,
+        justifyContent: 'center', alignItems: 'center',
+      }}>
+        <TouchableOpacity
+          onPress={handleAction}
+          style={{ flex: 1, width: '100%', justifyContent: 'center', alignItems: 'center' }}
+        >
+          <Text style={{ fontFamily: mono, fontSize: 11, color: '#fff', fontWeight: '700', letterSpacing: 1 }}>
+            {rightLabel}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Animated row content */}
+      <Animated.View style={{ transform: [{ translateX }] }} {...pan.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // CHATS TAB
 // ---------------------------------------------------------------------------
 function ChatsTab({ token, currentUser, onOpenDM }) {
@@ -1130,7 +1214,6 @@ function GroupsTab({ token, onOpenGroup }) {
   const [newDesc, setNewDesc]       = useState('');
   const [createErr, setCreateErr]   = useState('');
   const [showForm, setShowForm]     = useState(false);
-  const [deleting, setDeleting]     = useState({});
 
   const fetchGroups = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -1164,12 +1247,10 @@ function GroupsTab({ token, onOpenGroup }) {
           text: 'DELETE',
           style: 'destructive',
           onPress: async () => {
-            setDeleting(d => ({ ...d, [g.id]: true }));
             try {
               await api(`/api/groups/${g.id}`, 'DELETE', null, token);
               setGroups(prev => prev.filter(x => x.id !== g.id));
             } catch (e) { setErr(e.message); }
-            finally { setDeleting(d => ({ ...d, [g.id]: false })); }
           },
         },
       ]
@@ -1206,9 +1287,9 @@ function GroupsTab({ token, onOpenGroup }) {
           </TouchableOpacity>
         ) : null}
         ListEmptyComponent={<Text style={styles.emptyText}>NO GROUPS YET</Text>}
-        renderItem={({ item }) => (
-          <View style={styles.userRow}>
-            <TouchableOpacity style={{ flex: 1 }} onPress={() => onOpenGroup(item)}>
+        renderItem={({ item }) => {
+          const row = (
+            <TouchableOpacity style={styles.userRow} onPress={() => onOpenGroup(item)}>
               <View style={styles.userRowInfo}>
                 <Text style={styles.userRowName}>{item.name}</Text>
                 {item.description
@@ -1216,20 +1297,16 @@ function GroupsTab({ token, onOpenGroup }) {
                   : <Text style={styles.userRowMeta}>CREATED {fmtDate(item.created_at)}</Text>
                 }
               </View>
-            </TouchableOpacity>
-            {item.my_role === 'admin' ? (
-              <TouchableOpacity
-                style={styles.deleteGroupBtn}
-                onPress={() => deleteGroup(item)}
-                disabled={!!deleting[item.id]}
-              >
-                {deleting[item.id] ? <Spinner /> : <Text style={styles.deleteGroupBtnText}>DEL</Text>}
-              </TouchableOpacity>
-            ) : (
               <Text style={styles.chevron}>{'>'}</Text>
-            )}
-          </View>
-        )}
+            </TouchableOpacity>
+          );
+          if (item.my_role !== 'admin') return row;
+          return (
+            <SwipeableRow rightLabel="DELETE" onAction={() => deleteGroup(item)}>
+              {row}
+            </SwipeableRow>
+          );
+        }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     </View>
@@ -1823,28 +1900,21 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
       {contacts.length === 0
         ? <Text style={styles.emptyText}>NO CONTACTS YET{'\n'}Search below to add someone</Text>
         : contacts.map(c => (
-            <View key={c.contactId} style={styles.contactRow}>
+            <SwipeableRow key={c.contactId} rightLabel="BLOCK" onAction={() => blockUser(c)}>
               <TouchableOpacity
-                style={styles.contactRowLeft}
+                style={styles.contactRow}
                 onPress={() => onOpenDM({ id: c.userId, username: c.username, display_name: c.displayName })}
               >
-                <OnlineDot online={c.online} />
-                <View style={styles.contactRowInfo}>
-                  <Text style={styles.contactRowName}>{c.displayName || c.username}</Text>
-                  <Text style={styles.contactRowMeta}>{c.online ? 'ONLINE' : 'OFFLINE'}</Text>
+                <View style={styles.contactRowLeft}>
+                  <OnlineDot online={c.online} />
+                  <View style={styles.contactRowInfo}>
+                    <Text style={styles.contactRowName}>{c.displayName || c.username}</Text>
+                    <Text style={styles.contactRowMeta}>{c.online ? 'ONLINE' : 'OFFLINE'}</Text>
+                  </View>
                 </View>
+                <Text style={styles.chevron}>{'>'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.blockContactBtn}
-                onPress={() => blockUser(c)}
-                disabled={!!actioning[`blk_${c.userId}`]}
-              >
-                {actioning[`blk_${c.userId}`]
-                  ? <Spinner />
-                  : <Text style={styles.blockContactBtnText}>BLOCK</Text>
-                }
-              </TouchableOpacity>
-            </View>
+            </SwipeableRow>
           ))
       }
 
