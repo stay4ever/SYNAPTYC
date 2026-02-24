@@ -35,6 +35,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Clipboard from 'expo-clipboard';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 
 // ---------------------------------------------------------------------------
 // COLOUR PALETTES
@@ -123,8 +124,9 @@ function makeRawStyles(C) {
       flexDirection: 'row', backgroundColor: C.surface,
       borderTopWidth: 1, borderTopColor: C.border,
     },
-    tabItem:    { flex: 1, alignItems: 'center', paddingVertical: 11, position: 'relative' },
-    tabText:    { fontFamily: mono, fontSize: 9, color: C.dim, letterSpacing: 0.5 },
+    tabItem:    { flex: 1, alignItems: 'center', paddingVertical: 7, position: 'relative' },
+    tabIcon:    { fontSize: 18, textAlign: 'center', marginBottom: 2 },
+    tabText:    { fontFamily: mono, fontSize: 8, color: C.dim, letterSpacing: 0.5 },
     tabTextActive: { color: C.accent, fontWeight: '700' },
     tabIndicator: {
       position: 'absolute', top: 0, left: '20%', right: '20%',
@@ -330,6 +332,88 @@ function makeRawStyles(C) {
     disappearOptText:        { fontFamily: mono, fontSize: 11, color: C.dim, letterSpacing: 1 },
     disappearOptTextActive:  { color: C.accent, fontWeight: '700' },
 
+    // ── Contacts ──────────────────────────────────────────────────────────
+    contactSection: {
+      fontFamily: mono, fontSize: 11, color: C.accent,
+      letterSpacing: 3, marginBottom: 8, marginTop: 4,
+    },
+    contactRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingHorizontal: 16, paddingVertical: 14, backgroundColor: C.surface,
+    },
+    contactRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    contactRowInfo: { flex: 1, marginLeft: 10 },
+    contactRowName: { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '600' },
+    contactRowMeta: { fontFamily: mono, fontSize: 11, color: C.dim, marginTop: 2, letterSpacing: 1 },
+    contactBtnRow: { flexDirection: 'row', gap: 6 },
+    contactActionBtn: {
+      borderWidth: 1, paddingVertical: 6, paddingHorizontal: 10, borderColor: C.green,
+    },
+    contactActionBtnText: { fontFamily: mono, fontSize: 11, color: C.accent, letterSpacing: 1 },
+    contactRejectBtn: { borderColor: C.red },
+    contactRejectBtnText: { color: C.red },
+    addContactBtn: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
+      margin: 16, paddingVertical: 12, alignItems: 'center',
+    },
+    addContactBtnText: {
+      fontFamily: mono, fontSize: 13, color: C.accent, fontWeight: '700', letterSpacing: 2,
+    },
+    pendingBadge: {
+      backgroundColor: C.amber, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6,
+    },
+    pendingBadgeText: { fontFamily: mono, fontSize: 9, color: '#000', fontWeight: '700' },
+
+    // ── Admin panel ────────────────────────────────────────────────────────
+    adminCard: {
+      backgroundColor: C.surface, borderWidth: 1, borderColor: C.amber,
+      padding: 14, marginBottom: 10,
+    },
+    adminCardLabel: { fontFamily: mono, fontSize: 10, color: C.amber, letterSpacing: 2, marginBottom: 6 },
+    adminCardName:  { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '700', marginBottom: 2 },
+    adminCardEmail: { fontFamily: mono, fontSize: 12, color: C.dim, marginBottom: 4 },
+    adminCardReason:{ fontFamily: mono, fontSize: 11, color: C.text, lineHeight: 16, marginBottom: 8 },
+    adminBtnRow:    { flexDirection: 'row', gap: 8 },
+    adminApproveBtn:{ flex: 1, borderWidth: 1, borderColor: C.green, paddingVertical: 9, alignItems: 'center' },
+    adminApproveBtnText: { fontFamily: mono, fontSize: 11, color: C.accent, fontWeight: '700', letterSpacing: 1 },
+    adminRejectBtn: { flex: 1, borderWidth: 1, borderColor: C.red, paddingVertical: 9, alignItems: 'center' },
+    adminRejectBtnText:  { fontFamily: mono, fontSize: 11, color: C.red, fontWeight: '700', letterSpacing: 1 },
+
+    // ── Profile Edit ──────────────────────────────────────────────────────
+    profileEditHeader: {
+      fontFamily: mono, fontSize: 11, color: C.accent,
+      letterSpacing: 3, marginBottom: 10, marginTop: 4,
+    },
+    profileEditInput: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
+      color: C.bright, paddingHorizontal: 14, paddingVertical: 10,
+      fontFamily: mono, fontSize: 14, letterSpacing: 1, marginTop: 6,
+    },
+    profileEditMultiline: { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 },
+    saveProfileBtn: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
+      alignItems: 'center', paddingVertical: 13, marginTop: 10,
+    },
+    saveProfileBtnText: {
+      fontFamily: mono, fontSize: 13, fontWeight: '700', color: C.accent, letterSpacing: 2,
+    },
+    saveOkText: { fontFamily: mono, fontSize: 11, color: C.green, textAlign: 'center', marginTop: 8, letterSpacing: 1 },
+
+    // ── Location ──────────────────────────────────────────────────────────
+    locationBox: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.borderBright,
+      padding: 14, marginBottom: 8, gap: 4,
+    },
+    locationCoord: { fontFamily: mono, fontSize: 14, color: C.accent, letterSpacing: 1, fontWeight: '700' },
+    locationMeta:  { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 1, marginTop: 2 },
+    getLocationBtn: {
+      backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
+      alignItems: 'center', paddingVertical: 13, marginTop: 4,
+    },
+    getLocationBtnText: {
+      fontFamily: mono, fontSize: 13, fontWeight: '700', color: C.accent, letterSpacing: 2,
+    },
+
     // ── Face ID ───────────────────────────────────────────────────────────
     bioLoginBtn: {
       backgroundColor: 'transparent', borderWidth: 1, borderColor: C.accent,
@@ -367,6 +451,22 @@ function makeRawStyles(C) {
       color: C.accent, letterSpacing: 2, marginBottom: 8,
     },
     modalSub: { fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 18 },
+
+    // ── Destructive actions (delete group / block contact) ────────────────
+    deleteGroupBtn: {
+      borderWidth: 1, borderColor: C.red,
+      paddingHorizontal: 10, paddingVertical: 6, marginLeft: 8,
+    },
+    deleteGroupBtnText: {
+      fontFamily: mono, fontSize: 11, color: C.red, fontWeight: '700', letterSpacing: 1,
+    },
+    blockContactBtn: {
+      borderWidth: 1, borderColor: C.red,
+      paddingHorizontal: 10, paddingVertical: 6, marginLeft: 6,
+    },
+    blockContactBtnText: {
+      fontFamily: mono, fontSize: 11, color: C.red, fontWeight: '700', letterSpacing: 1,
+    },
   };
 }
 
@@ -419,8 +519,10 @@ const USER_KEY    = 'nano_user';
 const BIO_KEY     = 'nano_bio_enabled';
 const BIO_EMAIL_KEY = 'nano_bio_email';
 const BIO_PASS_KEY  = 'nano_bio_pass';
-const SKIN_KEY    = 'nano_skin';
+const SKIN_KEY      = 'nano_skin';
 const DISAPPEAR_KEY = 'nano_disappear';
+const PROFILE_EXT_KEY = 'nano_profile_ext';
+const LOCATION_KEY    = 'nano_location';
 
 const DISAPPEAR_OPTIONS = [
   { label: 'OFF',     value: null   },
@@ -493,6 +595,24 @@ async function loadDisappear() {
   if (!v) return null;
   const n = parseInt(v, 10);
   return isNaN(n) ? null : n;
+}
+async function saveProfileExt(data) {
+  await SecureStore.setItemAsync(PROFILE_EXT_KEY, JSON.stringify(data));
+}
+async function loadProfileExt() {
+  try {
+    const v = await SecureStore.getItemAsync(PROFILE_EXT_KEY);
+    return v ? JSON.parse(v) : {};
+  } catch { return {}; }
+}
+async function saveLocation(loc) {
+  await SecureStore.setItemAsync(LOCATION_KEY, JSON.stringify(loc));
+}
+async function loadLocation() {
+  try {
+    const v = await SecureStore.getItemAsync(LOCATION_KEY);
+    return v ? JSON.parse(v) : null;
+  } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------
@@ -592,18 +712,27 @@ function AppHeader({ title, onBack }) {
 // ---------------------------------------------------------------------------
 // BOTTOM TAB BAR  (5 tabs)
 // ---------------------------------------------------------------------------
-const TABS = ['CHATS', 'GROUPS', 'BOT', 'PROFILE', 'SETTINGS'];
+const TABS = ['CHATS', 'CONTACTS', 'GROUPS', 'BOT', 'PROFILE', 'SETTINGS'];
+const TAB_ICONS = {
+  CHATS:    '\uD83D\uDCAC',
+  CONTACTS: '\uD83D\uDCCB',
+  GROUPS:   '\uD83D\uDC65',
+  BOT:      '\uD83E\uDD16',
+  PROFILE:  '\uD83D\uDC64',
+  SETTINGS: '\u2699\uFE0F',
+};
 
 function TabBar({ active, onChange }) {
-  const { styles } = useSkin();
+  const { styles, C } = useSkin();
   return (
     <View style={styles.tabBar}>
       {TABS.map((tab) => {
         const isActive = tab === active;
         return (
           <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => onChange(tab)}>
-            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab}</Text>
             {isActive && <View style={styles.tabIndicator} />}
+            <Text style={[styles.tabIcon, { color: isActive ? C.accent : C.dim }]}>{TAB_ICONS[tab]}</Text>
+            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         );
       })}
@@ -804,7 +933,7 @@ function ChatsTab({ token, currentUser, onOpenDM }) {
     setErr('');
     try {
       const data = await api('/api/users', 'GET', null, token);
-      setUsers(data.filter((u) => u.id !== currentUser.id));
+      setUsers(data.filter((u) => !u.isMe));
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); setRefreshing(false); }
   }, [token, currentUser.id]);
@@ -825,7 +954,7 @@ function ChatsTab({ token, currentUser, onOpenDM }) {
             <View style={styles.userRowLeft}>
               <OnlineDot online={item.online} />
               <View style={styles.userRowInfo}>
-                <Text style={styles.userRowName}>{item.display_name || item.username}</Text>
+                <Text style={styles.userRowName}>{item.displayName || item.display_name || item.username}</Text>
                 <Text style={styles.userRowMeta}>{item.online ? 'ONLINE' : item.last_seen ? `LAST SEEN ${fmtDate(item.last_seen)}` : 'OFFLINE'}</Text>
               </View>
             </View>
@@ -935,7 +1064,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   return (
     <ThemedSafeArea>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <AppHeader title={peer.display_name || peer.username} onBack={onBack} />
+      <AppHeader title={peer.display_name || peer.displayName || peer.username} onBack={onBack} />
       {disappear && (
         <View style={{ backgroundColor: C.panel, paddingHorizontal: 14, paddingVertical: 4, alignItems: 'center' }}>
           <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.amber, letterSpacing: 1 }}>
@@ -1001,6 +1130,7 @@ function GroupsTab({ token, onOpenGroup }) {
   const [newDesc, setNewDesc]       = useState('');
   const [createErr, setCreateErr]   = useState('');
   const [showForm, setShowForm]     = useState(false);
+  const [deleting, setDeleting]     = useState({});
 
   const fetchGroups = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -1022,6 +1152,28 @@ function GroupsTab({ token, onOpenGroup }) {
       setGroups((prev) => [g, ...prev]); setShowForm(false); setNewName(''); setNewDesc('');
     } catch (e) { setCreateErr(e.message); }
     finally { setCreating(false); }
+  };
+
+  const deleteGroup = (g) => {
+    Alert.alert(
+      'DELETE GROUP',
+      `Delete "${g.name}"? This cannot be undone.`,
+      [
+        { text: 'CANCEL', style: 'cancel' },
+        {
+          text: 'DELETE',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(d => ({ ...d, [g.id]: true }));
+            try {
+              await api(`/api/groups/${g.id}`, 'DELETE', null, token);
+              setGroups(prev => prev.filter(x => x.id !== g.id));
+            } catch (e) { setErr(e.message); }
+            finally { setDeleting(d => ({ ...d, [g.id]: false })); }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) return <View style={styles.centerFill}><Spinner size="large" /></View>;
@@ -1055,16 +1207,28 @@ function GroupsTab({ token, onOpenGroup }) {
         ) : null}
         ListEmptyComponent={<Text style={styles.emptyText}>NO GROUPS YET</Text>}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.userRow} onPress={() => onOpenGroup(item)}>
-            <View style={styles.userRowInfo}>
-              <Text style={styles.userRowName}>{item.name}</Text>
-              {item.description
-                ? <Text style={styles.userRowMeta} numberOfLines={1}>{item.description}</Text>
-                : <Text style={styles.userRowMeta}>CREATED {fmtDate(item.created_at)}</Text>
-              }
-            </View>
-            <Text style={styles.chevron}>{'>'}</Text>
-          </TouchableOpacity>
+          <View style={styles.userRow}>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => onOpenGroup(item)}>
+              <View style={styles.userRowInfo}>
+                <Text style={styles.userRowName}>{item.name}</Text>
+                {item.description
+                  ? <Text style={styles.userRowMeta} numberOfLines={1}>{item.description}</Text>
+                  : <Text style={styles.userRowMeta}>CREATED {fmtDate(item.created_at)}</Text>
+                }
+              </View>
+            </TouchableOpacity>
+            {item.my_role === 'admin' ? (
+              <TouchableOpacity
+                style={styles.deleteGroupBtn}
+                onPress={() => deleteGroup(item)}
+                disabled={!!deleting[item.id]}
+              >
+                {deleting[item.id] ? <Spinner /> : <Text style={styles.deleteGroupBtnText}>DEL</Text>}
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.chevron}>{'>'}</Text>
+            )}
+          </View>
         )}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
@@ -1302,6 +1466,8 @@ function TypingDots() {
 // ---------------------------------------------------------------------------
 function ProfileTab({ token, currentUser, onLogout }) {
   const { styles, C } = useSkin();
+
+  // ── invite / bio state ────────────────────────────────────────────────
   const [loading, setLoading]     = useState(false);
   const [inviteUrl, setInviteUrl] = useState('');
   const [inviteErr, setInviteErr] = useState('');
@@ -1312,12 +1478,41 @@ function ProfileTab({ token, currentUser, onLogout }) {
   const [bioLoading, setBioLoading]     = useState(false);
   const [bioErr, setBioErr]             = useState('');
 
+  // ── editable profile fields ───────────────────────────────────────────
+  const [displayName,     setDisplayName]     = useState('');
+  const [phone,           setPhone]           = useState('');
+  const [residentialAddr, setResidentialAddr] = useState('');
+  const [workAddr,        setWorkAddr]        = useState('');
+  const [savingProfile,   setSavingProfile]   = useState(false);
+  const [saveProfileErr,  setSaveProfileErr]  = useState('');
+  const [saveProfileOk,   setSaveProfileOk]   = useState('');
+
   useEffect(() => {
     (async () => {
       setBioAvailable(await isBiometricReady());
       setBioEnabled(await loadBioEnabled());
+      const ext = await loadProfileExt();
+      setDisplayName(ext.displayName ?? currentUser.display_name ?? currentUser.username ?? '');
+      setPhone(ext.phone ?? '');
+      setResidentialAddr(ext.residentialAddr ?? '');
+      setWorkAddr(ext.workAddr ?? '');
     })();
   }, []);
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true); setSaveProfileErr(''); setSaveProfileOk('');
+    try {
+      const ext = { displayName, phone, residentialAddr, workAddr };
+      await saveProfileExt(ext);
+      // attempt backend sync — silent fail if endpoint not available
+      try {
+        await api('/api/profile', 'PATCH', { display_name: displayName, phone, residential_address: residentialAddr, work_address: workAddr }, token);
+      } catch {}
+      setSaveProfileOk('PROFILE SAVED');
+      setTimeout(() => setSaveProfileOk(''), 2500);
+    } catch (e) { setSaveProfileErr(e.message); }
+    finally { setSavingProfile(false); }
+  };
 
   const handleEnableBio = async () => {
     if (!bioPassword.trim()) { setBioErr('Password is required.'); return; }
@@ -1362,6 +1557,8 @@ function ProfileTab({ token, currentUser, onLogout }) {
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.profileScroll}>
+
+      {/* ── READ-ONLY INFO ──────────────────────────────────────────── */}
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>USERNAME</Text>
         <Text style={styles.profileValue}>{currentUser.username}</Text>
@@ -1369,10 +1566,6 @@ function ProfileTab({ token, currentUser, onLogout }) {
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>EMAIL</Text>
         <Text style={styles.profileValue}>{currentUser.email || '—'}</Text>
-      </View>
-      <View style={styles.profileCard}>
-        <Text style={styles.profileLabel}>DISPLAY NAME</Text>
-        <Text style={styles.profileValue}>{currentUser.display_name || currentUser.username}</Text>
       </View>
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>ACCOUNT STATUS</Text>
@@ -1383,6 +1576,69 @@ function ProfileTab({ token, currentUser, onLogout }) {
 
       <View style={styles.profileDivider} />
 
+      {/* ── EDIT PROFILE ────────────────────────────────────────────── */}
+      <Text style={styles.profileEditHeader}>EDIT PROFILE</Text>
+
+      <Text style={[styles.profileLabel, { marginTop: 4 }]}>DISPLAY NAME</Text>
+      <TextInput
+        style={styles.profileEditInput}
+        placeholder="DISPLAY NAME"
+        placeholderTextColor={C.muted}
+        value={displayName}
+        onChangeText={setDisplayName}
+        autoCorrect={false}
+        autoCapitalize="words"
+      />
+
+      <Text style={[styles.profileLabel, { marginTop: 12 }]}>PHONE NUMBER</Text>
+      <TextInput
+        style={styles.profileEditInput}
+        placeholder="+61 000 000 000"
+        placeholderTextColor={C.muted}
+        value={phone}
+        onChangeText={setPhone}
+        keyboardType="phone-pad"
+        autoCorrect={false}
+      />
+
+      <Text style={[styles.profileLabel, { marginTop: 12 }]}>RESIDENTIAL ADDRESS</Text>
+      <TextInput
+        style={[styles.profileEditInput, styles.profileEditMultiline]}
+        placeholder="Street, City, State, Postcode"
+        placeholderTextColor={C.muted}
+        value={residentialAddr}
+        onChangeText={setResidentialAddr}
+        multiline
+        numberOfLines={3}
+        autoCorrect={false}
+      />
+
+      <Text style={[styles.profileLabel, { marginTop: 12 }]}>WORK ADDRESS</Text>
+      <TextInput
+        style={[styles.profileEditInput, styles.profileEditMultiline]}
+        placeholder="Street, City, State, Postcode"
+        placeholderTextColor={C.muted}
+        value={workAddr}
+        onChangeText={setWorkAddr}
+        multiline
+        numberOfLines={3}
+        autoCorrect={false}
+      />
+
+      <ErrText msg={saveProfileErr} />
+      {saveProfileOk ? <Text style={styles.saveOkText}>{'\u2713'} {saveProfileOk}</Text> : null}
+
+      <TouchableOpacity
+        style={[styles.saveProfileBtn, savingProfile && styles.primaryBtnDisabled]}
+        onPress={handleSaveProfile}
+        disabled={savingProfile}
+      >
+        {savingProfile ? <Spinner /> : <Text style={styles.saveProfileBtnText}>SAVE PROFILE</Text>}
+      </TouchableOpacity>
+
+      <View style={styles.profileDivider} />
+
+      {/* ── INVITE ──────────────────────────────────────────────────── */}
       <TouchableOpacity style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]} onPress={handleInvite} disabled={loading}>
         {loading ? <Spinner /> : <Text style={styles.primaryBtnText}>GENERATE INVITE LINK</Text>}
       </TouchableOpacity>
@@ -1399,6 +1655,7 @@ function ProfileTab({ token, currentUser, onLogout }) {
 
       <View style={styles.profileDivider} />
 
+      {/* ── FACE ID ─────────────────────────────────────────────────── */}
       {bioAvailable && (
         bioEnabled
           ? <TouchableOpacity style={styles.bioDisableBtn} onPress={handleDisableBio}><Text style={styles.bioDisableBtnText}>DISABLE FACE ID LOGIN</Text></TouchableOpacity>
@@ -1437,19 +1694,286 @@ function ProfileTab({ token, currentUser, onLogout }) {
 }
 
 // ---------------------------------------------------------------------------
+// CONTACTS TAB
+// ---------------------------------------------------------------------------
+function ContactsTab({ token, currentUser, onOpenDM }) {
+  const { styles, C } = useSkin();
+  // contacts  → array of { contactId, userId, username, displayName, online, since }
+  // pending   → { received: [{contactId, userId, username, displayName}], sent: [...] }
+  // users     → array of { id, username, displayName, online, isMe, contactStatus }
+  const [contacts,   setContacts]   = useState([]);
+  const [pending,    setPending]    = useState({ received: [], sent: [] });
+  const [users,      setUsers]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [err,        setErr]        = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [query,      setQuery]      = useState('');
+  const [actioning,  setActioning]  = useState({});
+
+  const fetchAll = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    setErr('');
+    try {
+      const [c, p, u] = await Promise.all([
+        api('/api/contacts',         'GET', null, token),
+        api('/api/contacts/pending', 'GET', null, token),
+        api('/api/users',            'GET', null, token),
+      ]);
+      setContacts(Array.isArray(c) ? c : []);
+      // pending is { received: [...], sent: [...] } — never an array
+      setPending({ received: p?.received ?? [], sent: p?.sent ?? [] });
+      setUsers(Array.isArray(u) ? u.filter(u2 => !u2.isMe) : []);
+    } catch (e) { setErr(e.message); }
+    finally { setLoading(false); setRefreshing(false); }
+  }, [token]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const act = async (key, fn) => {
+    setActioning(a => ({ ...a, [key]: true }));
+    try { await fn(); await fetchAll(); } catch (e) { setErr(e.message); }
+    finally { setActioning(a => ({ ...a, [key]: false })); }
+  };
+
+  // API uses camelCase keys
+  const sendRequest    = (userId)    => act(`req_${userId}`,    () => api('/api/contacts/request', 'POST', { userId },    token));
+  const acceptRequest  = (contactId) => act(`acc_${contactId}`, () => api('/api/contacts/accept',  'POST', { contactId }, token));
+  const declineRequest = (contactId) => act(`dec_${contactId}`, () => api('/api/contacts/decline', 'POST', { contactId }, token));
+
+  const blockUser = (c) => {
+    Alert.alert(
+      'BLOCK USER',
+      `Block ${c.displayName || c.username}? They won't be able to message you.`,
+      [
+        { text: 'CANCEL', style: 'cancel' },
+        {
+          text: 'BLOCK',
+          style: 'destructive',
+          onPress: () => act(`blk_${c.userId}`, () => api('/api/contacts/block', 'POST', { userId: c.userId }, token)),
+        },
+      ]
+    );
+  };
+
+  // Correct field names from API responses
+  const contactUserIds = new Set(contacts.map(c => c.userId));
+  const pendingFromIds = new Set(pending.received.map(p => p.userId));
+  const pendingSentIds = new Set(pending.sent.map(p => p.userId));
+
+  const filteredUsers = query.trim()
+    ? users.filter(u => (u.username + (u.displayName || '')).toLowerCase().includes(query.toLowerCase()))
+    : users;
+
+  if (loading) return <View style={styles.centerFill}><Spinner size="large" /></View>;
+
+  return (
+    <ScrollView
+      style={styles.flex}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchAll(true)} tintColor={C.accent} />}
+    >
+      <ErrText msg={err} />
+
+      {/* ── INCOMING REQUESTS ──────────────────────────────────── */}
+      {pending.received.length > 0 && (
+        <>
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4, flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={styles.contactSection}>PENDING REQUESTS</Text>
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>{pending.received.length}</Text>
+            </View>
+          </View>
+          {pending.received.map(p => (
+            <View key={p.contactId} style={[styles.contactRow, { borderLeftWidth: 3, borderLeftColor: C.amber }]}>
+              <View style={styles.contactRowLeft}>
+                <View style={styles.contactRowInfo}>
+                  <Text style={styles.contactRowName}>{p.displayName || p.username}</Text>
+                  <Text style={styles.contactRowMeta}>WANTS TO CONNECT</Text>
+                </View>
+              </View>
+              <View style={styles.contactBtnRow}>
+                <TouchableOpacity
+                  style={styles.contactActionBtn}
+                  onPress={() => acceptRequest(p.contactId)}
+                  disabled={!!actioning[`acc_${p.contactId}`]}
+                >
+                  {actioning[`acc_${p.contactId}`]
+                    ? <Spinner />
+                    : <Text style={styles.contactActionBtnText}>{'\u2713'} OK</Text>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.contactActionBtn, styles.contactRejectBtn]}
+                  onPress={() => declineRequest(p.contactId)}
+                  disabled={!!actioning[`dec_${p.contactId}`]}
+                >
+                  <Text style={[styles.contactActionBtnText, styles.contactRejectBtnText]}>{'\u2715'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+          <View style={styles.separator} />
+        </>
+      )}
+
+      {/* ── MY CONTACTS ────────────────────────────────────────── */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 }}>
+        <Text style={styles.contactSection}>MY CONTACTS</Text>
+      </View>
+      {contacts.length === 0
+        ? <Text style={styles.emptyText}>NO CONTACTS YET{'\n'}Search below to add someone</Text>
+        : contacts.map(c => (
+            <View key={c.contactId} style={styles.contactRow}>
+              <TouchableOpacity
+                style={styles.contactRowLeft}
+                onPress={() => onOpenDM({ id: c.userId, username: c.username, display_name: c.displayName })}
+              >
+                <OnlineDot online={c.online} />
+                <View style={styles.contactRowInfo}>
+                  <Text style={styles.contactRowName}>{c.displayName || c.username}</Text>
+                  <Text style={styles.contactRowMeta}>{c.online ? 'ONLINE' : 'OFFLINE'}</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.blockContactBtn}
+                onPress={() => blockUser(c)}
+                disabled={!!actioning[`blk_${c.userId}`]}
+              >
+                {actioning[`blk_${c.userId}`]
+                  ? <Spinner />
+                  : <Text style={styles.blockContactBtnText}>BLOCK</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          ))
+      }
+
+      <View style={styles.separator} />
+
+      {/* ── ADD CONTACTS ───────────────────────────────────────── */}
+      <TouchableOpacity style={styles.addContactBtn} onPress={() => setShowSearch(s => !s)}>
+        <Text style={styles.addContactBtnText}>{showSearch ? '\u2715 CLOSE SEARCH' : '+ ADD CONTACT'}</Text>
+      </TouchableOpacity>
+
+      {showSearch && (
+        <>
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <TextInput
+              style={styles.input}
+              placeholder="SEARCH USERS..."
+              placeholderTextColor={C.muted}
+              value={query}
+              onChangeText={setQuery}
+              autoFocus
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+          </View>
+          {filteredUsers.map(u => {
+            const isContact   = contactUserIds.has(u.id);
+            const sentPending = pendingSentIds.has(u.id);
+            const recvPending = pendingFromIds.has(u.id);
+            const key = `req_${u.id}`;
+            return (
+              <View key={u.id} style={styles.contactRow}>
+                <View style={styles.contactRowLeft}>
+                  <OnlineDot online={u.online} />
+                  <View style={styles.contactRowInfo}>
+                    <Text style={styles.contactRowName}>{u.displayName || u.username}</Text>
+                    <Text style={styles.contactRowMeta}>{u.online ? 'ONLINE' : 'OFFLINE'}</Text>
+                  </View>
+                </View>
+                {isContact ? (
+                  <Text style={[styles.contactActionBtnText, { color: C.green }]}>{'\u2713'} CONTACT</Text>
+                ) : sentPending ? (
+                  <Text style={[styles.contactActionBtnText, { color: C.amber }]}>PENDING</Text>
+                ) : recvPending ? (
+                  <Text style={[styles.contactActionBtnText, { color: C.amber }]}>RESPOND ABOVE</Text>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.contactActionBtn}
+                    onPress={() => sendRequest(u.id)}
+                    disabled={!!actioning[key]}
+                  >
+                    {actioning[key] ? <Spinner /> : <Text style={styles.contactActionBtnText}>+ ADD</Text>}
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // SETTINGS TAB
 // ---------------------------------------------------------------------------
-function SettingsTab() {
+function SettingsTab({ token, currentUser }) {
   const { styles, C, skin, setSkin } = useSkin();
+  const mono = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
   const [disappear, setDisappearState] = useState(null);
+  const [location,   setLocationState] = useState(null);
+  const [locLoading, setLocLoading]    = useState(false);
+  const [locErr,     setLocErr]        = useState('');
+
+  // ── Admin state ───────────────────────────────────────────────────────
+  const isAdmin = currentUser?.is_staff || currentUser?.is_superuser;
+  const [pendingUsers,   setPendingUsers]   = useState([]);
+  const [adminLoading,   setAdminLoading]   = useState(false);
+  const [adminRefreshing,setAdminRefreshing]= useState(false);
+  const [adminErr,       setAdminErr]       = useState('');
+  const [adminActioning, setAdminActioning] = useState({});
+
+  const fetchPending = useCallback(async (isRefresh = false) => {
+    if (!isAdmin) return;
+    if (isRefresh) setAdminRefreshing(true); else setAdminLoading(true);
+    setAdminErr('');
+    try {
+      const data = await api('/api/admin/pending', 'GET', null, token);
+      setPendingUsers(Array.isArray(data) ? data : []);
+    } catch (e) { setAdminErr(e.message); }
+    finally { setAdminLoading(false); setAdminRefreshing(false); }
+  }, [isAdmin, token]);
+
+  const adminAction = async (key, path, userId) => {
+    setAdminActioning(a => ({ ...a, [key]: true }));
+    try {
+      await api(path, 'POST', {}, token);
+      setPendingUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (e) { setAdminErr(e.message); }
+    finally { setAdminActioning(a => ({ ...a, [key]: false })); }
+  };
 
   useEffect(() => {
     loadDisappear().then(v => setDisappearState(v));
-  }, []);
+    loadLocation().then(v => { if (v) setLocationState(v); });
+    fetchPending();
+  }, [fetchPending]);
 
   const handleSetDisappear = async (v) => {
     setDisappearState(v);
     await saveDisappear(v);
+  };
+
+  const handleGetLocation = async () => {
+    setLocLoading(true); setLocErr('');
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') { setLocErr('Location permission denied.'); return; }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const loc = {
+        lat:       pos.coords.latitude,
+        lng:       pos.coords.longitude,
+        accuracy:  Math.round(pos.coords.accuracy ?? 0),
+        altitude:  pos.coords.altitude != null ? Math.round(pos.coords.altitude) : null,
+        timestamp: new Date().toISOString(),
+      };
+      setLocationState(loc);
+      await saveLocation(loc);
+    } catch (e) { setLocErr(e.message || 'Failed to get location.'); }
+    finally { setLocLoading(false); }
   };
 
   const SKIN_OPTS = [
@@ -1500,12 +2024,111 @@ function SettingsTab() {
         ))}
       </View>
       {disappear && (
-        <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.amber, marginTop: 10, letterSpacing: 1 }}>
+        <Text style={{ fontFamily: mono, fontSize: 10, color: C.amber, marginTop: 10, letterSpacing: 1 }}>
           {'\u26A0'} Messages will disappear after {DISAPPEAR_OPTIONS.find(o => o.value === disappear)?.label}
         </Text>
       )}
 
       <View style={styles.profileDivider} />
+
+      {/* ── GPS LOCATION ─────────────────────────────────────── */}
+      <Text style={styles.settingsHeader}>GPS LOCATION</Text>
+      <Text style={{ fontFamily: mono, fontSize: 10, color: C.dim, marginBottom: 12, letterSpacing: 1, lineHeight: 16 }}>
+        Capture and store your current GPS coordinates.
+      </Text>
+
+      {location && (
+        <View style={styles.locationBox}>
+          <Text style={styles.locationCoord}>
+            {'\uD83D\uDCCD'} {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
+          </Text>
+          {location.altitude != null && (
+            <Text style={styles.locationMeta}>ALT {location.altitude}m</Text>
+          )}
+          <Text style={styles.locationMeta}>ACC \u00B1{location.accuracy}m</Text>
+          <Text style={styles.locationMeta}>CAPTURED {new Date(location.timestamp).toLocaleString()}</Text>
+        </View>
+      )}
+
+      {locErr ? <Text style={[styles.errText, { marginBottom: 8 }]}>{locErr}</Text> : null}
+
+      <TouchableOpacity
+        style={[styles.getLocationBtn, locLoading && styles.primaryBtnDisabled]}
+        onPress={handleGetLocation}
+        disabled={locLoading}
+      >
+        {locLoading
+          ? <Spinner />
+          : <Text style={styles.getLocationBtnText}>{location ? '\uD83D\uDD04 UPDATE LOCATION' : '\uD83D\uDCCD GET LOCATION'}</Text>
+        }
+      </TouchableOpacity>
+
+      <View style={styles.profileDivider} />
+
+      {/* ── ADMIN PANEL (staff only) ─────────────────────────── */}
+      {isAdmin && (
+        <>
+          <Text style={[styles.settingsHeader, { color: C.amber }]}>ADMIN — PENDING APPROVALS</Text>
+          {adminErr ? <ErrText msg={adminErr} /> : null}
+
+          {adminLoading ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}><Spinner /></View>
+          ) : pendingUsers.length === 0 ? (
+            <Text style={[styles.emptyText, { marginTop: 0, marginBottom: 16, fontSize: 11 }]}>
+              {'\u2713'} NO PENDING REGISTRATIONS
+            </Text>
+          ) : (
+            pendingUsers.map(u => (
+              <View key={u.id} style={styles.adminCard}>
+                <Text style={styles.adminCardLabel}>PENDING REGISTRATION</Text>
+                <Text style={styles.adminCardName}>{u.username}</Text>
+                <Text style={styles.adminCardEmail}>{u.email}</Text>
+                {u.join_reason ? (
+                  <Text style={styles.adminCardReason}>"{u.join_reason}"</Text>
+                ) : null}
+                {u.ip_address ? (
+                  <Text style={styles.adminCardEmail}>IP: {u.ip_address}</Text>
+                ) : null}
+                <Text style={styles.adminCardEmail}>
+                  {new Date(u.created_at).toLocaleString()}
+                </Text>
+                <View style={styles.adminBtnRow}>
+                  <TouchableOpacity
+                    style={[styles.adminApproveBtn, adminActioning[`app_${u.id}`] && { opacity: 0.5 }]}
+                    onPress={() => adminAction(`app_${u.id}`, `/api/admin/approve/${u.id}`, u.id)}
+                    disabled={!!adminActioning[`app_${u.id}`] || !!adminActioning[`rej_${u.id}`]}
+                  >
+                    {adminActioning[`app_${u.id}`]
+                      ? <Spinner />
+                      : <Text style={styles.adminApproveBtnText}>{'\u2713'} APPROVE</Text>
+                    }
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.adminRejectBtn, adminActioning[`rej_${u.id}`] && { opacity: 0.5 }]}
+                    onPress={() => adminAction(`rej_${u.id}`, `/api/admin/reject/${u.id}`, u.id)}
+                    disabled={!!adminActioning[`app_${u.id}`] || !!adminActioning[`rej_${u.id}`]}
+                  >
+                    {adminActioning[`rej_${u.id}`]
+                      ? <Spinner />
+                      : <Text style={styles.adminRejectBtnText}>{'\u2715'} REJECT</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+
+          <TouchableOpacity
+            style={[styles.ghostBtn, { marginBottom: 4 }, adminRefreshing && { opacity: 0.5 }]}
+            onPress={() => fetchPending(true)}
+            disabled={adminRefreshing || adminLoading}
+          >
+            {adminRefreshing ? <Spinner /> : <Text style={styles.ghostBtnText}>{'\uD83D\uDD04'} REFRESH LIST</Text>}
+          </TouchableOpacity>
+
+          <View style={styles.profileDivider} />
+        </>
+      )}
 
       {/* ── APP INFO ─────────────────────────────────────────── */}
       <Text style={styles.settingsHeader}>APP INFO</Text>
@@ -1595,10 +2218,11 @@ function HomeScreen({ token, currentUser, onLogout }) {
       </View>
       <View style={styles.flex}>
         {activeTab === 'CHATS'    && <ChatsTab token={token} currentUser={currentUser} onOpenDM={(peer) => setDmPeer(peer)} />}
+        {activeTab === 'CONTACTS' && <ContactsTab token={token} currentUser={currentUser} onOpenDM={(peer) => { setDmPeer(peer); setActiveTab('CHATS'); }} />}
         {activeTab === 'GROUPS'   && <GroupsTab token={token} onOpenGroup={(g) => setGroupChat(g)} />}
         {activeTab === 'BOT'      && <BotTab token={token} />}
         {activeTab === 'PROFILE'  && <ProfileTab token={token} currentUser={currentUser} onLogout={onLogout} />}
-        {activeTab === 'SETTINGS' && <SettingsTab />}
+        {activeTab === 'SETTINGS' && <SettingsTab token={token} currentUser={currentUser} />}
       </View>
       <TabBar active={activeTab} onChange={setActiveTab} />
     </ThemedSafeArea>
@@ -1619,7 +2243,9 @@ function AppInner() {
       try {
         const storedToken = await loadToken();
         if (!storedToken) { setAppState('auth'); return; }
-        const user = await api('/auth/me', 'GET', null, storedToken);
+        const rawMe = await api('/auth/me', 'GET', null, storedToken);
+        // MeView wraps in { user: {...} } — unwrap it
+        const user = rawMe?.user ?? rawMe;
         await saveUser(user);
         setToken(storedToken); setUser(user);
         const bioEnabled = await loadBioEnabled();
