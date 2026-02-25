@@ -18,7 +18,6 @@ import {
   Animated,
   FlatList,
   Image,
-  ImageBackground,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -38,6 +37,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import Svg, { Path, Circle, Line, G, Polygon, Rect, Defs, Pattern } from 'react-native-svg';
 
 // ---------------------------------------------------------------------------
 // COLOUR PALETTES
@@ -141,16 +141,30 @@ function makeRawStyles(C) {
     homeSubtitle: { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 4, marginTop: 2 },
 
     tabBar: {
-      flexDirection: 'row', backgroundColor: C.surface,
-      borderTopWidth: 1, borderTopColor: C.border,
+      flexDirection: 'row',
+      backgroundColor: C.surface,
+      borderRadius: 28,
+      marginHorizontal: 12,
+      marginBottom: Platform.OS === 'ios' ? 6 : 8,
+      paddingVertical: 10,
+      paddingHorizontal: 2,
+      shadowColor: C.accent,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.22,
+      shadowRadius: 22,
+      elevation: 24,
+      borderWidth: 1,
+      borderColor: C.borderBright,
     },
-    tabItem:    { flex: 1, alignItems: 'center', paddingVertical: 7, position: 'relative' },
-    tabIcon:    { fontSize: 18, textAlign: 'center', marginBottom: 2 },
-    tabText:    { fontFamily: mono, fontSize: 8, color: C.dim, letterSpacing: 0.5 },
+    tabItem:    { flex: 1, alignItems: 'center', paddingVertical: 4, position: 'relative', gap: 4 },
+    tabIcon:    { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+    tabText:    { fontFamily: mono, fontSize: 7, color: C.dim, letterSpacing: 0.5 },
     tabTextActive: { color: C.accent, fontWeight: '700' },
-    tabIndicator: {
-      position: 'absolute', top: 0, left: '20%', right: '20%',
-      height: 2, backgroundColor: C.accent,
+    tabActiveGlow: {
+      position: 'absolute', top: -1, left: '15%', right: '15%',
+      height: 2, borderRadius: 2, backgroundColor: C.accent,
+      shadowColor: C.accent, shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.9, shadowRadius: 6, elevation: 0,
     },
 
     authScroll: {
@@ -680,44 +694,86 @@ function isImageContent(c) { return typeof c === 'string' && c.startsWith('data:
 // ---------------------------------------------------------------------------
 // THEMED WRAPPERS
 // ---------------------------------------------------------------------------
-function ThemedSafeArea({ style, children }) {
-  const { skin, C } = useSkin();
-  if (skin === 'tactical') {
-    return (
-      <ImageBackground
-        source={require('./magpulbackground.webp')}
-        style={{ flex: 1, backgroundColor: C.bg }}
-        imageStyle={{ opacity: 0.12 }}
-        resizeMode="cover"
-      >
-        <SafeAreaView style={[{ flex: 1, backgroundColor: 'transparent' }, style]}>
-          {children}
-        </SafeAreaView>
-      </ImageBackground>
-    );
-  }
+/* SynapseTexture — custom dot-grid background, replaces magpul branding */
+function SynapseTexture({ accentColor }) {
+  // 6 radial arms at 60° intervals for the central mark
+  const arms = [0, 60, 120, 180, 240, 300].map((deg) => {
+    const rad = (deg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const tx = (80 * cos).toFixed(1);
+    const ty = (80 * sin).toFixed(1);
+    const bx = (52 * cos).toFixed(1);
+    const by = (52 * sin).toFixed(1);
+    const b1x = (52 * cos + 14 * Math.cos(rad + Math.PI / 3)).toFixed(1);
+    const b1y = (52 * sin + 14 * Math.sin(rad + Math.PI / 3)).toFixed(1);
+    const b2x = (52 * cos + 14 * Math.cos(rad - Math.PI / 3)).toFixed(1);
+    const b2y = (52 * sin + 14 * Math.sin(rad - Math.PI / 3)).toFixed(1);
+    return { tx, ty, bx, by, b1x, b1y, b2x, b2y };
+  });
+  const hexPts = [0, 60, 120, 180, 240, 300]
+    .map((d) => {
+      const r = (d * Math.PI) / 180;
+      return `${(88 * Math.cos(r)).toFixed(1)},${(88 * Math.sin(r)).toFixed(1)}`;
+    })
+    .join(' ');
+
   return (
-    <SafeAreaView style={[{ flex: 1, backgroundColor: C.bg }, style]}>
-      {children}
-    </SafeAreaView>
+    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="xMidYMid slice">
+      <Defs>
+        {/* Repeating dot-grid tile */}
+        <Pattern id="sg" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
+          <Circle cx="14" cy="14" r="1.2" fill={accentColor} fillOpacity="0.09" />
+          <Line x1="0" y1="14" x2="28" y2="14" stroke={accentColor} strokeOpacity="0.025" strokeWidth="0.5" />
+          <Line x1="14" y1="0" x2="14" y2="28" stroke={accentColor} strokeOpacity="0.025" strokeWidth="0.5" />
+        </Pattern>
+      </Defs>
+
+      {/* Full-screen dot grid */}
+      <Rect width="100%" height="100%" fill="url(#sg)" />
+
+      {/* Central synapse mark — watermark at screen center */}
+      <G opacity="0.07" transform="translate(50%, 50%) translate(188, 400)">
+        {/* Outer connecting hexagon */}
+        <Polygon points={hexPts} stroke={accentColor} strokeWidth="1" fill="none" />
+        {/* Radial arms + branches */}
+        {arms.map((a, i) => (
+          <G key={i}>
+            <Line x1="0" y1="0" x2={a.tx} y2={a.ty} stroke={accentColor} strokeWidth="0.8" />
+            <Line x1={a.bx} y1={a.by} x2={a.b1x} y2={a.b1y} stroke={accentColor} strokeWidth="0.6" />
+            <Line x1={a.bx} y1={a.by} x2={a.b2x} y2={a.b2y} stroke={accentColor} strokeWidth="0.6" />
+            <Circle cx={parseFloat(a.tx)} cy={parseFloat(a.ty)} r="3.5" fill={accentColor} />
+          </G>
+        ))}
+        {/* Nucleus rings */}
+        <Circle cx="0" cy="0" r="18" stroke={accentColor} strokeWidth="1.2" fill="none" />
+        <Circle cx="0" cy="0" r="8" stroke={accentColor} strokeWidth="0.8" fill="none" />
+        <Circle cx="0" cy="0" r="3" fill={accentColor} />
+      </G>
+    </Svg>
+  );
+}
+
+function ThemedSafeArea({ style, children }) {
+  const { C } = useSkin();
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <SynapseTexture accentColor={C.accent} />
+      <SafeAreaView style={[{ flex: 1, backgroundColor: 'transparent' }, style]}>
+        {children}
+      </SafeAreaView>
+    </View>
   );
 }
 
 function ThemedView({ style, children }) {
-  const { skin, C } = useSkin();
-  if (skin === 'tactical') {
-    return (
-      <ImageBackground
-        source={require('./magpulbackground.webp')}
-        style={[{ flex: 1, backgroundColor: C.bg }, style]}
-        imageStyle={{ opacity: 0.12 }}
-        resizeMode="cover"
-      >
-        {children}
-      </ImageBackground>
-    );
-  }
-  return <View style={[{ flex: 1, backgroundColor: C.bg }, style]}>{children}</View>;
+  const { C } = useSkin();
+  return (
+    <View style={[{ flex: 1, backgroundColor: C.bg }, style]}>
+      <SynapseTexture accentColor={C.accent} />
+      {children}
+    </View>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -757,17 +813,127 @@ function AppHeader({ title, onBack }) {
 }
 
 // ---------------------------------------------------------------------------
-// BOTTOM TAB BAR  (5 tabs)
+// CUSTOM SVG ICONS  (personalised, transparent background)
+// ---------------------------------------------------------------------------
+function IconChats({ size = 24, color }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Rounded speech bubble */}
+      <Path
+        d="M4 3.5h16c.83 0 1.5.67 1.5 1.5v10c0 .83-.67 1.5-1.5 1.5H8.8L4 20V5c0-.83.67-1.5 1.5-1.5z"
+        stroke={color} strokeWidth="1.5" strokeLinejoin="round"
+      />
+      {/* Signal dots */}
+      <Circle cx="8.5" cy="9.5" r="1.3" fill={color} />
+      <Circle cx="12"  cy="9.5" r="1.3" fill={color} />
+      <Circle cx="15.5" cy="9.5" r="1.3" fill={color} />
+    </Svg>
+  );
+}
+
+function IconContacts({ size = 24, color }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Head */}
+      <Circle cx="12" cy="7.5" r="4" stroke={color} strokeWidth="1.5" />
+      {/* Body arc */}
+      <Path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      {/* Small connection node top-right — unique to this icon */}
+      <Circle cx="18.5" cy="4.5" r="2" fill={color} fillOpacity="0.7" />
+      <Line x1="16.8" y1="5.2" x2="15" y2="6.5" stroke={color} strokeWidth="1.1" />
+    </Svg>
+  );
+}
+
+function IconGroups({ size = 24, color }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Left person */}
+      <Circle cx="8" cy="7" r="3.2" stroke={color} strokeWidth="1.4" />
+      <Path d="M2 21c0-3.3 2.7-6 6-6" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+      {/* Right person */}
+      <Circle cx="16" cy="7" r="3.2" stroke={color} strokeWidth="1.4" />
+      <Path d="M22 21c0-3.3-2.7-6-6-6" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+      {/* Centre overlap arc — connects them */}
+      <Path d="M9.5 15.5c.8-.3 1.6-.5 2.5-.5s1.7.2 2.5.5" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function IconBot({ size = 24, color }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Hexagon shell */}
+      <Polygon
+        points="12,2 20.5,7 20.5,17 12,22 3.5,17 3.5,7"
+        stroke={color} strokeWidth="1.4" strokeLinejoin="round"
+      />
+      {/* Centre nucleus */}
+      <Circle cx="12" cy="12" r="2.5" fill={color} />
+      {/* Radial spokes */}
+      <Line x1="12" y1="7"  x2="12" y2="9.5"  stroke={color} strokeWidth="1"  />
+      <Line x1="12" y1="14.5" x2="12" y2="17" stroke={color} strokeWidth="1"  />
+      <Line x1="7.3"  y1="9.5"  x2="9.8"  y2="11"  stroke={color} strokeWidth="1" />
+      <Line x1="16.7" y1="9.5"  x2="14.2" y2="11"  stroke={color} strokeWidth="1" />
+      <Line x1="7.3"  y1="14.5" x2="9.8"  y2="13"  stroke={color} strokeWidth="1" />
+      <Line x1="16.7" y1="14.5" x2="14.2" y2="13"  stroke={color} strokeWidth="1" />
+      {/* Vertex nodes */}
+      <Circle cx="12"   cy="2"  r="1.2" fill={color} fillOpacity="0.6" />
+      <Circle cx="20.5" cy="7"  r="1.2" fill={color} fillOpacity="0.6" />
+      <Circle cx="20.5" cy="17" r="1.2" fill={color} fillOpacity="0.6" />
+      <Circle cx="12"   cy="22" r="1.2" fill={color} fillOpacity="0.6" />
+      <Circle cx="3.5"  cy="17" r="1.2" fill={color} fillOpacity="0.6" />
+      <Circle cx="3.5"  cy="7"  r="1.2" fill={color} fillOpacity="0.6" />
+    </Svg>
+  );
+}
+
+function IconProfile({ size = 24, color }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Head */}
+      <Circle cx="12" cy="7.5" r="4" stroke={color} strokeWidth="1.5" />
+      {/* Body arc */}
+      <Path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+      {/* Shield badge — bottom-right corner */}
+      <Path
+        d="M18 13.5l2.5 1.2v3c0 1.6-1.2 2.8-2.5 3.3-1.3-.5-2.5-1.7-2.5-3.3v-3L18 13.5z"
+        stroke={color} strokeWidth="1.2" fill={color} fillOpacity="0.15"
+      />
+      <Line x1="18" y1="16.2" x2="18" y2="18.8" stroke={color} strokeWidth="1" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function IconSettings({ size = 24, color }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Outer gear ring - 8 teeth using path */}
+      <Path
+        d="M12 2.5l1.5 1.8h2l.8-1.6 2.2 1.2-.2 2 1.4 1.4 2-.2 1.2 2.2-1.6.8v2l1.8 1.5-1.8 1.5v2l1.6.8-1.2 2.2-2-.2-1.4 1.4.2 2-2.2 1.2-.8-1.6h-2L12 21.5l-1.5-1.8h-2l-.8 1.6-2.2-1.2.2-2-1.4-1.4-2 .2-1.2-2.2 1.6-.8v-2L2.5 12l1.8-1.5v-2l-1.6-.8 1.2-2.2 2 .2 1.4-1.4-.2-2 2.2-1.2.8 1.6h2L12 2.5z"
+        stroke={color} strokeWidth="1.3" strokeLinejoin="round"
+      />
+      {/* Centre circle */}
+      <Circle cx="12" cy="12" r="3.2" stroke={color} strokeWidth="1.4" />
+      {/* Centre dot */}
+      <Circle cx="12" cy="12" r="1" fill={color} />
+    </Svg>
+  );
+}
+
+const ICON_COMPONENTS = {
+  CHATS:    IconChats,
+  CONTACTS: IconContacts,
+  GROUPS:   IconGroups,
+  BOT:      IconBot,
+  PROFILE:  IconProfile,
+  SETTINGS: IconSettings,
+};
+
+// ---------------------------------------------------------------------------
+// BOTTOM TAB BAR  (floating, rounded, back-shadowed)
 // ---------------------------------------------------------------------------
 const TABS = ['CHATS', 'CONTACTS', 'GROUPS', 'BOT', 'PROFILE', 'SETTINGS'];
-const TAB_ICONS = {
-  CHATS:    '\uD83D\uDCAC',
-  CONTACTS: '\uD83D\uDCCB',
-  GROUPS:   '\uD83D\uDC65',
-  BOT:      '\uD83E\uDD16',
-  PROFILE:  '\uD83D\uDC64',
-  SETTINGS: '\u2699\uFE0F',
-};
 
 function TabBar({ active, onChange }) {
   const { styles, C } = useSkin();
@@ -775,10 +941,13 @@ function TabBar({ active, onChange }) {
     <View style={styles.tabBar}>
       {TABS.map((tab) => {
         const isActive = tab === active;
+        const IconComp = ICON_COMPONENTS[tab];
         return (
-          <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => onChange(tab)}>
-            {isActive && <View style={styles.tabIndicator} />}
-            <Text style={[styles.tabIcon, { color: isActive ? C.accent : C.dim }]}>{TAB_ICONS[tab]}</Text>
+          <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => onChange(tab)} activeOpacity={0.7}>
+            {isActive && <View style={styles.tabActiveGlow} />}
+            <View style={styles.tabIcon}>
+              <IconComp size={22} color={isActive ? C.accent : C.dim} />
+            </View>
             <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         );
