@@ -78,7 +78,25 @@ const TACTICAL_C = {
 // STYLES FACTORY  (called once per palette → two static StyleSheet objects)
 // ---------------------------------------------------------------------------
 function makeRawStyles(C) {
-  const mono = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+  // Technical labels, logos, timestamps → Menlo (more readable than Courier New)
+  const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+  // Body text, inputs, messages → system font (SF Pro on iOS, Roboto on Android)
+  const body = undefined;
+
+  // Reusable shadow helpers
+  const cardShadow = {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
+  };
+  const inputShadow = {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25, shadowRadius: 8, elevation: 3,
+  };
+  const btnShadow = {
+    shadowColor: C.green, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22, shadowRadius: 10, elevation: 4,
+  };
+
   return {
     flex:       { flex: 1 },
     safeArea:   { flex: 1, backgroundColor: C.bg },
@@ -149,23 +167,27 @@ function makeRawStyles(C) {
     authTabRow: {
       flexDirection: 'row', borderWidth: 1, borderColor: C.border,
       marginBottom: 24, backgroundColor: C.surface,
+      borderRadius: 10, overflow: 'hidden',
     },
     authTab:       { flex: 1, paddingVertical: 10, alignItems: 'center' },
     authTabActive: { backgroundColor: C.panel, borderBottomWidth: 2, borderBottomColor: C.accent },
     authTabText:       { fontFamily: mono, fontSize: 13, color: C.dim, letterSpacing: 1 },
     authTabTextActive: { color: C.accent, fontWeight: '700' },
-    authForm: { gap: 12 },
+    authForm: { gap: 14 },
 
     input: {
       backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
-      color: C.bright, paddingHorizontal: 14, paddingVertical: 12,
-      fontFamily: mono, fontSize: 14, letterSpacing: 1,
+      color: C.bright, paddingHorizontal: 16, paddingVertical: 13,
+      fontFamily: body, fontSize: 15,
+      borderRadius: 12,
+      ...inputShadow,
     },
-    inputMultiline: { minHeight: 90, textAlignVertical: 'top', paddingTop: 12 },
+    inputMultiline: { minHeight: 90, textAlignVertical: 'top', paddingTop: 13 },
 
     primaryBtn: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
       alignItems: 'center', paddingVertical: 14,
+      borderRadius: 10, ...btnShadow,
     },
     primaryBtnDisabled: { borderColor: C.muted, opacity: 0.6 },
     primaryBtnText: {
@@ -173,17 +195,17 @@ function makeRawStyles(C) {
     },
     ghostBtn: {
       backgroundColor: 'transparent', borderWidth: 1, borderColor: C.border,
-      alignItems: 'center', paddingVertical: 14,
+      alignItems: 'center', paddingVertical: 14, borderRadius: 10,
     },
     ghostBtnText: { fontFamily: mono, fontSize: 13, color: C.dim, letterSpacing: 1 },
 
     errText: {
-      color: C.red, fontFamily: mono, fontSize: 12,
+      color: C.red, fontFamily: body, fontSize: 13,
       paddingHorizontal: 16, paddingVertical: 8,
     },
     emptyText: {
-      color: C.muted, fontFamily: mono, fontSize: 13,
-      textAlign: 'center', marginTop: 40, letterSpacing: 2,
+      color: C.muted, fontFamily: body, fontSize: 14,
+      textAlign: 'center', marginTop: 40,
     },
 
     separator: { height: 1, backgroundColor: C.border },
@@ -193,29 +215,39 @@ function makeRawStyles(C) {
     },
     userRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     userRowInfo: { flex: 1, marginLeft: 10 },
-    userRowName: { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '600' },
+    userRowName: { fontFamily: body, fontSize: 15, color: C.bright, fontWeight: '600' },
     userRowMeta: { fontFamily: mono, fontSize: 11, color: C.dim, marginTop: 2, letterSpacing: 1 },
     chevron:     { color: C.dim, fontFamily: mono, fontSize: 16, marginLeft: 8 },
 
     dot: { width: 8, height: 8, borderRadius: 4, marginLeft: 4 },
 
     msgList:      { padding: 12, paddingBottom: 20 },
-    msgRow:       { marginVertical: 4, flexDirection: 'row' },
+    msgRow:       { marginVertical: 3, flexDirection: 'row' },
     msgRowMine:   { justifyContent: 'flex-end' },
     msgRowTheirs: { justifyContent: 'flex-start' },
     msgBubble: {
-      maxWidth: '78%', paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1,
+      maxWidth: '78%', paddingHorizontal: 13, paddingVertical: 9, borderWidth: 1,
     },
+    // WhatsApp-style bubbles: flat corner on sender side
     bubbleMine: {
-      backgroundColor: C.panel, borderColor: C.borderBright, borderRadius: 0,
+      backgroundColor: C.panel, borderColor: C.borderBright,
+      borderRadius: 18, borderTopRightRadius: 4,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
     },
     bubbleTheirs: {
-      backgroundColor: C.surface, borderColor: C.border, borderRadius: 0,
+      backgroundColor: C.surface, borderColor: C.border,
+      borderRadius: 18, borderTopLeftRadius: 4,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
     },
     bubbleBotMsg: {
-      backgroundColor: C.panel, borderColor: C.borderBright, borderRadius: 0,
+      backgroundColor: C.panel, borderColor: C.borderBright,
+      borderRadius: 18, borderTopLeftRadius: 4,
+      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
     },
-    msgText:    { fontFamily: mono, fontSize: 14, color: C.text, lineHeight: 20 },
+    msgText:    { fontFamily: body, fontSize: 15, color: C.text, lineHeight: 22 },
     botMsgText: { color: C.bright },
     msgSender: {
       fontFamily: mono, fontSize: 10, color: C.accent,
@@ -231,7 +263,7 @@ function makeRawStyles(C) {
     msgTime: { fontFamily: mono, fontSize: 10, color: C.muted, marginTop: 4 },
     msgRead: { fontFamily: mono, fontSize: 10, color: C.green },
 
-    imageMsg: { width: 200, height: 150, marginVertical: 4 },
+    imageMsg: { width: 200, height: 150, marginVertical: 4, borderRadius: 12 },
 
     inputRow: {
       flexDirection: 'row', borderTopWidth: 1, borderTopColor: C.border,
@@ -239,19 +271,22 @@ function makeRawStyles(C) {
     },
     attachBtn: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
-      width: 38, height: 38, justifyContent: 'center', alignItems: 'center', marginRight: 6,
+      width: 38, height: 38, borderRadius: 19,
+      justifyContent: 'center', alignItems: 'center', marginRight: 6,
     },
     attachBtnText: { fontFamily: mono, fontSize: 22, color: C.accent, lineHeight: 26 },
     chatInput: {
       flex: 1, color: C.bright, backgroundColor: C.panel,
       borderWidth: 1, borderColor: C.border,
-      paddingHorizontal: 12, paddingVertical: 10,
-      fontFamily: mono, fontSize: 14, maxHeight: 120, marginRight: 8,
+      paddingHorizontal: 16, paddingVertical: 10,
+      fontFamily: body, fontSize: 15, maxHeight: 120, marginRight: 8,
+      borderRadius: 22,
     },
     sendBtn: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
-      paddingHorizontal: 14, paddingVertical: 10,
-      justifyContent: 'center', alignItems: 'center', minWidth: 60,
+      paddingHorizontal: 14, paddingVertical: 10, borderRadius: 19,
+      justifyContent: 'center', alignItems: 'center', minWidth: 44,
+      ...btnShadow,
     },
     sendBtnDisabled: { borderColor: C.muted, opacity: 0.5 },
     sendBtnText: {
@@ -261,6 +296,7 @@ function makeRawStyles(C) {
     createGroupBtn: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
       margin: 16, paddingVertical: 12, alignItems: 'center',
+      borderRadius: 10, ...btnShadow,
     },
     createGroupBtnText: {
       fontFamily: mono, fontSize: 13, color: C.accent, fontWeight: '700', letterSpacing: 2,
@@ -270,7 +306,7 @@ function makeRawStyles(C) {
       padding: 16, gap: 10,
     },
     formLabel: { fontFamily: mono, fontSize: 12, color: C.accent, letterSpacing: 2, marginBottom: 4 },
-    formBtnRow: { flexDirection: 'row', marginTop: 4 },
+    formBtnRow: { flexDirection: 'row', marginTop: 4, gap: 8 },
 
     botHeader: {
       flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface,
@@ -284,25 +320,26 @@ function makeRawStyles(C) {
     profileScroll:  { padding: 16, paddingBottom: 60 },
     profileCard: {
       backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
-      padding: 14, marginBottom: 8,
+      padding: 16, marginBottom: 10, borderRadius: 12,
+      ...cardShadow,
     },
     profileLabel: { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 2, marginBottom: 4 },
-    profileValue: { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '600' },
+    profileValue: { fontFamily: body, fontSize: 15, color: C.bright, fontWeight: '600' },
     profileDivider: { height: 1, backgroundColor: C.border, marginVertical: 20 },
     inviteUrlBox: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.borderBright,
-      padding: 14, marginTop: 12, gap: 8,
+      padding: 14, marginTop: 12, gap: 8, borderRadius: 12,
     },
     inviteUrlLabel: { fontFamily: mono, fontSize: 10, color: C.accent, letterSpacing: 2 },
-    inviteUrlText:  { fontFamily: mono, fontSize: 12, color: C.text, lineHeight: 18 },
+    inviteUrlText:  { fontFamily: body, fontSize: 13, color: C.text, lineHeight: 20 },
     copyBtn: {
       backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
-      paddingVertical: 8, alignItems: 'center', marginTop: 4,
+      paddingVertical: 8, alignItems: 'center', marginTop: 4, borderRadius: 8,
     },
     copyBtnText: { fontFamily: mono, fontSize: 11, color: C.accent, letterSpacing: 1 },
     logoutBtn: {
       backgroundColor: 'transparent', borderWidth: 1, borderColor: C.red,
-      paddingVertical: 14, alignItems: 'center',
+      paddingVertical: 14, alignItems: 'center', borderRadius: 10,
     },
     logoutBtnText: {
       fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.red, letterSpacing: 2,
@@ -316,7 +353,7 @@ function makeRawStyles(C) {
     skinRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
     skinBtn: {
       flex: 1, backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
-      paddingVertical: 14, alignItems: 'center', gap: 4,
+      paddingVertical: 14, alignItems: 'center', gap: 4, borderRadius: 10,
     },
     skinBtnActive:     { borderColor: C.accent },
     skinDot:           { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
@@ -328,7 +365,7 @@ function makeRawStyles(C) {
     disappearWrap:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     disappearOpt: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
-      paddingVertical: 8, paddingHorizontal: 12,
+      paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20,
     },
     disappearOptActive:      { borderColor: C.accent },
     disappearOptText:        { fontFamily: mono, fontSize: 11, color: C.dim, letterSpacing: 1 },
@@ -345,11 +382,12 @@ function makeRawStyles(C) {
     },
     contactRowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     contactRowInfo: { flex: 1, marginLeft: 10 },
-    contactRowName: { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '600' },
+    contactRowName: { fontFamily: body, fontSize: 15, color: C.bright, fontWeight: '600' },
     contactRowMeta: { fontFamily: mono, fontSize: 11, color: C.dim, marginTop: 2, letterSpacing: 1 },
     contactBtnRow: { flexDirection: 'row', gap: 6 },
     contactActionBtn: {
-      borderWidth: 1, paddingVertical: 6, paddingHorizontal: 10, borderColor: C.green,
+      borderWidth: 1, paddingVertical: 6, paddingHorizontal: 10,
+      borderColor: C.green, borderRadius: 8,
     },
     contactActionBtnText: { fontFamily: mono, fontSize: 11, color: C.accent, letterSpacing: 1 },
     contactRejectBtn: { borderColor: C.red },
@@ -357,28 +395,31 @@ function makeRawStyles(C) {
     addContactBtn: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
       margin: 16, paddingVertical: 12, alignItems: 'center',
+      borderRadius: 10, ...btnShadow,
     },
     addContactBtnText: {
       fontFamily: mono, fontSize: 13, color: C.accent, fontWeight: '700', letterSpacing: 2,
     },
     pendingBadge: {
-      backgroundColor: C.amber, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6,
+      backgroundColor: C.amber, paddingHorizontal: 8, paddingVertical: 3,
+      marginLeft: 6, borderRadius: 10,
     },
     pendingBadgeText: { fontFamily: mono, fontSize: 9, color: '#000', fontWeight: '700' },
 
     // ── Admin panel ────────────────────────────────────────────────────────
     adminCard: {
       backgroundColor: C.surface, borderWidth: 1, borderColor: C.amber,
-      padding: 14, marginBottom: 10,
+      padding: 14, marginBottom: 10, borderRadius: 12,
+      ...cardShadow,
     },
     adminCardLabel: { fontFamily: mono, fontSize: 10, color: C.amber, letterSpacing: 2, marginBottom: 6 },
-    adminCardName:  { fontFamily: mono, fontSize: 15, color: C.bright, fontWeight: '700', marginBottom: 2 },
-    adminCardEmail: { fontFamily: mono, fontSize: 12, color: C.dim, marginBottom: 4 },
-    adminCardReason:{ fontFamily: mono, fontSize: 11, color: C.text, lineHeight: 16, marginBottom: 8 },
+    adminCardName:  { fontFamily: body, fontSize: 15, color: C.bright, fontWeight: '700', marginBottom: 2 },
+    adminCardEmail: { fontFamily: body, fontSize: 13, color: C.dim, marginBottom: 4 },
+    adminCardReason:{ fontFamily: body, fontSize: 13, color: C.text, lineHeight: 20, marginBottom: 8 },
     adminBtnRow:    { flexDirection: 'row', gap: 8 },
-    adminApproveBtn:{ flex: 1, borderWidth: 1, borderColor: C.green, paddingVertical: 9, alignItems: 'center' },
+    adminApproveBtn:{ flex: 1, borderWidth: 1, borderColor: C.green, paddingVertical: 9, alignItems: 'center', borderRadius: 8 },
     adminApproveBtnText: { fontFamily: mono, fontSize: 11, color: C.accent, fontWeight: '700', letterSpacing: 1 },
-    adminRejectBtn: { flex: 1, borderWidth: 1, borderColor: C.red, paddingVertical: 9, alignItems: 'center' },
+    adminRejectBtn: { flex: 1, borderWidth: 1, borderColor: C.red, paddingVertical: 9, alignItems: 'center', borderRadius: 8 },
     adminRejectBtnText:  { fontFamily: mono, fontSize: 11, color: C.red, fontWeight: '700', letterSpacing: 1 },
 
     // ── Profile Edit ──────────────────────────────────────────────────────
@@ -388,29 +429,32 @@ function makeRawStyles(C) {
     },
     profileEditInput: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
-      color: C.bright, paddingHorizontal: 14, paddingVertical: 10,
-      fontFamily: mono, fontSize: 14, letterSpacing: 1, marginTop: 6,
+      color: C.bright, paddingHorizontal: 16, paddingVertical: 12,
+      fontFamily: body, fontSize: 15, marginTop: 6,
+      borderRadius: 12, ...inputShadow,
     },
-    profileEditMultiline: { minHeight: 70, textAlignVertical: 'top', paddingTop: 10 },
+    profileEditMultiline: { minHeight: 70, textAlignVertical: 'top', paddingTop: 12 },
     saveProfileBtn: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
       alignItems: 'center', paddingVertical: 13, marginTop: 10,
+      borderRadius: 10, ...btnShadow,
     },
     saveProfileBtnText: {
       fontFamily: mono, fontSize: 13, fontWeight: '700', color: C.accent, letterSpacing: 2,
     },
-    saveOkText: { fontFamily: mono, fontSize: 11, color: C.green, textAlign: 'center', marginTop: 8, letterSpacing: 1 },
+    saveOkText: { fontFamily: body, fontSize: 13, color: C.green, textAlign: 'center', marginTop: 8 },
 
     // ── Location ──────────────────────────────────────────────────────────
     locationBox: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.borderBright,
-      padding: 14, marginBottom: 8, gap: 4,
+      padding: 14, marginBottom: 8, gap: 4, borderRadius: 12,
     },
     locationCoord: { fontFamily: mono, fontSize: 14, color: C.accent, letterSpacing: 1, fontWeight: '700' },
     locationMeta:  { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 1, marginTop: 2 },
     getLocationBtn: {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
       alignItems: 'center', paddingVertical: 13, marginTop: 4,
+      borderRadius: 10, ...btnShadow,
     },
     getLocationBtnText: {
       fontFamily: mono, fontSize: 13, fontWeight: '700', color: C.accent, letterSpacing: 2,
@@ -419,7 +463,7 @@ function makeRawStyles(C) {
     // ── Face ID ───────────────────────────────────────────────────────────
     bioLoginBtn: {
       backgroundColor: 'transparent', borderWidth: 1, borderColor: C.accent,
-      alignItems: 'center', paddingVertical: 14, marginTop: 4,
+      alignItems: 'center', paddingVertical: 14, marginTop: 4, borderRadius: 10,
     },
     bioLoginBtnText: {
       fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.accent, letterSpacing: 2,
@@ -428,12 +472,12 @@ function makeRawStyles(C) {
     bioBtn:         { width: 240, alignSelf: 'center' },
     bioFallbackBtn: { marginTop: 28, paddingVertical: 8 },
     bioFallbackText: {
-      fontFamily: mono, fontSize: 12, color: C.dim,
-      letterSpacing: 1, textDecorationLine: 'underline',
+      fontFamily: body, fontSize: 13, color: C.dim,
+      textDecorationLine: 'underline',
     },
     bioDisableBtn: {
       backgroundColor: 'transparent', borderWidth: 1, borderColor: C.amber,
-      paddingVertical: 14, alignItems: 'center',
+      paddingVertical: 14, alignItems: 'center', borderRadius: 10,
     },
     bioDisableBtnText: {
       fontFamily: mono, fontSize: 14, fontWeight: '700', color: C.amber, letterSpacing: 2,
@@ -441,30 +485,31 @@ function makeRawStyles(C) {
 
     // ── Modal ─────────────────────────────────────────────────────────────
     modalOverlay: {
-      flex: 1, backgroundColor: 'rgba(0,0,0,0.8)',
+      flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
       justifyContent: 'center', alignItems: 'center', padding: 24,
     },
     modalBox: {
       backgroundColor: C.surface, borderWidth: 1, borderColor: C.borderBright,
       padding: 24, width: '100%', maxWidth: 380,
+      borderRadius: 16, ...cardShadow,
     },
     modalTitle: {
       fontFamily: mono, fontSize: 16, fontWeight: '800',
       color: C.accent, letterSpacing: 2, marginBottom: 8,
     },
-    modalSub: { fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 18 },
+    modalSub: { fontFamily: body, fontSize: 14, color: C.dim, lineHeight: 22 },
 
     // ── Destructive actions (delete group / block contact) ────────────────
     deleteGroupBtn: {
       borderWidth: 1, borderColor: C.red,
-      paddingHorizontal: 10, paddingVertical: 6, marginLeft: 8,
+      paddingHorizontal: 10, paddingVertical: 6, marginLeft: 8, borderRadius: 8,
     },
     deleteGroupBtnText: {
       fontFamily: mono, fontSize: 11, color: C.red, fontWeight: '700', letterSpacing: 1,
     },
     blockContactBtn: {
       borderWidth: 1, borderColor: C.red,
-      paddingHorizontal: 10, paddingVertical: 6, marginLeft: 6,
+      paddingHorizontal: 10, paddingVertical: 6, marginLeft: 6, borderRadius: 8,
     },
     blockContactBtnText: {
       fontFamily: mono, fontSize: 11, color: C.red, fontWeight: '700', letterSpacing: 1,
@@ -642,8 +687,8 @@ function ThemedSafeArea({ style, children }) {
       <ImageBackground
         source={require('./magpulbackground.webp')}
         style={{ flex: 1, backgroundColor: C.bg }}
-        imageStyle={{ opacity: 0.07 }}
-        resizeMode="repeat"
+        imageStyle={{ opacity: 0.12 }}
+        resizeMode="cover"
       >
         <SafeAreaView style={[{ flex: 1, backgroundColor: 'transparent' }, style]}>
           {children}
@@ -665,8 +710,8 @@ function ThemedView({ style, children }) {
       <ImageBackground
         source={require('./magpulbackground.webp')}
         style={[{ flex: 1, backgroundColor: C.bg }, style]}
-        imageStyle={{ opacity: 0.07 }}
-        resizeMode="repeat"
+        imageStyle={{ opacity: 0.12 }}
+        resizeMode="cover"
       >
         {children}
       </ImageBackground>
