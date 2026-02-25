@@ -19,6 +19,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   PanResponder,
   Platform,
@@ -27,6 +28,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -37,6 +39,9 @@ import * as Clipboard from 'expo-clipboard';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import * as Contacts from 'expo-contacts';
+import * as SMS from 'expo-sms';
+import * as Notifications from 'expo-notifications';
 import Svg, { Path, Circle, Line, G, Polygon, Rect, Defs, Pattern } from 'react-native-svg';
 
 // ---------------------------------------------------------------------------
@@ -584,6 +589,7 @@ const SKIN_KEY      = 'nano_skin';
 const DISAPPEAR_KEY = 'nano_disappear';
 const PROFILE_EXT_KEY = 'nano_profile_ext';
 const LOCATION_KEY    = 'nano_location';
+const NOTIF_KEY       = 'nano_notif_enabled';
 
 const DISAPPEAR_OPTIONS = [
   { label: 'OFF',     value: null   },
@@ -690,6 +696,53 @@ function fmtDate(iso) {
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString();
 }
 function isImageContent(c) { return typeof c === 'string' && c.startsWith('data:image'); }
+function isLocationContent(c) { return typeof c === 'string' && c.includes('[LOCATION:'); }
+
+// ---------------------------------------------------------------------------
+// NOTIFICATION HELPERS
+// ---------------------------------------------------------------------------
+async function loadNotifEnabled() {
+  try {
+    const v = await SecureStore.getItemAsync(NOTIF_KEY);
+    return v === null ? true : v !== 'false';   // default ON
+  } catch { return true; }
+}
+async function saveNotifEnabled(v) {
+  try { await SecureStore.setItemAsync(NOTIF_KEY, v ? 'true' : 'false'); } catch {}
+}
+async function registerForNotifications() {
+  try {
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    let finalStatus = existing;
+    if (existing !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') return false;
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('messages', {
+        name: 'Messages',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#00FF41',
+      });
+    }
+    return true;
+  } catch { return false; }
+}
+async function showLocalNotification(title, body) {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+        ...(Platform.OS === 'android' ? { channelId: 'messages' } : {}),
+      },
+      trigger: null,
+    });
+  } catch {}
+}
 
 // ---------------------------------------------------------------------------
 // THEMED WRAPPERS
@@ -1480,6 +1533,17 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
     ]);
   }, [sendMessage]);
 
+  const handleShareLocation = useCallback(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Location access required.'); return; }
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      sendMessage(`\uD83D\uDCCD [LOCATION:${lat},${lng}] https://maps.google.com/?q=${lat},${lng}`);
+    } catch (e) { Alert.alert('ERROR', 'Failed to get location: ' + e.message); }
+  }, [sendMessage]);
+
   const isMine = (msg) => String(msg.from_user?.id ?? msg.from_user) === String(currentUser.id);
 
   return (
@@ -1506,10 +1570,26 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
                 return (
                   <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
                     <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-                      {isImageContent(item.content)
-                        ? <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
-                        : <Text style={styles.msgText}>{item.content}</Text>
-                      }
+                      {isImageContent(item.content) ? (
+                        <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
+                      ) : isLocationContent(item.content) ? (
+                        <TouchableOpacity onPress={() => {
+                          const m = item.content.match(/\[LOCATION:([-\d.]+),([-\d.]+)\]/);
+                          if (m) Linking.openURL(`https://maps.google.com/?q=${m[1]},${m[2]}`);
+                        }}>
+                          <Text style={[styles.msgText, { color: mine ? '#fff' : C.accent }]}>
+                            {'\uD83D\uDCCD'} Location shared
+                          </Text>
+                          <Text style={[styles.msgTime, { marginTop: 2 }]}>
+                            {item.content.match(/\[LOCATION:([-\d.]+),([-\d.]+)\]/)?.[0].replace('[LOCATION:', '').replace(']', '') || ''}
+                          </Text>
+                          <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 9, color: mine ? '#ffffffaa' : C.dim, marginTop: 2 }}>
+                            TAP TO OPEN IN MAPS
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.msgText}>{item.content}</Text>
+                      )}
                       <View style={styles.msgMeta}>
                         <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
                         {mine && <Text style={styles.msgRead}>{item.read ? ' \u2713\u2713' : ' \u2713'}</Text>}
@@ -1522,6 +1602,9 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
             <View style={styles.inputRow}>
               <TouchableOpacity style={styles.attachBtn} onPress={handleAttachment}>
                 <Text style={styles.attachBtnText}>+</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.attachBtn} onPress={handleShareLocation}>
+                <Text style={styles.attachBtnText}>{'\uD83D\uDCCD'}</Text>
               </TouchableOpacity>
               <TextInput style={styles.chatInput} placeholder="MESSAGE..." placeholderTextColor={C.muted}
                 value={text} onChangeText={setText} multiline maxLength={2000} />
@@ -1741,6 +1824,17 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     ]);
   }, [sendMessage]);
 
+  const handleShareLocation = useCallback(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Location access required.'); return; }
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      sendMessage(`\uD83D\uDCCD [LOCATION:${lat},${lng}] https://maps.google.com/?q=${lat},${lng}`);
+    } catch (e) { Alert.alert('ERROR', 'Failed to get location: ' + e.message); }
+  }, [sendMessage]);
+
   // Handle both new snake_case (from_user) and legacy camelCase (from) field names
   const isMine = (msg) => {
     const id = msg.from_user?.id ?? msg.from_user ?? msg.from;
@@ -1766,10 +1860,23 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
                   <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
                     <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                       {!mine && <Text style={styles.msgSender}>{senderName}</Text>}
-                      {isImageContent(item.content)
-                        ? <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
-                        : <Text style={styles.msgText}>{item.content}</Text>
-                      }
+                      {isImageContent(item.content) ? (
+                        <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
+                      ) : isLocationContent(item.content) ? (
+                        <TouchableOpacity onPress={() => {
+                          const m = item.content.match(/\[LOCATION:([-\d.]+),([-\d.]+)\]/);
+                          if (m) Linking.openURL(`https://maps.google.com/?q=${m[1]},${m[2]}`);
+                        }}>
+                          <Text style={[styles.msgText, { color: mine ? '#fff' : C.accent }]}>
+                            {'\uD83D\uDCCD'} Location shared
+                          </Text>
+                          <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 9, color: mine ? '#ffffffaa' : C.dim, marginTop: 2 }}>
+                            TAP TO OPEN IN MAPS
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.msgText}>{item.content}</Text>
+                      )}
                       <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
                     </View>
                   </View>
@@ -1779,6 +1886,9 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
             <View style={styles.inputRow}>
               <TouchableOpacity style={styles.attachBtn} onPress={handleAttachment}>
                 <Text style={styles.attachBtnText}>+</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.attachBtn} onPress={handleShareLocation}>
+                <Text style={styles.attachBtnText}>{'\uD83D\uDCCD'}</Text>
               </TouchableOpacity>
               <TextInput style={styles.chatInput} placeholder="MESSAGE..." placeholderTextColor={C.muted}
                 value={text} onChangeText={setText} multiline maxLength={2000} />
@@ -1800,41 +1910,88 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
 function BotTab({ token }) {
   const { styles, C } = useSkin();
   const [messages, setMessages] = useState([{
-    id: 0, role: 'bot', content: 'BANNER AI ONLINE. How can I assist you today?', ts: new Date().toISOString(),
+    id: 0, role: 'bot', content: 'BANNER AI ONLINE.\n\nI\'m your unlimited AI assistant — ask me anything, or send a photo/screenshot for analysis.',
+    ts: new Date().toISOString(),
   }]);
-  const [text, setText]       = useState('');
-  const [loading, setLoading] = useState(false);
-  const [err, setErr]         = useState('');
-  const [typing, setTyping]   = useState(false);
-  const listRef               = useRef(null);
-  const typingTimer           = useRef(null);
+  const [text,         setText]         = useState('');
+  const [loading,      setLoading]      = useState(false);
+  const [err,          setErr]          = useState('');
+  const [typing,       setTyping]       = useState(false);
+  const [pendingImage, setPendingImage] = useState(null); // { uri, base64, mimeType }
+  const listRef                         = useRef(null);
+  const typingTimer                     = useRef(null);
 
   useEffect(() => {
     if (messages.length > 0) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages, typing]);
 
   const sendToBot = async () => {
-    const content = text.trim();
-    if (!content || loading) return;
-    setText(''); setErr('');
-    setMessages((prev) => [...prev, { id: Date.now(), role: 'user', content, ts: new Date().toISOString() }]);
+    const content  = text.trim();
+    const imgToSend = pendingImage;
+    if (!content && !imgToSend || loading) return;
+    setText('');
+    setPendingImage(null);
+    setErr('');
+    setMessages((prev) => [...prev, {
+      id: Date.now(), role: 'user',
+      content: content || '\uD83D\uDCF7 Image',
+      imageUri: imgToSend?.uri,
+      ts: new Date().toISOString(),
+    }]);
     setTyping(true); setLoading(true);
     typingTimer.current = setTimeout(async () => {
       try {
-        const data = await api('/api/bot/chat', 'POST', { message: content }, token);
+        const body = { message: content || 'Describe this image.' };
+        if (imgToSend?.base64) { body.image_base64 = imgToSend.base64; body.image_mime = imgToSend.mimeType || 'image/jpeg'; }
+        const data = await api('/api/bot/chat', 'POST', body, token);
         setMessages((prev) => [...prev, { id: Date.now() + 1, role: 'bot', content: data.reply || '...', ts: new Date().toISOString() }]);
       } catch (e) { setErr(e.message); }
       finally { setTyping(false); setLoading(false); }
     }, 400);
   };
 
+  const pickImageForBanner = () => {
+    Alert.alert('BANNER VISION', 'Choose image source', [
+      {
+        text: 'PHOTO LIBRARY',
+        onPress: async () => {
+          const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Photo library access required.'); return; }
+          const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.5, base64: true, mediaTypes: 'images' });
+          if (!res.canceled && res.assets?.[0]) {
+            const a = res.assets[0];
+            setPendingImage({ uri: a.uri, base64: a.base64, mimeType: a.mimeType || 'image/jpeg' });
+          }
+        },
+      },
+      {
+        text: 'CAMERA / SCREENSHOT',
+        onPress: async () => {
+          const perm = await ImagePicker.requestCameraPermissionsAsync();
+          if (perm.status !== 'granted') { Alert.alert('PERMISSION DENIED', 'Camera access required.'); return; }
+          const res = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true });
+          if (!res.canceled && res.assets?.[0]) {
+            const a = res.assets[0];
+            setPendingImage({ uri: a.uri, base64: a.base64, mimeType: a.mimeType || 'image/jpeg' });
+          }
+        },
+      },
+      { text: 'CANCEL', style: 'cancel' },
+    ]);
+  };
+
   useEffect(() => { return () => { if (typingTimer.current) clearTimeout(typingTimer.current); }; }, []);
+
+  const canSend = (text.trim().length > 0 || pendingImage !== null) && !loading;
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={KAV_BEHAVIOR}>
       <View style={styles.botHeader}>
         <Text style={styles.botHeaderText}>BANNER AI</Text>
         <View style={[{ width: 8, height: 8, borderRadius: 4, marginLeft: 8 }, { backgroundColor: C.green }]} />
+        <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 9, color: C.dim, marginLeft: 8, letterSpacing: 1 }}>
+          UNLIMITED · VISION
+        </Text>
       </View>
       <FlatList
         ref={listRef} data={messages} keyExtractor={(m) => String(m.id)}
@@ -1845,6 +2002,9 @@ function BotTab({ token }) {
             <View style={[styles.msgRow, isBot ? styles.msgRowTheirs : styles.msgRowMine]}>
               <View style={[styles.msgBubble, isBot ? styles.bubbleBotMsg : styles.bubbleMine]}>
                 {isBot && <Text style={styles.botLabel}>BANNER</Text>}
+                {item.imageUri && (
+                  <Image source={{ uri: item.imageUri }} style={[styles.imageMsg, { marginBottom: 6 }]} resizeMode="contain" />
+                )}
                 <Text style={[styles.msgText, isBot && styles.botMsgText]}>{item.content}</Text>
                 <Text style={styles.msgTime}>{fmtTime(item.ts)}</Text>
               </View>
@@ -1861,11 +2021,24 @@ function BotTab({ token }) {
         ) : null}
       />
       <ErrText msg={err} />
+      {pendingImage && (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 6, flexDirection: 'row', alignItems: 'center' }}>
+          <Image source={{ uri: pendingImage.uri }} style={{ width: 56, height: 56, borderRadius: 6, borderWidth: 1, borderColor: C.accent }} />
+          <TouchableOpacity onPress={() => setPendingImage(null)} style={{ marginLeft: 8, padding: 4 }}>
+            <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 11, color: C.danger || C.amber }}>
+              {'\u2715'} REMOVE
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
       <View style={styles.inputRow}>
+        <TouchableOpacity style={styles.attachBtn} onPress={pickImageForBanner}>
+          <Text style={styles.attachBtnText}>{'\uD83D\uDCF7'}</Text>
+        </TouchableOpacity>
         <TextInput style={styles.chatInput} placeholder="ASK BANNER AI..." placeholderTextColor={C.muted}
-          value={text} onChangeText={setText} multiline maxLength={2000} onSubmitEditing={sendToBot} />
-        <TouchableOpacity style={[styles.sendBtn, (!text.trim() || loading) && styles.sendBtnDisabled]}
-          onPress={sendToBot} disabled={!text.trim() || loading}>
+          value={text} onChangeText={setText} multiline maxLength={4000} onSubmitEditing={sendToBot} />
+        <TouchableOpacity style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+          onPress={sendToBot} disabled={!canSend}>
           {loading ? <Spinner /> : <Text style={styles.sendBtnText}>SEND</Text>}
         </TouchableOpacity>
       </View>
@@ -2123,15 +2296,21 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
   // contacts  → array of { contactId, userId, username, displayName, online, since }
   // pending   → { received: [{contactId, userId, username, displayName}], sent: [...] }
   // users     → array of { id, username, displayName, online, isMe, contactStatus }
-  const [contacts,   setContacts]   = useState([]);
-  const [pending,    setPending]    = useState({ received: [], sent: [] });
-  const [users,      setUsers]      = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [err,        setErr]        = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-  const [query,      setQuery]      = useState('');
-  const [actioning,  setActioning]  = useState({});
+  const [contacts,       setContacts]       = useState([]);
+  const [pending,        setPending]        = useState({ received: [], sent: [] });
+  const [users,          setUsers]          = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [refreshing,     setRefreshing]     = useState(false);
+  const [err,            setErr]            = useState('');
+  const [showSearch,     setShowSearch]     = useState(false);
+  const [query,          setQuery]          = useState('');
+  const [actioning,      setActioning]      = useState({});
+  // SMS invite
+  const [showInvite,     setShowInvite]     = useState(false);
+  const [deviceContacts, setDeviceContacts] = useState([]);
+  const [contactsLoading,setContactsLoading]= useState(false);
+  const [contactsQuery,  setContactsQuery]  = useState('');
+  const [inviting,       setInviting]       = useState(null);
 
   const fetchAll = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -2176,6 +2355,56 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
         },
       ]
     );
+  };
+
+  const openInviteModal = async () => {
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('PERMISSION DENIED', 'Contacts access is required to send SMS invites.');
+      return;
+    }
+    setShowInvite(true);
+    setContactsLoading(true);
+    try {
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
+        sort: Contacts.SortTypes.FirstName,
+      });
+      const withPhones = data
+        .filter(c => c.phoneNumbers?.length > 0)
+        .map(c => ({
+          id: c.id,
+          name: (c.name || ((c.firstName || '') + ' ' + (c.lastName || '')).trim()) || 'Unknown',
+          phone: c.phoneNumbers[0].number,
+        }));
+      setDeviceContacts(withPhones);
+    } catch (e) {
+      Alert.alert('ERROR', 'Failed to load contacts: ' + e.message);
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
+  const sendSMSInvite = async (contact) => {
+    const isAvailable = await SMS.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('SMS NOT AVAILABLE', 'This device cannot send SMS messages.');
+      return;
+    }
+    setInviting(contact.id);
+    try {
+      const data = await api('/api/invites', 'POST', {}, token);
+      const inviteUrl = data.invite_url || data.url;
+      const senderName = currentUser?.display_name || currentUser?.username || 'A friend';
+      const msg =
+        `Hey ${contact.name}! ${senderName} has invited you to nano-SYNAPSYS — an encrypted, private messaging platform by AI Evolution. Join here: ${inviteUrl}  (invite expires in 7 days, one-use only)`;
+      const { result } = await SMS.sendSMSAsync([contact.phone], msg);
+      if (result === 'sent') Alert.alert('INVITE SENT', `SMS sent to ${contact.name}.`);
+    } catch (e) {
+      Alert.alert('ERROR', e.message);
+    } finally {
+      setInviting(null);
+    }
   };
 
   // Correct field names from API responses
@@ -2318,6 +2547,72 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
           })}
         </>
       )}
+
+      <View style={styles.separator} />
+
+      {/* ── INVITE VIA SMS ──────────────────────────────────────── */}
+      <TouchableOpacity style={[styles.addContactBtn, { borderColor: C.amber }]} onPress={openInviteModal}>
+        <Text style={[styles.addContactBtnText, { color: C.amber }]}>{'\uD83D\uDCF1'} INVITE VIA SMS</Text>
+      </TouchableOpacity>
+
+      {/* ── INVITE MODAL ───────────────────────────────────────── */}
+      <Modal visible={showInvite} transparent animationType="slide" onRequestClose={() => { setShowInvite(false); setContactsQuery(''); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { maxHeight: '80%' }]}>
+            <Text style={styles.modalTitle}>INVITE CONTACT</Text>
+            <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.dim, marginBottom: 10, letterSpacing: 0.5 }}>
+              Select a contact to send them an invite link via SMS.
+            </Text>
+            <TextInput
+              style={[styles.input, { marginBottom: 8 }]}
+              placeholder="SEARCH CONTACTS..."
+              placeholderTextColor={C.muted}
+              value={contactsQuery}
+              onChangeText={setContactsQuery}
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            {contactsLoading ? (
+              <View style={{ paddingVertical: 30, alignItems: 'center' }}><Spinner size="large" /></View>
+            ) : (
+              <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled">
+                {deviceContacts
+                  .filter(c => !contactsQuery.trim() || c.name.toLowerCase().includes(contactsQuery.toLowerCase()) || c.phone.includes(contactsQuery))
+                  .map(c => (
+                    <View key={c.id} style={styles.contactRow}>
+                      <View style={styles.contactRowLeft}>
+                        <View style={styles.contactRowInfo}>
+                          <Text style={styles.contactRowName}>{c.name}</Text>
+                          <Text style={styles.contactRowMeta}>{c.phone}</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.contactActionBtn, { borderColor: C.amber }]}
+                        onPress={() => sendSMSInvite(c)}
+                        disabled={inviting === c.id}
+                      >
+                        {inviting === c.id
+                          ? <Spinner />
+                          : <Text style={[styles.contactActionBtnText, { color: C.amber }]}>INVITE</Text>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                }
+                {deviceContacts.length === 0 && !contactsLoading && (
+                  <Text style={styles.emptyText}>NO CONTACTS WITH PHONE NUMBERS</Text>
+                )}
+              </ScrollView>
+            )}
+            <TouchableOpacity
+              style={[styles.ghostBtn, { marginTop: 12 }]}
+              onPress={() => { setShowInvite(false); setContactsQuery(''); }}
+            >
+              <Text style={styles.ghostBtnText}>{'\u2715'} CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -2325,7 +2620,7 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
 // ---------------------------------------------------------------------------
 // SETTINGS TAB
 // ---------------------------------------------------------------------------
-function SettingsTab({ token, currentUser }) {
+function SettingsTab({ token, currentUser, notifEnabled, onSetNotifEnabled }) {
   const { styles, C, skin, setSkin } = useSkin();
   const mono = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
   const [disappear, setDisappearState] = useState(null);
@@ -2417,6 +2712,27 @@ function SettingsTab({ token, currentUser }) {
       <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.dim, marginTop: 8, letterSpacing: 1 }}>
         {skin === 'tactical' ? 'TACTICAL: gunmetal + Magpul texture overlay' : 'PHANTOM: classic green terminal matrix'}
       </Text>
+
+      <View style={styles.profileDivider} />
+
+      {/* ── NOTIFICATIONS ────────────────────────────────────── */}
+      <Text style={styles.settingsHeader}>NOTIFICATIONS</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <View style={{ flex: 1, marginRight: 16 }}>
+          <Text style={{ fontFamily: mono, fontSize: 11, color: C.text, letterSpacing: 1 }}>
+            Message notifications
+          </Text>
+          <Text style={{ fontFamily: mono, fontSize: 9, color: C.dim, marginTop: 2, letterSpacing: 0.5 }}>
+            Show alerts when a new message arrives
+          </Text>
+        </View>
+        <Switch
+          value={notifEnabled ?? true}
+          onValueChange={onSetNotifEnabled}
+          thumbColor={notifEnabled ? C.accent : C.dim}
+          trackColor={{ false: C.border, true: `${C.accent}55` }}
+        />
+      </View>
 
       <View style={styles.profileDivider} />
 
@@ -2573,13 +2889,29 @@ function HomeScreen({ token, currentUser, onLogout }) {
   const [groupChat, setGroupChat]     = useState(null);
   const [incomingMsg, setIncomingMsg] = useState(null);
   const [disappear, setDisappear]     = useState(null);
+  const [notifEnabled, setNotifEnabled] = useState(true);
 
-  const wsRef        = useRef(null);
-  const reconnectRef = useRef(null);
-  const backoffRef   = useRef(1000);
+  const wsRef          = useRef(null);
+  const reconnectRef   = useRef(null);
+  const backoffRef     = useRef(1000);
+  const notifRef       = useRef(true);   // mirrors notifEnabled for WS closure
+  const activeTabRef   = useRef('CHATS');// mirrors activeTab for WS closure
+  const dmPeerRef      = useRef(null);   // mirrors dmPeer for WS closure
 
   useEffect(() => {
     loadDisappear().then(v => setDisappear(v));
+    loadNotifEnabled().then(v => { setNotifEnabled(v); notifRef.current = v; });
+  }, []);
+
+  // Keep refs in sync with state
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
+  useEffect(() => { notifRef.current = notifEnabled; }, [notifEnabled]);
+  useEffect(() => { dmPeerRef.current = dmPeer; }, [dmPeer]);
+
+  const handleSetNotifEnabled = useCallback((v) => {
+    setNotifEnabled(v);
+    notifRef.current = v;
+    saveNotifEnabled(v);
   }, []);
 
   const connectWS = useCallback(() => {
@@ -2588,7 +2920,22 @@ function HomeScreen({ token, currentUser, onLogout }) {
     wsRef.current = ws;
     ws.onopen = () => { backoffRef.current = 1000; };
     ws.onmessage = (event) => {
-      try { setIncomingMsg(JSON.parse(event.data)); } catch {}
+      try {
+        const msg = JSON.parse(event.data);
+        setIncomingMsg(msg);
+        // Fire local notification when a DM arrives and user is not viewing that chat
+        if (
+          notifRef.current &&
+          msg.type === 'chat_message' &&
+          (activeTabRef.current !== 'CHATS' || dmPeerRef.current === null)
+        ) {
+          const sender = msg.from_user?.username || msg.fromUsername || 'Someone';
+          const preview = (typeof msg.content === 'string' && !msg.content.startsWith('data:'))
+            ? msg.content.slice(0, 80)
+            : '\uD83D\uDCF7 Image';
+          showLocalNotification(`nano-SYNAPSYS \u2014 ${sender}`, preview);
+        }
+      } catch {}
     };
     ws.onerror  = () => {};
     ws.onclose  = () => {
@@ -2637,7 +2984,7 @@ function HomeScreen({ token, currentUser, onLogout }) {
         {activeTab === 'GROUPS'   && <GroupsTab token={token} onOpenGroup={(g) => setGroupChat(g)} />}
         {activeTab === 'BOT'      && <BotTab token={token} />}
         {activeTab === 'PROFILE'  && <ProfileTab token={token} currentUser={currentUser} onLogout={onLogout} />}
-        {activeTab === 'SETTINGS' && <SettingsTab token={token} currentUser={currentUser} />}
+        {activeTab === 'SETTINGS' && <SettingsTab token={token} currentUser={currentUser} notifEnabled={notifEnabled} onSetNotifEnabled={handleSetNotifEnabled} />}
       </View>
       <TabBar active={activeTab} onChange={setActiveTab} />
     </ThemedSafeArea>
@@ -2654,6 +3001,7 @@ function AppInner() {
   const [currentUser, setUser]  = useState(null);
 
   useEffect(() => {
+    registerForNotifications().catch(() => {});
     (async () => {
       try {
         const storedToken = await loadToken();

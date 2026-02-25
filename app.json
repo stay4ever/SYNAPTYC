@@ -11,12 +11,25 @@
       "buildNumber": "1",
       "supportsTablet": false,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "nano-SYNAPSYS uses Face ID to protect your secure messages."
+        "NSFaceIDUsageDescription": "nano-SYNAPSYS uses Face ID to protect your secure messages.",
+        "NSContactsUsageDescription": "nano-SYNAPSYS reads your contacts so you can invite them to join.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.aievolution.nanosynapsys",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.SEND_SMS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
     },
     "plugins": [
       "expo-secure-store",
@@ -39,7 +52,26 @@
           "locationAlwaysAndWhenInUsePermission": "nano-SYNAPSYS uses your location to attach GPS coordinates to your profile.",
           "locationWhenInUsePermission": "nano-SYNAPSYS uses your location to attach GPS coordinates to your profile."
         }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "nano-SYNAPSYS reads your contacts so you can invite them to join."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#00FF41",
+          "sounds": []
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e5532763-45a0-4185-9294-2bd0ef8d1bef"
+      }
+    }
   }
 }
