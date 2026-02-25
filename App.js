@@ -906,17 +906,40 @@ function IconProfile({ size = 24, color }) {
 }
 
 function IconSettings({ size = 24, color }) {
+  // Sniper / monoscope reticle
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* Outer gear ring - 8 teeth using path */}
-      <Path
-        d="M12 2.5l1.5 1.8h2l.8-1.6 2.2 1.2-.2 2 1.4 1.4 2-.2 1.2 2.2-1.6.8v2l1.8 1.5-1.8 1.5v2l1.6.8-1.2 2.2-2-.2-1.4 1.4.2 2-2.2 1.2-.8-1.6h-2L12 21.5l-1.5-1.8h-2l-.8 1.6-2.2-1.2.2-2-1.4-1.4-2 .2-1.2-2.2 1.6-.8v-2L2.5 12l1.8-1.5v-2l-1.6-.8 1.2-2.2 2 .2 1.4-1.4-.2-2 2.2-1.2.8 1.6h2L12 2.5z"
-        stroke={color} strokeWidth="1.3" strokeLinejoin="round"
-      />
-      {/* Centre circle */}
-      <Circle cx="12" cy="12" r="3.2" stroke={color} strokeWidth="1.4" />
+      {/* Outer scope ring */}
+      <Circle cx="12" cy="12" r="9.5" stroke={color} strokeWidth="1.2" />
+      {/* Inner precision ring */}
+      <Circle cx="12" cy="12" r="5.5" stroke={color} strokeWidth="0.9" />
+      {/* Mil-dot ring */}
+      <Circle cx="12" cy="12" r="2.8" stroke={color} strokeWidth="0.8" />
       {/* Centre dot */}
-      <Circle cx="12" cy="12" r="1" fill={color} />
+      <Circle cx="12" cy="12" r="0.9" fill={color} />
+      {/* Cross-hairs — full length, breaking at inner ring */}
+      {/* Top */}
+      <Path d="M12 2.5V6.5" stroke={color} strokeWidth="1.1" strokeLinecap="round" />
+      {/* Bottom */}
+      <Path d="M12 17.5V21.5" stroke={color} strokeWidth="1.1" strokeLinecap="round" />
+      {/* Left */}
+      <Path d="M2.5 12H6.5" stroke={color} strokeWidth="1.1" strokeLinecap="round" />
+      {/* Right */}
+      <Path d="M17.5 12H21.5" stroke={color} strokeWidth="1.1" strokeLinecap="round" />
+      {/* Short inner cross stubs (between mil-dot ring and inner ring) */}
+      <Path d="M12 9.2V6.5" stroke={color} strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.5" />
+      <Path d="M12 14.8V17.5" stroke={color} strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.5" />
+      <Path d="M9.2 12H6.5" stroke={color} strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.5" />
+      <Path d="M14.8 12H17.5" stroke={color} strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.5" />
+      {/* Mil-dot markers on outer ring at 45° positions */}
+      <Circle cx="18.73" cy="5.27" r="0.6" fill={color} fillOpacity="0.55" />
+      <Circle cx="5.27"  cy="5.27" r="0.6" fill={color} fillOpacity="0.55" />
+      <Circle cx="18.73" cy="18.73" r="0.6" fill={color} fillOpacity="0.55" />
+      <Circle cx="5.27"  cy="18.73" r="0.6" fill={color} fillOpacity="0.55" />
+      {/* Range-finding hash marks on right arm */}
+      <Path d="M19 10.8V11.4" stroke={color} strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.65" />
+      <Path d="M20.2 11.1V11.9" stroke={color} strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.65" />
+      <Path d="M19 12.6V13.2" stroke={color} strokeWidth="0.7" strokeLinecap="round" strokeOpacity="0.65" />
     </Svg>
   );
 }
