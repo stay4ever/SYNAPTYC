@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Easing,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -533,6 +534,46 @@ function makeRawStyles(C) {
     blockContactBtnText: {
       fontFamily: mono, fontSize: 11, color: C.red, fontWeight: '700', letterSpacing: 1,
     },
+
+    // ── Unread badges ────────────────────────────────────────────────────
+    tabBadge: {
+      position: 'absolute', top: -2, right: -4,
+      backgroundColor: '#ef4444', borderRadius: 8,
+      minWidth: 16, height: 16,
+      justifyContent: 'center', alignItems: 'center',
+      paddingHorizontal: 3,
+    },
+    tabBadgeText: {
+      fontFamily: mono, fontSize: 8, color: '#fff', fontWeight: '700',
+    },
+    rowBadge: {
+      backgroundColor: '#ef4444', borderRadius: 10,
+      minWidth: 20, height: 20,
+      justifyContent: 'center', alignItems: 'center',
+      paddingHorizontal: 6, marginLeft: 8,
+    },
+    rowBadgeText: {
+      fontFamily: mono, fontSize: 10, color: '#fff', fontWeight: '700',
+    },
+
+    // ── Group members modal ──────────────────────────────────────────────
+    membersHeaderBtn: {
+      paddingVertical: 4, paddingLeft: 8,
+    },
+    membersHeaderBtnText: {
+      fontFamily: mono, fontSize: 11, color: C.accent, letterSpacing: 1,
+    },
+    memberRow: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.border,
+    },
+    memberName: { fontFamily: body, fontSize: 14, color: C.bright, fontWeight: '600' },
+    memberRole: { fontFamily: mono, fontSize: 9, color: C.dim, letterSpacing: 1, marginTop: 2 },
+    memberRemoveBtn: {
+      borderWidth: 1, borderColor: C.red,
+      paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6,
+    },
+    memberRemoveBtnText: { fontFamily: mono, fontSize: 10, color: C.red, letterSpacing: 0.5 },
   };
 }
 
@@ -848,7 +889,7 @@ function OnlineDot({ online }) {
   return <View style={[{ width: 8, height: 8, borderRadius: 4, marginLeft: 4 }, { backgroundColor: online ? C.green : C.muted }]} />;
 }
 
-function AppHeader({ title, onBack }) {
+function AppHeader({ title, onBack, rightComponent }) {
   const { styles } = useSkin();
   return (
     <View style={styles.appHeader}>
@@ -860,7 +901,7 @@ function AppHeader({ title, onBack }) {
         <View style={{ width: 80 }} />
       )}
       <Text style={styles.appHeaderTitle}>{title}</Text>
-      <View style={{ width: 80 }} />
+      {rightComponent ? rightComponent : <View style={{ width: 80 }} />}
     </View>
   );
 }
@@ -997,6 +1038,150 @@ function IconSettings({ size = 24, color }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// GROUP MEMBERS MODAL
+// ---------------------------------------------------------------------------
+function GroupMembersModal({ token, group, currentUser, visible, onClose }) {
+  const { styles, C } = useSkin();
+  const mono = Platform.OS === 'ios' ? 'Menlo' : 'monospace';
+  const [members,     setMembers]     = useState([]);
+  const [allUsers,    setAllUsers]    = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [showAdd,     setShowAdd]     = useState(false);
+  const [query,       setQuery]       = useState('');
+  const [actioning,   setActioning]   = useState({});
+
+  const fetchMembers = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api(`/api/groups/${group.id}/members`, 'GET', null, token);
+      setMembers(Array.isArray(data) ? data : []);
+    } catch {}
+    finally { setLoading(false); }
+  }, [group.id, token]);
+
+  useEffect(() => {
+    if (!visible) return;
+    fetchMembers();
+    api('/api/users', 'GET', null, token)
+      .then(data => setAllUsers(Array.isArray(data) ? data.filter(u => !u.isMe) : []))
+      .catch(() => {});
+  }, [visible, fetchMembers, token]);
+
+  const isAdmin = members.find(m => m.userId === currentUser.id)?.role === 'admin';
+  const memberIds = new Set(members.map(m => m.userId));
+
+  const act = async (key, fn) => {
+    setActioning(a => ({ ...a, [key]: true }));
+    try { await fn(); await fetchMembers(); } catch (e) { Alert.alert('ERROR', e.message); }
+    finally { setActioning(a => ({ ...a, [key]: false })); }
+  };
+
+  const addMember = (userId) => act(`add_${userId}`, () =>
+    api(`/api/groups/${group.id}/members`, 'POST', { user_id: userId }, token)
+  );
+
+  const removeMember = (userId) => {
+    Alert.alert('REMOVE MEMBER', 'Remove this member from the group?', [
+      { text: 'CANCEL', style: 'cancel' },
+      { text: 'REMOVE', style: 'destructive', onPress: () =>
+        act(`rem_${userId}`, () =>
+          api(`/api/groups/${group.id}/members`, 'DELETE', { user_id: userId }, token)
+        ),
+      },
+    ]);
+  };
+
+  const filteredAdd = query.trim()
+    ? allUsers.filter(u => !memberIds.has(u.id) && (u.username + (u.displayName || '')).toLowerCase().includes(query.toLowerCase()))
+    : allUsers.filter(u => !memberIds.has(u.id));
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalBox, { maxHeight: '85%' }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <Text style={styles.modalTitle}>MEMBERS</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={{ fontFamily: mono, fontSize: 14, color: C.dim }}>{'\u2715'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}><Spinner size="large" /></View>
+          ) : (
+            <ScrollView style={{ maxHeight: 260 }} keyboardShouldPersistTaps="handled">
+              {members.map(m => (
+                <View key={m.userId} style={styles.memberRow}>
+                  <View>
+                    <Text style={styles.memberName}>{m.displayName || m.username}</Text>
+                    <Text style={styles.memberRole}>{m.role.toUpperCase()}</Text>
+                  </View>
+                  {isAdmin && m.userId !== currentUser.id && (
+                    <TouchableOpacity
+                      style={styles.memberRemoveBtn}
+                      onPress={() => removeMember(m.userId)}
+                      disabled={!!actioning[`rem_${m.userId}`]}
+                    >
+                      {actioning[`rem_${m.userId}`]
+                        ? <Spinner />
+                        : <Text style={styles.memberRemoveBtnText}>REMOVE</Text>
+                      }
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+              {members.length === 0 && <Text style={styles.emptyText}>NO MEMBERS</Text>}
+            </ScrollView>
+          )}
+
+          {isAdmin && (
+            <>
+              <TouchableOpacity
+                style={[styles.ghostBtn, { marginTop: 14, marginBottom: showAdd ? 8 : 0 }]}
+                onPress={() => { setShowAdd(s => !s); setQuery(''); }}
+              >
+                <Text style={styles.ghostBtnText}>{showAdd ? '\u2715 CANCEL' : '+ ADD MEMBER'}</Text>
+              </TouchableOpacity>
+              {showAdd && (
+                <>
+                  <TextInput
+                    style={[styles.input, { marginBottom: 8 }]}
+                    placeholder="SEARCH USERS..."
+                    placeholderTextColor={C.muted}
+                    value={query}
+                    onChangeText={setQuery}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                  />
+                  <ScrollView style={{ maxHeight: 180 }} keyboardShouldPersistTaps="handled">
+                    {filteredAdd.map(u => (
+                      <View key={u.id} style={styles.memberRow}>
+                        <Text style={styles.memberName}>{u.displayName || u.display_name || u.username}</Text>
+                        <TouchableOpacity
+                          style={[styles.contactActionBtn, { borderColor: C.green }]}
+                          onPress={() => addMember(u.id)}
+                          disabled={!!actioning[`add_${u.id}`]}
+                        >
+                          {actioning[`add_${u.id}`]
+                            ? <Spinner />
+                            : <Text style={styles.contactActionBtnText}>+ ADD</Text>
+                          }
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    {filteredAdd.length === 0 && <Text style={styles.emptyText}>NO USERS FOUND</Text>}
+                  </ScrollView>
+                </>
+              )}
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const ICON_COMPONENTS = {
   CHATS:    IconChats,
   CONTACTS: IconContacts,
@@ -1011,18 +1196,24 @@ const ICON_COMPONENTS = {
 // ---------------------------------------------------------------------------
 const TABS = ['CHATS', 'CONTACTS', 'GROUPS', 'BOT', 'PROFILE', 'SETTINGS'];
 
-function TabBar({ active, onChange }) {
+function TabBar({ active, onChange, unread = {} }) {
   const { styles, C } = useSkin();
   return (
     <View style={styles.tabBar}>
       {TABS.map((tab) => {
         const isActive = tab === active;
         const IconComp = ICON_COMPONENTS[tab];
+        const cnt = unread[tab] || 0;
         return (
           <TouchableOpacity key={tab} style={styles.tabItem} onPress={() => onChange(tab)} activeOpacity={0.7}>
             {isActive && <View style={styles.tabActiveGlow} />}
-            <View style={styles.tabIcon}>
+            <View style={[styles.tabIcon, { position: 'relative' }]}>
               <IconComp size={22} color={isActive ? C.accent : C.dim} />
+              {cnt > 0 && (
+                <View style={styles.tabBadge}>
+                  <Text style={styles.tabBadgeText}>{cnt > 99 ? '99+' : cnt}</Text>
+                </View>
+              )}
             </View>
             <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
@@ -1313,11 +1504,11 @@ function SwipeableRow({ children, rightLabel = 'DELETE', rightColor, onAction, d
   const dragStart = useRef(0); // actual position when the finger goes down
 
   const snapTo = useCallback((toValue) => {
-    Animated.spring(position, {
+    Animated.timing(position, {
       toValue,
+      duration: 160,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
-      bounciness: 0,   // no oscillation — clean mechanical snap
-      speed: 20,
     }).start();
   }, [position]);
 
@@ -1383,7 +1574,7 @@ function SwipeableRow({ children, rightLabel = 'DELETE', rightColor, onAction, d
 // ---------------------------------------------------------------------------
 // CHATS TAB
 // ---------------------------------------------------------------------------
-function ChatsTab({ token, currentUser, onOpenDM }) {
+function ChatsTab({ token, currentUser, onOpenDM, unread = {} }) {
   const { styles, C } = useSkin();
   const [users, setUsers]         = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -1411,18 +1602,28 @@ function ChatsTab({ token, currentUser, onOpenDM }) {
         data={users} keyExtractor={(u) => String(u.id)}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchUsers(true)} tintColor={C.accent} />}
         ListEmptyComponent={<Text style={styles.emptyText}>NO USERS FOUND</Text>}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.userRow} onPress={() => onOpenDM(item)}>
-            <View style={styles.userRowLeft}>
-              <OnlineDot online={item.online} />
-              <View style={styles.userRowInfo}>
-                <Text style={styles.userRowName}>{item.displayName || item.display_name || item.username}</Text>
-                <Text style={styles.userRowMeta}>{item.online ? 'ONLINE' : item.last_seen ? `LAST SEEN ${fmtDate(item.last_seen)}` : 'OFFLINE'}</Text>
+        renderItem={({ item }) => {
+          const cnt = unread[`dm_${item.id}`] || 0;
+          return (
+            <TouchableOpacity style={styles.userRow} onPress={() => onOpenDM(item)}>
+              <View style={styles.userRowLeft}>
+                <OnlineDot online={item.online} />
+                <View style={styles.userRowInfo}>
+                  <Text style={styles.userRowName}>{item.displayName || item.display_name || item.username}</Text>
+                  <Text style={styles.userRowMeta}>{item.online ? 'ONLINE' : item.last_seen ? `LAST SEEN ${fmtDate(item.last_seen)}` : 'OFFLINE'}</Text>
+                </View>
               </View>
-            </View>
-            <Text style={styles.chevron}>{'>'}</Text>
-          </TouchableOpacity>
-        )}
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {cnt > 0 && (
+                  <View style={styles.rowBadge}>
+                    <Text style={styles.rowBadgeText}>{cnt > 99 ? '99+' : cnt}</Text>
+                  </View>
+                )}
+                <Text style={styles.chevron}>{'>'}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
       />
     </View>
@@ -1467,6 +1668,13 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
         const exists = prev.some((m) => m.id === incomingMsg.id);
         return exists ? prev : [...prev, incomingMsg];
       });
+      // Schedule disappear if requested
+      if (incomingMsg.disappear_after && incomingMsg.disappear_after > 0) {
+        const msgId = incomingMsg.id;
+        setTimeout(() => {
+          setMessages(prev => prev.filter(m => m.id !== msgId));
+        }, incomingMsg.disappear_after * 1000);
+      }
     }
   }, [incomingMsg, peer.id, currentUser.id]);
 
@@ -1623,7 +1831,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
 // ---------------------------------------------------------------------------
 // GROUPS TAB
 // ---------------------------------------------------------------------------
-function GroupsTab({ token, onOpenGroup }) {
+function GroupsTab({ token, onOpenGroup, unread = {} }) {
   const { styles, C } = useSkin();
   const [groups, setGroups]         = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -1708,16 +1916,24 @@ function GroupsTab({ token, onOpenGroup }) {
         ) : null}
         ListEmptyComponent={<Text style={styles.emptyText}>NO GROUPS YET</Text>}
         renderItem={({ item }) => {
+          const cnt = unread[`group_${item.id}`] || 0;
           const row = (
             <TouchableOpacity style={styles.userRow} onPress={() => onOpenGroup(item)}>
-              <View style={styles.userRowInfo}>
+              <View style={[styles.userRowInfo, { flex: 1 }]}>
                 <Text style={styles.userRowName}>{item.name}</Text>
                 {item.description
                   ? <Text style={styles.userRowMeta} numberOfLines={1}>{item.description}</Text>
                   : <Text style={styles.userRowMeta}>CREATED {fmtDate(item.created_at)}</Text>
                 }
               </View>
-              <Text style={styles.chevron}>{'>'}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                {cnt > 0 && (
+                  <View style={styles.rowBadge}>
+                    <Text style={styles.rowBadgeText}>{cnt > 99 ? '99+' : cnt}</Text>
+                  </View>
+                )}
+                <Text style={styles.chevron}>{'>'}</Text>
+              </View>
             </TouchableOpacity>
           );
           if (item.my_role !== 'admin') return row;
@@ -1738,12 +1954,13 @@ function GroupsTab({ token, onOpenGroup }) {
 // ---------------------------------------------------------------------------
 function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg }) {
   const { styles, C } = useSkin();
-  const [messages, setMessages] = useState([]);
-  const [text, setText]         = useState('');
-  const [loading, setLoading]   = useState(true);
-  const [sending, setSending]   = useState(false);
-  const [err, setErr]           = useState('');
-  const listRef                 = useRef(null);
+  const [messages, setMessages]     = useState([]);
+  const [text, setText]             = useState('');
+  const [loading, setLoading]       = useState(true);
+  const [sending, setSending]       = useState(false);
+  const [err, setErr]               = useState('');
+  const [showMembers, setShowMembers] = useState(false);
+  const listRef                     = useRef(null);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true); setErr('');
@@ -1764,6 +1981,12 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
         const exists = prev.some((m) => m.id === incomingMsg.id);
         return exists ? prev : [...prev, incomingMsg];
       });
+      if (incomingMsg.disappear_after && incomingMsg.disappear_after > 0) {
+        const msgId = incomingMsg.id;
+        setTimeout(() => {
+          setMessages(prev => prev.filter(m => m.id !== msgId));
+        }, incomingMsg.disappear_after * 1000);
+      }
     }
   }, [incomingMsg, group.id]);
 
@@ -1844,7 +2067,22 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   return (
     <ThemedSafeArea>
       <StatusBar barStyle="light-content" backgroundColor={C.bg} />
-      <AppHeader title={group.name} onBack={onBack} />
+      <AppHeader
+        title={group.name}
+        onBack={onBack}
+        rightComponent={
+          <TouchableOpacity style={styles.membersHeaderBtn} onPress={() => setShowMembers(true)}>
+            <Text style={styles.membersHeaderBtnText}>MEMBERS</Text>
+          </TouchableOpacity>
+        }
+      />
+      <GroupMembersModal
+        token={token}
+        group={group}
+        currentUser={currentUser}
+        visible={showMembers}
+        onClose={() => setShowMembers(false)}
+      />
       <KeyboardAvoidingView style={styles.flex} behavior={KAV_BEHAVIOR}>
         {loading ? <View style={styles.centerFill}><Spinner size="large" /></View> : (
           <>
@@ -2399,7 +2637,7 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
       const msg =
         `Hey ${contact.name}! ${senderName} has invited you to nano-SYNAPSYS — an encrypted, private messaging platform by AI Evolution. Join here: ${inviteUrl}  (invite expires in 7 days, one-use only)`;
       const { result } = await SMS.sendSMSAsync([contact.phone], msg);
-      if (result === 'sent') Alert.alert('INVITE SENT', `SMS sent to ${contact.name}.`);
+      if (result !== 'cancelled') Alert.alert('INVITE SENT', `Invite sent to ${contact.name}.`);
     } catch (e) {
       Alert.alert('ERROR', e.message);
     } finally {
@@ -2890,23 +3128,37 @@ function HomeScreen({ token, currentUser, onLogout }) {
   const [incomingMsg, setIncomingMsg] = useState(null);
   const [disappear, setDisappear]     = useState(null);
   const [notifEnabled, setNotifEnabled] = useState(true);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   const wsRef          = useRef(null);
   const reconnectRef   = useRef(null);
   const backoffRef     = useRef(1000);
-  const notifRef       = useRef(true);   // mirrors notifEnabled for WS closure
-  const activeTabRef   = useRef('CHATS');// mirrors activeTab for WS closure
-  const dmPeerRef      = useRef(null);   // mirrors dmPeer for WS closure
+  const notifRef       = useRef(true);    // mirrors notifEnabled for WS closure
+  const activeTabRef   = useRef('CHATS'); // mirrors activeTab for WS closure
+  const dmPeerRef      = useRef(null);    // mirrors dmPeer for WS closure
+  const groupChatRef   = useRef(null);    // mirrors groupChat for WS closure
 
   useEffect(() => {
     loadDisappear().then(v => setDisappear(v));
     loadNotifEnabled().then(v => { setNotifEnabled(v); notifRef.current = v; });
-  }, []);
+    // Register Expo push token with backend
+    (async () => {
+      try {
+        const tokenData = await Notifications.getExpoPushTokenAsync({
+          projectId: 'e5532763-45a0-4185-9294-2bd0ef8d1bef',
+        });
+        if (tokenData?.data) {
+          await api('/api/push-token', 'POST', { token: tokenData.data }, token);
+        }
+      } catch {}
+    })();
+  }, [token]);
 
   // Keep refs in sync with state
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   useEffect(() => { notifRef.current = notifEnabled; }, [notifEnabled]);
   useEffect(() => { dmPeerRef.current = dmPeer; }, [dmPeer]);
+  useEffect(() => { groupChatRef.current = groupChat; }, [groupChat]);
 
   const handleSetNotifEnabled = useCallback((v) => {
     setNotifEnabled(v);
@@ -2923,17 +3175,48 @@ function HomeScreen({ token, currentUser, onLogout }) {
       try {
         const msg = JSON.parse(event.data);
         setIncomingMsg(msg);
-        // Fire local notification when a DM arrives and user is not viewing that chat
-        if (
-          notifRef.current &&
-          msg.type === 'chat_message' &&
-          (activeTabRef.current !== 'CHATS' || dmPeerRef.current === null)
-        ) {
-          const sender = msg.from_user?.username || msg.fromUsername || 'Someone';
-          const preview = (typeof msg.content === 'string' && !msg.content.startsWith('data:'))
-            ? msg.content.slice(0, 80)
-            : '\uD83D\uDCF7 Image';
-          showLocalNotification(`nano-SYNAPSYS \u2014 ${sender}`, preview);
+
+        if (msg.type === 'chat_message') {
+          const fromId = String(msg.from_user?.id ?? msg.from_user ?? msg.from);
+          const meId   = String(currentUser.id);
+          // Only count messages from others
+          if (fromId !== meId) {
+            const isViewingThisChat =
+              activeTabRef.current === 'CHATS' &&
+              dmPeerRef.current !== null &&
+              String(dmPeerRef.current.id) === fromId;
+            if (!isViewingThisChat) {
+              setUnreadCounts(prev => ({ ...prev, [`dm_${fromId}`]: (prev[`dm_${fromId}`] || 0) + 1 }));
+            }
+            // Fire local notification when not viewing that chat
+            if (notifRef.current && !isViewingThisChat) {
+              const sender = msg.from_user?.username || msg.fromUsername || 'Someone';
+              const preview = (typeof msg.content === 'string' && !msg.content.startsWith('data:'))
+                ? msg.content.slice(0, 80) : '\uD83D\uDCF7 Image';
+              showLocalNotification(`nano-SYNAPSYS \u2014 ${sender}`, preview);
+            }
+          }
+        }
+
+        if (msg.type === 'group_message') {
+          const fromId = String(msg.from_user?.id ?? msg.from_user);
+          const meId   = String(currentUser.id);
+          if (fromId !== meId) {
+            const groupId = msg.group_id ?? msg.group?.id;
+            const isViewingThisGroup =
+              activeTabRef.current === 'GROUPS' &&
+              groupChatRef.current !== null &&
+              String(groupChatRef.current.id) === String(groupId);
+            if (!isViewingThisGroup) {
+              setUnreadCounts(prev => ({ ...prev, [`group_${groupId}`]: (prev[`group_${groupId}`] || 0) + 1 }));
+            }
+            if (notifRef.current && !isViewingThisGroup) {
+              const sender = msg.from_display || msg.from_username || 'Group';
+              const preview = (typeof msg.content === 'string' && !msg.content.startsWith('data:'))
+                ? msg.content.slice(0, 80) : '\uD83D\uDCF7 Image';
+              showLocalNotification(`nano-SYNAPSYS — ${msg.group?.name || 'Group'}`, `${sender}: ${preview}`);
+            }
+          }
         }
       } catch {}
     };
@@ -2953,6 +3236,22 @@ function HomeScreen({ token, currentUser, onLogout }) {
     };
   }, [connectWS]);
 
+  const openDM = useCallback((peer) => {
+    setDmPeer(peer);
+    setUnreadCounts(prev => { const n = { ...prev }; delete n[`dm_${peer.id}`]; return n; });
+  }, []);
+
+  const openGroup = useCallback((g) => {
+    setGroupChat(g);
+    setUnreadCounts(prev => { const n = { ...prev }; delete n[`group_${g.id}`]; return n; });
+  }, []);
+
+  // Aggregate unread counts for tab bar badges
+  const tabUnread = {
+    CHATS:  Object.entries(unreadCounts).filter(([k]) => k.startsWith('dm_')).reduce((s, [, v]) => s + v, 0),
+    GROUPS: Object.entries(unreadCounts).filter(([k]) => k.startsWith('group_')).reduce((s, [, v]) => s + v, 0),
+  };
+
   if (dmPeer) {
     return (
       <DMChatScreen
@@ -2966,7 +3265,7 @@ function HomeScreen({ token, currentUser, onLogout }) {
     return (
       <GroupChatScreen
         token={token} currentUser={currentUser} group={groupChat}
-        onBack={() => setGroupChat(null)} wsRef={wsRef} incomingMsg={incomingMsg} disappear={disappear}
+        onBack={() => setGroupChat(null)} wsRef={wsRef} incomingMsg={incomingMsg}
       />
     );
   }
@@ -2979,14 +3278,14 @@ function HomeScreen({ token, currentUser, onLogout }) {
         <Text style={styles.homeSubtitle}>AI EVOLUTION MESH</Text>
       </View>
       <View style={styles.flex}>
-        {activeTab === 'CHATS'    && <ChatsTab token={token} currentUser={currentUser} onOpenDM={(peer) => setDmPeer(peer)} />}
-        {activeTab === 'CONTACTS' && <ContactsTab token={token} currentUser={currentUser} onOpenDM={(peer) => { setDmPeer(peer); setActiveTab('CHATS'); }} />}
-        {activeTab === 'GROUPS'   && <GroupsTab token={token} onOpenGroup={(g) => setGroupChat(g)} />}
+        {activeTab === 'CHATS'    && <ChatsTab token={token} currentUser={currentUser} onOpenDM={openDM} unread={unreadCounts} />}
+        {activeTab === 'CONTACTS' && <ContactsTab token={token} currentUser={currentUser} onOpenDM={(peer) => { openDM(peer); setActiveTab('CHATS'); }} />}
+        {activeTab === 'GROUPS'   && <GroupsTab token={token} onOpenGroup={openGroup} unread={unreadCounts} />}
         {activeTab === 'BOT'      && <BotTab token={token} />}
         {activeTab === 'PROFILE'  && <ProfileTab token={token} currentUser={currentUser} onLogout={onLogout} />}
         {activeTab === 'SETTINGS' && <SettingsTab token={token} currentUser={currentUser} notifEnabled={notifEnabled} onSetNotifEnabled={handleSetNotifEnabled} />}
       </View>
-      <TabBar active={activeTab} onChange={setActiveTab} />
+      <TabBar active={activeTab} onChange={setActiveTab} unread={tabUnread} />
     </ThemedSafeArea>
   );
 }
