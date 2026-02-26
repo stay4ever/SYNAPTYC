@@ -4,21 +4,35 @@
     "slug": "nano-synapsys",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#050f05",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050f05"
+    },
     "ios": {
       "bundleIdentifier": "com.aievolution.nanosynapsys",
       "buildNumber": "1",
       "supportsTablet": false,
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "NSFaceIDUsageDescription": "nano-SYNAPSYS uses Face ID to protect your secure messages.",
         "NSContactsUsageDescription": "nano-SYNAPSYS reads your contacts so you can invite them to join.",
+        "NSCameraUsageDescription": "nano-SYNAPSYS uses the camera to capture images for chat.",
+        "NSPhotoLibraryUsageDescription": "nano-SYNAPSYS accesses your photos to send images in chat.",
+        "NSLocationWhenInUseUsageDescription": "nano-SYNAPSYS uses your location to attach GPS coordinates to your profile.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.aievolution.nanosynapsys",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#050f05"
+      },
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
