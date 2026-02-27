@@ -2,7 +2,7 @@
   "expo": {
     "name": "nano-SYNAPSYS",
     "slug": "nano-synapsys",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.aievolution.nanosynapsys",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
       "infoPlist": {
@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.aievolution.nanosynapsys",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#050f05"

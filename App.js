@@ -57,7 +57,7 @@ const GREEN_C = {
   text:        '#aad0aa',
   bright:      '#e8f8e8',
   dim:         '#4a8a4a',
-  muted:       '#2a5a2a',
+  muted:       '#5a8a5a',   // was #2a5a2a — brightened for readable placeholder text
   accent:      '#00FF41',
   green:       '#00C832',
   amber:       '#f59e0b',
@@ -73,7 +73,7 @@ const TACTICAL_C = {
   text:        '#9090a8',
   bright:      '#d8d8ec',
   dim:         '#505068',
-  muted:       '#2c2c3c',
+  muted:       '#484860',   // was #2c2c3c — brightened for readable placeholder text
   accent:      '#a8b8cc',
   green:       '#6888a0',
   amber:       '#b89060',
@@ -1226,46 +1226,124 @@ function TabBar({ active, onChange, unread = {} }) {
 // ---------------------------------------------------------------------------
 // FACE ID ICON  (drawn with Views — no external icon library needed)
 // ---------------------------------------------------------------------------
-function FaceIDIcon({ size = 68, color }) {
-  const { C } = useSkin();
-  const c  = color || C.accent;
-  const lw = Math.max(2, Math.round(size * 0.055)); // line thickness
-  const arm = Math.round(size * 0.23);              // bracket arm length
-  const r   = Math.round(size * 0.11);              // corner radius
+// ---------------------------------------------------------------------------
+// SVG ICON HELPERS  (no emoji anywhere — pure vector)
+// ---------------------------------------------------------------------------
+function IconPin({ size = 16, color = '#00FF41' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
+        stroke={color} strokeWidth="1.7" fill="none" strokeLinejoin="round" />
+      <Circle cx="12" cy="9" r="2.5" fill={color} />
+    </Svg>
+  );
+}
 
-  const bracket = (pos) => ({
-    position: 'absolute',
-    width: arm, height: arm,
-    borderColor: c,
-    borderTopWidth:    pos.t ? lw : 0,
-    borderBottomWidth: pos.b ? lw : 0,
-    borderLeftWidth:   pos.l ? lw : 0,
-    borderRightWidth:  pos.r ? lw : 0,
-    borderTopLeftRadius:     (pos.t && pos.l) ? r : 0,
-    borderTopRightRadius:    (pos.t && pos.r) ? r : 0,
-    borderBottomLeftRadius:  (pos.b && pos.l) ? r : 0,
-    borderBottomRightRadius: (pos.b && pos.r) ? r : 0,
-    top:    pos.t ? 0 : undefined,
-    bottom: pos.b ? 0 : undefined,
-    left:   pos.l ? 0 : undefined,
-    right:  pos.r ? 0 : undefined,
+function IconCamera({ size = 16, color = '#00FF41' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+        stroke={color} strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="12" cy="13" r="4" stroke={color} strokeWidth="1.7" fill="none" />
+    </Svg>
+  );
+}
+
+function IconSMS({ size = 16, color = '#00FF41' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+        stroke={color} strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <Line x1="8" y1="10" x2="16" y2="10" stroke={color} strokeWidth="1.7" strokeLinecap="round" />
+      <Line x1="8" y1="14" x2="12" y2="14" stroke={color} strokeWidth="1.7" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function IconRefresh({ size = 14, color = '#00FF41' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M23 4v6h-6" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M1 20v-6h6" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+function IconLock({ size = 14, color = '#00FF41' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke={color} strokeWidth="1.8" fill="none" />
+      <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke={color} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// VAULT ICON  (replaces Face-ID icon — transparent background, SVG vault door)
+// ---------------------------------------------------------------------------
+function VaultIcon({ size = 68, color }) {
+  const { C } = useSkin();
+  const c    = color || C.accent;
+  const half = size / 2;
+  const outerR = half * 0.88;
+  const doorR  = half * 0.68;
+  const dialR  = half * 0.26;
+  const lw     = Math.max(1.5, size * 0.038);
+
+  // 8 locking bolts radiating from door edge to frame
+  const bolts = Array.from({ length: 8 }, (_, i) => {
+    const a = (i * 2 * Math.PI) / 8;
+    return {
+      x1: half + doorR * 0.84 * Math.cos(a),
+      y1: half + doorR * 0.84 * Math.sin(a),
+      x2: half + outerR * 0.90 * Math.cos(a),
+      y2: half + outerR * 0.90 * Math.sin(a),
+    };
+  });
+
+  // 12 tick marks on the combination dial
+  const ticks = Array.from({ length: 12 }, (_, i) => {
+    const a      = (i * 2 * Math.PI) / 12;
+    const major  = i % 3 === 0;
+    const inner  = dialR * (major ? 0.52 : 0.68);
+    const outer  = dialR * 0.90;
+    return {
+      x1: half + inner * Math.cos(a), y1: half + inner * Math.sin(a),
+      x2: half + outer * Math.cos(a), y2: half + outer * Math.sin(a),
+      major,
+    };
   });
 
   return (
-    <View style={{ width: size, height: size }}>
-      <View style={bracket({ t: true,  l: true  })} />
-      <View style={bracket({ t: true,  r: true  })} />
-      <View style={bracket({ b: true,  l: true  })} />
-      <View style={bracket({ b: true,  r: true  })} />
-      {/* Left eye */}
-      <View style={{ position: 'absolute', top: size * 0.30, left:  size * 0.26, width: lw, height: size * 0.17, backgroundColor: c, borderRadius: lw }} />
-      {/* Right eye */}
-      <View style={{ position: 'absolute', top: size * 0.30, right: size * 0.26, width: lw, height: size * 0.17, backgroundColor: c, borderRadius: lw }} />
-      {/* Nose */}
-      <View style={{ position: 'absolute', top: size * 0.49, left: size / 2 - lw / 2, width: lw, height: size * 0.11, backgroundColor: c, borderRadius: lw }} />
-      {/* Mouth */}
-      <View style={{ position: 'absolute', bottom: size * 0.22, left: size * 0.30, right: size * 0.30, height: lw, backgroundColor: c, borderRadius: lw }} />
-    </View>
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {/* Outer frame ring */}
+      <Circle cx={half} cy={half} r={outerR} stroke={c} strokeWidth={lw * 0.7} fill="none" opacity={0.35} />
+      {/* Vault door */}
+      <Circle cx={half} cy={half} r={doorR} stroke={c} strokeWidth={lw} fill="none" />
+      {/* Locking bolts */}
+      {bolts.map((b, i) => (
+        <Line key={i} x1={b.x1} y1={b.y1} x2={b.x2} y2={b.y2}
+          stroke={c} strokeWidth={lw * 1.4} strokeLinecap="round" />
+      ))}
+      {/* Combination dial ring */}
+      <Circle cx={half} cy={half} r={dialR} stroke={c} strokeWidth={lw} fill="none" opacity={0.9} />
+      {/* Dial tick marks */}
+      {ticks.map((t, i) => (
+        <Line key={i} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+          stroke={c} strokeWidth={t.major ? lw * 0.7 : lw * 0.4} strokeLinecap="round" opacity={0.65} />
+      ))}
+      {/* 12 o'clock marker */}
+      <Circle cx={half} cy={half - dialR * 0.72} r={lw * 0.9} fill={c} />
+      {/* Centre hub */}
+      <Circle cx={half} cy={half} r={lw * 1.8} fill={c} />
+      {/* Handle lever */}
+      <Line x1={half + dialR * 0.1} y1={half} x2={half + doorR * 0.78} y2={half}
+        stroke={c} strokeWidth={lw * 1.2} strokeLinecap="round" />
+      <Circle cx={half + doorR * 0.78} cy={half} r={lw * 1.5}
+        stroke={c} strokeWidth={lw * 0.8} fill="none" />
+    </Svg>
   );
 }
 
@@ -1319,7 +1397,7 @@ function BiometricUnlockScreen({ onUnlock, onUsePassword }) {
         <Text style={styles.logoSub}>AI EVOLUTION SECURE MESH</Text>
         <View style={{ height: 48 }} />
         <TouchableOpacity onPress={() => tryBiometric(false)} disabled={loading} activeOpacity={0.7}>
-          <FaceIDIcon size={72} />
+          <VaultIcon size={72} />
         </TouchableOpacity>
         <View style={{ height: 24 }} />
         <TouchableOpacity
@@ -1476,7 +1554,12 @@ function AuthScreen({ onAuth }) {
               <TouchableOpacity style={[styles.bioLoginBtn, bioLoading && styles.primaryBtnDisabled]}
                 onPress={bioReady ? handleBioLogin : () => Alert.alert('FACE ID NOT SET UP', 'Go to Profile tab and tap "ENABLE FACE ID LOGIN" to set up biometric login.')}
                 disabled={bioLoading}>
-                {bioLoading ? <Spinner /> : <Text style={styles.bioLoginBtnText}>{'\uD83D\uDD12'}  FACE ID LOGIN</Text>}
+                {bioLoading ? <Spinner /> : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <IconLock size={15} color={C.accent} />
+                    <Text style={styles.bioLoginBtnText}>VAULT LOGIN</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -1641,6 +1724,10 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   const [sending, setSending]   = useState(false);
   const [err, setErr]           = useState('');
   const listRef                 = useRef(null);
+  const disappearTimers         = useRef([]);
+
+  // Clean up all pending disappear timers on unmount
+  useEffect(() => () => { disappearTimers.current.forEach(clearTimeout); }, []);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true); setErr('');
@@ -1668,12 +1755,13 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
         const exists = prev.some((m) => m.id === incomingMsg.id);
         return exists ? prev : [...prev, incomingMsg];
       });
-      // Schedule disappear if requested
+      // Schedule disappear if requested — track timer so it's cancelled on unmount
       if (incomingMsg.disappear_after && incomingMsg.disappear_after > 0) {
         const msgId = incomingMsg.id;
-        setTimeout(() => {
+        const tid = setTimeout(() => {
           setMessages(prev => prev.filter(m => m.id !== msgId));
         }, incomingMsg.disappear_after * 1000);
+        disappearTimers.current.push(tid);
       }
     }
   }, [incomingMsg, peer.id, currentUser.id]);
@@ -1748,7 +1836,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const lat = pos.coords.latitude.toFixed(6);
       const lng = pos.coords.longitude.toFixed(6);
-      sendMessage(`\uD83D\uDCCD [LOCATION:${lat},${lng}] https://maps.google.com/?q=${lat},${lng}`);
+      sendMessage(`[LOCATION:${lat},${lng}] https://maps.google.com/?q=${lat},${lng}`);
     } catch (e) { Alert.alert('ERROR', 'Failed to get location: ' + e.message); }
   }, [sendMessage]);
 
@@ -1785,9 +1873,10 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
                           const m = item.content.match(/\[LOCATION:([-\d.]+),([-\d.]+)\]/);
                           if (m) Linking.openURL(`https://maps.google.com/?q=${m[1]},${m[2]}`);
                         }}>
-                          <Text style={[styles.msgText, { color: mine ? '#fff' : C.accent }]}>
-                            {'\uD83D\uDCCD'} Location shared
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <IconPin size={13} color={mine ? '#fff' : C.accent} />
+                            <Text style={[styles.msgText, { color: mine ? '#fff' : C.accent }]}>Location shared</Text>
+                          </View>
                           <Text style={[styles.msgTime, { marginTop: 2 }]}>
                             {item.content.match(/\[LOCATION:([-\d.]+),([-\d.]+)\]/)?.[0].replace('[LOCATION:', '').replace(']', '') || ''}
                           </Text>
@@ -1812,7 +1901,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
                 <Text style={styles.attachBtnText}>+</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.attachBtn} onPress={handleShareLocation}>
-                <Text style={styles.attachBtnText}>{'\uD83D\uDCCD'}</Text>
+                <IconPin size={18} color={C.accent} />
               </TouchableOpacity>
               <TextInput style={styles.chatInput} placeholder="MESSAGE..." placeholderTextColor={C.muted}
                 value={text} onChangeText={setText} multiline maxLength={2000} />
@@ -1961,6 +2050,9 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   const [err, setErr]               = useState('');
   const [showMembers, setShowMembers] = useState(false);
   const listRef                     = useRef(null);
+  const disappearTimers             = useRef([]);
+
+  useEffect(() => () => { disappearTimers.current.forEach(clearTimeout); }, []);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true); setErr('');
@@ -1983,9 +2075,10 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       });
       if (incomingMsg.disappear_after && incomingMsg.disappear_after > 0) {
         const msgId = incomingMsg.id;
-        setTimeout(() => {
+        const tid = setTimeout(() => {
           setMessages(prev => prev.filter(m => m.id !== msgId));
         }, incomingMsg.disappear_after * 1000);
+        disappearTimers.current.push(tid);
       }
     }
   }, [incomingMsg, group.id]);
@@ -2054,7 +2147,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const lat = pos.coords.latitude.toFixed(6);
       const lng = pos.coords.longitude.toFixed(6);
-      sendMessage(`\uD83D\uDCCD [LOCATION:${lat},${lng}] https://maps.google.com/?q=${lat},${lng}`);
+      sendMessage(`[LOCATION:${lat},${lng}] https://maps.google.com/?q=${lat},${lng}`);
     } catch (e) { Alert.alert('ERROR', 'Failed to get location: ' + e.message); }
   }, [sendMessage]);
 
@@ -2105,9 +2198,10 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
                           const m = item.content.match(/\[LOCATION:([-\d.]+),([-\d.]+)\]/);
                           if (m) Linking.openURL(`https://maps.google.com/?q=${m[1]},${m[2]}`);
                         }}>
-                          <Text style={[styles.msgText, { color: mine ? '#fff' : C.accent }]}>
-                            {'\uD83D\uDCCD'} Location shared
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <IconPin size={13} color={mine ? '#fff' : C.accent} />
+                            <Text style={[styles.msgText, { color: mine ? '#fff' : C.accent }]}>Location shared</Text>
+                          </View>
                           <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 9, color: mine ? '#ffffffaa' : C.dim, marginTop: 2 }}>
                             TAP TO OPEN IN MAPS
                           </Text>
@@ -2126,7 +2220,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
                 <Text style={styles.attachBtnText}>+</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.attachBtn} onPress={handleShareLocation}>
-                <Text style={styles.attachBtnText}>{'\uD83D\uDCCD'}</Text>
+                <IconPin size={18} color={C.accent} />
               </TouchableOpacity>
               <TextInput style={styles.chatInput} placeholder="MESSAGE..." placeholderTextColor={C.muted}
                 value={text} onChangeText={setText} multiline maxLength={2000} />
@@ -2172,7 +2266,7 @@ function BotTab({ token }) {
     setErr('');
     setMessages((prev) => [...prev, {
       id: Date.now(), role: 'user',
-      content: content || '\uD83D\uDCF7 Image',
+      content: content || '[Image]',
       imageUri: imgToSend?.uri,
       ts: new Date().toISOString(),
     }]);
@@ -2271,7 +2365,7 @@ function BotTab({ token }) {
       )}
       <View style={styles.inputRow}>
         <TouchableOpacity style={styles.attachBtn} onPress={pickImageForBanner}>
-          <Text style={styles.attachBtnText}>{'\uD83D\uDCF7'}</Text>
+          <IconCamera size={18} color={C.accent} />
         </TouchableOpacity>
         <TextInput style={styles.chatInput} placeholder="ASK BANNER AI..." placeholderTextColor={C.muted}
           value={text} onChangeText={setText} multiline maxLength={4000} onSubmitEditing={sendToBot} />
@@ -2571,12 +2665,20 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
 
   const act = async (key, fn) => {
     setActioning(a => ({ ...a, [key]: true }));
-    try { await fn(); await fetchAll(); } catch (e) { setErr(e.message); }
+    // Use isRefresh=true so the pull-to-refresh indicator shows instead of
+    // replacing the entire UI with a full-screen spinner while data reloads.
+    try { await fn(); await fetchAll(true); } catch (e) { setErr(e.message); }
     finally { setActioning(a => ({ ...a, [key]: false })); }
   };
 
   // API uses camelCase keys
-  const sendRequest    = (userId)    => act(`req_${userId}`,    () => api('/api/contacts/request', 'POST', { userId },    token));
+  const sendRequest = (userId) => act(`req_${userId}`, async () => {
+    const res = await api('/api/contacts/request', 'POST', { userId }, token);
+    // Backend returns {status:'already_contacts'} if already connected
+    if (!res?.status || res.status !== 'already_contacts') {
+      Alert.alert('REQUEST SENT', 'Contact request sent. They will need to accept before you can chat.');
+    }
+  });
   const acceptRequest  = (contactId) => act(`acc_${contactId}`, () => api('/api/contacts/accept',  'POST', { contactId }, token));
   const declineRequest = (contactId) => act(`dec_${contactId}`, () => api('/api/contacts/decline', 'POST', { contactId }, token));
 
@@ -2598,7 +2700,14 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
   const openInviteModal = async () => {
     const { status } = await Contacts.requestPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('PERMISSION DENIED', 'Contacts access is required to send SMS invites.');
+      Alert.alert(
+        'CONTACTS PERMISSION',
+        'Contacts access is required to send SMS invites. Please enable it in Settings.',
+        [
+          { text: 'CANCEL', style: 'cancel' },
+          { text: 'OPEN SETTINGS', onPress: () => Linking.openSettings() },
+        ],
+      );
       return;
     }
     setShowInvite(true);
@@ -2633,11 +2742,17 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
     try {
       const data = await api('/api/invites', 'POST', {}, token);
       const inviteUrl = data.invite_url || data.url;
+      if (!inviteUrl) {
+        Alert.alert('ERROR', 'Could not generate an invite link. Please try again.');
+        return;
+      }
       const senderName = currentUser?.display_name || currentUser?.username || 'A friend';
       const msg =
-        `Hey ${contact.name}! ${senderName} has invited you to nano-SYNAPSYS — an encrypted, private messaging platform by AI Evolution. Join here: ${inviteUrl}  (invite expires in 7 days, one-use only)`;
+        `${senderName} invited you to nano-SYNAPSYS — private encrypted messaging by AI Evolution. Join here: ${inviteUrl} (expires in 7 days, one-use only)`;
       const { result } = await SMS.sendSMSAsync([contact.phone], msg);
-      if (result !== 'cancelled') Alert.alert('INVITE SENT', `Invite sent to ${contact.name}.`);
+      if (result !== 'cancelled') {
+        Alert.alert('INVITE SENT', `Invite sent to ${contact.name}.\n\nThey will receive a link to join nano-SYNAPSYS.`);
+      }
     } catch (e) {
       Alert.alert('ERROR', e.message);
     } finally {
@@ -2789,8 +2904,9 @@ function ContactsTab({ token, currentUser, onOpenDM }) {
       <View style={styles.separator} />
 
       {/* ── INVITE VIA SMS ──────────────────────────────────────── */}
-      <TouchableOpacity style={[styles.addContactBtn, { borderColor: C.amber }]} onPress={openInviteModal}>
-        <Text style={[styles.addContactBtnText, { color: C.amber }]}>{'\uD83D\uDCF1'} INVITE VIA SMS</Text>
+      <TouchableOpacity style={[styles.addContactBtn, { borderColor: C.amber, flexDirection: 'row', gap: 8 }]} onPress={openInviteModal}>
+        <IconSMS size={15} color={C.amber} />
+        <Text style={[styles.addContactBtnText, { color: C.amber }]}>INVITE VIA SMS</Text>
       </TouchableOpacity>
 
       {/* ── INVITE MODAL ───────────────────────────────────────── */}
@@ -3008,9 +3124,10 @@ function SettingsTab({ token, currentUser, notifEnabled, onSetNotifEnabled }) {
 
       {location && (
         <View style={styles.locationBox}>
-          <Text style={styles.locationCoord}>
-            {'\uD83D\uDCCD'} {location.lat.toFixed(6)}, {location.lng.toFixed(6)}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <IconPin size={13} color={C.accent} />
+            <Text style={styles.locationCoord}>{location.lat.toFixed(6)}, {location.lng.toFixed(6)}</Text>
+          </View>
           {location.altitude != null && (
             <Text style={styles.locationMeta}>ALT {location.altitude}m</Text>
           )}
@@ -3028,7 +3145,12 @@ function SettingsTab({ token, currentUser, notifEnabled, onSetNotifEnabled }) {
       >
         {locLoading
           ? <Spinner />
-          : <Text style={styles.getLocationBtnText}>{location ? '\uD83D\uDD04 UPDATE LOCATION' : '\uD83D\uDCCD GET LOCATION'}</Text>
+          : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {location ? <IconRefresh size={13} color={C.bright} /> : <IconPin size={13} color={C.bright} />}
+              <Text style={styles.getLocationBtnText}>{location ? 'UPDATE LOCATION' : 'GET LOCATION'}</Text>
+            </View>
+          )
         }
       </TouchableOpacity>
 
@@ -3092,7 +3214,12 @@ function SettingsTab({ token, currentUser, notifEnabled, onSetNotifEnabled }) {
             onPress={() => fetchPending(true)}
             disabled={adminRefreshing || adminLoading}
           >
-            {adminRefreshing ? <Spinner /> : <Text style={styles.ghostBtnText}>{'\uD83D\uDD04'} REFRESH LIST</Text>}
+            {adminRefreshing ? <Spinner /> : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <IconRefresh size={13} color={C.dim} />
+                <Text style={styles.ghostBtnText}>REFRESH LIST</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <View style={styles.profileDivider} />
@@ -3103,7 +3230,7 @@ function SettingsTab({ token, currentUser, notifEnabled, onSetNotifEnabled }) {
       <Text style={styles.settingsHeader}>APP INFO</Text>
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>VERSION</Text>
-        <Text style={styles.profileValue}>1.0.0</Text>
+        <Text style={styles.profileValue}>1.1.0</Text>
       </View>
       <View style={styles.profileCard}>
         <Text style={styles.profileLabel}>NETWORK</Text>
@@ -3192,7 +3319,7 @@ function HomeScreen({ token, currentUser, onLogout }) {
             if (notifRef.current && !isViewingThisChat) {
               const sender = msg.from_user?.username || msg.fromUsername || 'Someone';
               const preview = (typeof msg.content === 'string' && !msg.content.startsWith('data:'))
-                ? msg.content.slice(0, 80) : '\uD83D\uDCF7 Image';
+                ? msg.content.slice(0, 80) : '[Image]';
               showLocalNotification(`nano-SYNAPSYS \u2014 ${sender}`, preview);
             }
           }
@@ -3213,7 +3340,7 @@ function HomeScreen({ token, currentUser, onLogout }) {
             if (notifRef.current && !isViewingThisGroup) {
               const sender = msg.from_display || msg.from_username || 'Group';
               const preview = (typeof msg.content === 'string' && !msg.content.startsWith('data:'))
-                ? msg.content.slice(0, 80) : '\uD83D\uDCF7 Image';
+                ? msg.content.slice(0, 80) : '[Image]';
               showLocalNotification(`nano-SYNAPSYS — ${msg.group?.name || 'Group'}`, `${sender}: ${preview}`);
             }
           }
