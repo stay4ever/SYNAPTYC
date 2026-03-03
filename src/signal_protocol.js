@@ -309,8 +309,10 @@ function _arraysEqual(a, b) {
 
 // Maximum iteration value — must fit in uint32 LE wire encoding (4 bytes)
 const SK_MAX_ITERATION = 0xFFFFFFFF;  // 2^32 - 1
-// Maximum number of out-of-order message keys to cache per sender key
-const SK_MAX_SKIP = 256;
+// Maximum number of out-of-order message keys to cache per sender key.
+// Must be large enough for active groups where a member is offline for extended periods.
+// 10000 iterations × ~10ms HMAC = ~100ms to advance on mobile — acceptable.
+const SK_MAX_SKIP = 10000;
 
 /**
  * Generate a fresh sender key chain state for a group.

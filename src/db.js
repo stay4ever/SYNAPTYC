@@ -100,12 +100,23 @@ async function upsertMessages(convoKey, msgs) {
       const mediaUrl = isMedia ? (() => {
         try { return JSON.parse(content).url ?? null; } catch { return null; }
       })() : null;
+      // CRITICAL: Never overwrite plaintext with encrypted content.
+      // Sync may fail to decrypt (sender key not yet loaded) and persist the encrypted
+      // envelope. If DB already has plaintext (from WS handler or earlier successful
+      // decrypt), keep it. Only update content when new value is plaintext (decrypted).
       await db.executeAsync(
         `INSERT INTO messages
            (id, convo_key, from_id, from_username, from_display, content, is_media, media_url, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
-           content       = excluded.content,
+           content       = CASE
+             WHEN excluded.content LIKE '{"gsig":true%'
+               OR excluded.content LIKE '{"sig":true%'
+               OR excluded.content LIKE '{"enc":1%'
+               OR excluded.content LIKE '{"enc":2%'
+             THEN COALESCE(messages.content, excluded.content)
+             ELSE excluded.content
+           END,
            is_media      = excluded.is_media,
            media_url     = excluded.media_url,
            from_username = COALESCE(excluded.from_username, messages.from_username),

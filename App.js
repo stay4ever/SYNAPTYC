@@ -1292,10 +1292,13 @@ async function generateAndDistributeGroupKey(groupId, memberIds, token, myId) {
 
 /**
  * Load all sender keys for a group.
+ * ALWAYS fetches from server to detect stale/regenerated keys.
+ * Compares server's raw encrypted_sk blob with what we last processed —
+ * if unchanged, keeps the locally-advanced chain state (don't regress).
+ * If different, the sender regenerated: decrypt new seed, replace local state.
  * Supports both NaCl box (ik_box:true) and legacy DM-encrypted envelopes.
- * Caches in memory and SecureStore.
  */
-async function loadGroupSenderKeys(groupId, token, myId) {
+async function loadGroupSenderKeys(groupId, token, _myId) {
   await _e2eeReady;
   try {
     const serverKeys = await api(`/api/signal/sender-keys/${groupId}`, 'GET', null, token);
@@ -1304,24 +1307,30 @@ async function loadGroupSenderKeys(groupId, token, myId) {
     for (const { sender_id, encrypted_sk } of serverKeys) {
       const sid = String(sender_id);
       const cacheKey = `${groupId}_${sid}`;
-      if (_sigSenderKeys[cacheKey]) continue;
+      const rawStoreKey = `sig_sk_raw_${groupId}_${sid}`;
 
-      // Try SecureStore first (already decrypted and cached from prior session)
+      // ── Fast path: server key hasn't changed since we last processed it ──
+      // Compare raw encrypted blob — if identical, skip expensive decryption.
+      // Still ensure in-memory cache is populated (may have been evicted).
       try {
-        const stored = await SecureStore.getItemAsync(sigSKStore(groupId, sid));
-        if (stored) {
-          _sigSenderKeys[cacheKey] = SIG.deserialiseSKState(stored);
-          continue;
+        const storedRaw = await SecureStore.getItemAsync(rawStoreKey);
+        if (storedRaw === encrypted_sk) {
+          if (!_sigSenderKeys[cacheKey]) {
+            try {
+              const stored = await SecureStore.getItemAsync(sigSKStore(groupId, sid));
+              if (stored) _sigSenderKeys[cacheKey] = SIG.deserialiseSKState(stored);
+            } catch {}
+          }
+          if (_sigSenderKeys[cacheKey]) continue; // Same server key, state loaded — done
         }
       } catch {}
 
-      // Decrypt from server envelope
+      // ── Slow path: decrypt from server envelope ──
       try {
         const env = JSON.parse(encrypted_sk);
-
         let plainStr = null;
 
-        // ── New format: NaCl box with identity keys (session-independent) ──
+        // NaCl box with identity keys (session-independent, preferred)
         if (env.ik_box === true && _sigIdentityKey) {
           const senderIkPub = _b64dec(env.ik_sender);
           const nonce       = _b64dec(env.nonce);
@@ -1330,7 +1339,7 @@ async function loadGroupSenderKeys(groupId, token, myId) {
           if (plainBytes) plainStr = naclUtil.encodeUTF8(plainBytes);
         }
 
-        // ── Legacy format: DM-encrypted envelope (hdr + ct) ──
+        // Legacy DM-encrypted envelope (hdr + ct)
         if (!plainStr && env.hdr && env.ct) {
           plainStr = await decryptDM(
             JSON.stringify({ sig: true, v: 1, hdr: env.hdr, ct: env.ct }),
@@ -1342,8 +1351,10 @@ async function loadGroupSenderKeys(groupId, token, myId) {
           const state = SIG.deserialiseSKState(plainStr);
           _sigSenderKeys[cacheKey] = state;
           await SecureStore.setItemAsync(sigSKStore(groupId, sid), SIG.serialiseSKState(state));
+          // Persist raw blob for future staleness detection
+          try { await SecureStore.setItemAsync(rawStoreKey, encrypted_sk); } catch {}
         } else {
-          console.warn(`[Signal] loadGroupSenderKeys: failed to decrypt sender key from user ${sid} for group ${groupId}`);
+          console.warn(`[Signal] loadGroupSenderKeys: failed to decrypt sender key from user ${sid} for group ${groupId} (identity key mismatch? sender needs to re-distribute)`);
         }
       } catch (e) {
         console.warn(`[Signal] loadGroupSenderKeys: error decrypting sender key from user ${sid}:`, e?.message);
@@ -1443,10 +1454,11 @@ async function decryptGroupMsg(envelopeStr, _unusedGroupKey, senderId, groupId) 
         _sigSenderKeys[cacheKey] = SIG.deserialiseSKState(stateBackup);
 
         // skDecrypt failed — key may be stale (peer regenerated after reinstall).
-        // Clear local cache and re-fetch fresh key from server, then retry once.
+        // Clear ALL local caches (state + raw blob) and re-fetch fresh key from server.
         console.warn(`[Signal] decryptGroupMsg: skDecrypt failed for user ${sid} (iter=${state.iteration}), retrying with fresh key`);
         delete _sigSenderKeys[cacheKey];
         try { await SecureStore.deleteItemAsync(sigSKStore(groupId, sid)); } catch {}
+        try { await SecureStore.deleteItemAsync(`sig_sk_raw_${groupId}_${sid}`); } catch {}
         try {
           await loadGroupSenderKeys(groupId, _SESSION_TOKEN || null, sid);
           const freshState = _sigSenderKeys[cacheKey];
@@ -4159,14 +4171,19 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
 
   useEffect(() => () => { disappearTimers.current.forEach(clearTimeout); }, []);
 
-  // Load all Signal sender keys for this group (replaces legacy loadGroupKey)
-  // Also auto-distribute our own sender key to all group members
+  // Load all Signal sender keys for this group.
+  // 1. Fetch existing sender keys from server (detects stale/regenerated keys)
+  // 2. Distribute OUR sender key to ALL current members (covers new members)
+  // 3. Re-fetch sender keys again AFTER distribution (other members may have
+  //    distributed while we were setting up — catches the mutual-join race)
   useEffect(() => {
     setSenderKeysReady(false);
     const p = (async () => {
+      // Phase 1: Load existing sender keys from server
       await loadGroupSenderKeys(group.id, token, String(currentUser.id));
-      setSenderKeysReady(true);
-      // Distribute our sender key to all group members so they can decrypt our messages
+      setSenderKeysReady(true);  // Unblock decryption attempts with what we have
+
+      // Phase 2: Distribute our sender key to ALL current members
       try {
         const members = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
         const memberIds = (Array.isArray(members) ? members : []).map(m => m.user_id ?? m.id).filter(Boolean);
@@ -4174,6 +4191,9 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           await generateAndDistributeGroupKey(group.id, memberIds, token, String(currentUser.id));
         }
       } catch {}
+
+      // Phase 3: Re-fetch sender keys (other members may have distributed during phase 2)
+      try { await loadGroupSenderKeys(group.id, token, String(currentUser.id)); } catch {}
     })().catch(() => setSenderKeysReady(true));
     senderKeysPromise.current = p;
     // Also load legacy NaCl key for backward compat
@@ -4246,17 +4266,31 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       }
       // Eagerly decrypt incoming encrypted messages from others — don't wait
       // for the batch decrypt effect. Near-instant decryption for real-time messages.
+      // If initial decrypt fails (missing sender key), reload keys from server and retry
+      // after a short delay — the sender's key distribution may arrive moments after the message.
       {
         const fromId = String(incomingMsg.from_user?.id ?? incomingMsg.from_user ?? incomingMsg.from_id ?? incomingMsg.from);
         if (fromId !== String(currentUser.id) && isEncryptedGroup(incomingMsg.content)) {
           const mid = incomingMsg.id;
           _decryptInFlight.add(mid);
-          decryptGroupMsg(incomingMsg.content, null, fromId, group.id).then(plain => {
-            _decryptInFlight.delete(mid);
+          decryptGroupMsg(incomingMsg.content, null, fromId, group.id).then(async (plain) => {
             if (plain !== null) {
+              _decryptInFlight.delete(mid);
               decryptedMsgsRef.current[mid] = plain;
               setDecryptedMsgs(p => ({ ...p, [mid]: plain }));
               DB.persistMessage(`group_${group.id}`, mid, fromId, plain, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
+            } else {
+              // First attempt failed — wait 1.5s, reload sender keys, retry
+              await new Promise(r => setTimeout(r, 1500));
+              try { await loadGroupSenderKeys(group.id, token, String(currentUser.id)); } catch {}
+              const plain2 = await decryptGroupMsg(incomingMsg.content, null, fromId, group.id).catch(() => null);
+              _decryptInFlight.delete(mid);
+              if (plain2 !== null) {
+                decryptedMsgsRef.current[mid] = plain2;
+                setDecryptedMsgs(p => ({ ...p, [mid]: plain2 }));
+                DB.persistMessage(`group_${group.id}`, mid, fromId, plain2, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
+              }
+              // If still null, the batch decrypt effect will retry with longer delays
             }
           }).catch(() => { _decryptInFlight.delete(mid); });
         }
@@ -4277,13 +4311,23 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   // Async decrypt all encrypted group messages whenever the message list changes.
   // Each successful decryption IMMEDIATELY updates state (not batched at end)
   // to prevent "[Decrypting…]" from persisting due to effect cancellation races.
-  // Messages that fail are retried up to 3 times (after sender keys load) before
-  // being marked permanently __UNDECRYPTABLE__.
+  // Messages that fail are retried up to 6 times (with escalating delays and
+  // sender key re-fetches between passes) before marking __UNDECRYPTABLE__.
+  const MAX_GROUP_RETRIES = 6;
   const decryptRetryRef = useRef({});
   useEffect(() => {
     let alive = true;
     const myInflight = new Set();
     (async () => {
+      // On retry passes (retryCount > 0), reload sender keys from server first —
+      // the missing key may have been distributed since last attempt.
+      const maxRetryAmongPending = Math.max(0, ...messages
+        .filter(m => isEncryptedGroup(m.content) && !decryptedMsgsRef.current[m.id])
+        .map(m => decryptRetryRef.current[m.id] || 0));
+      if (maxRetryAmongPending > 0 && senderKeysReady) {
+        try { await loadGroupSenderKeys(group.id, token, String(currentUser.id)); } catch {}
+      }
+
       for (const msg of messages) {
         if (isEncryptedGroup(msg.content)) {
           const cached = decryptedMsgsRef.current[msg.id];
@@ -4294,7 +4338,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           } else {
             const retryCount = decryptRetryRef.current[msg.id] || 0;
             // After max retries AND sender keys are loaded, give up
-            if (retryCount >= 3 && senderKeysReady) {
+            if (retryCount >= MAX_GROUP_RETRIES && senderKeysReady) {
               if (cached !== '__UNDECRYPTABLE__') {
                 decryptedMsgsRef.current[msg.id] = '__UNDECRYPTABLE__';
                 setDecryptedMsgs(prev => ({ ...prev, [msg.id]: '__UNDECRYPTABLE__' }));
@@ -4307,10 +4351,12 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
             myInflight.add(msg.id);
             const sid = String(msg.from_user?.id ?? msg.from_user ?? msg.from ?? msg.from_id ?? '');
             let plain = null;
+            // 1. Check DB cache — sync or WS handler may have persisted plaintext
             try {
               const dbCached = await DB.getMessage(`group_${group.id}`, msg.id);
               if (dbCached?.content && !isEncryptedGroup(dbCached.content)) plain = dbCached.content;
             } catch {}
+            // 2. Live decryption (decryptGroupMsg has its own internal retry with key re-fetch)
             if (plain === null) {
               try {
                 plain = await decryptGroupMsg(msg.content, null, sid, group.id);
@@ -4341,16 +4387,20 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           }
         }
       }
-      // Schedule retry for messages still pending decryption
-      const pendingRetries = messages.some(m =>
-        isEncryptedGroup(m.content) && !decryptedMsgsRef.current[m.id] && (decryptRetryRef.current[m.id] || 0) < 3
+      // Schedule retry with escalating delay for messages still pending decryption.
+      // Delay increases per retry: 3s, 5s, 7s, 9s, 11s, 13s — gives time for
+      // sender key distribution to propagate between members.
+      const pendingRetries = messages.filter(m =>
+        isEncryptedGroup(m.content) && !decryptedMsgsRef.current[m.id] && (decryptRetryRef.current[m.id] || 0) < MAX_GROUP_RETRIES
       );
-      if (pendingRetries && alive) {
+      if (pendingRetries.length > 0 && alive) {
+        const maxRetry = Math.max(...pendingRetries.map(m => decryptRetryRef.current[m.id] || 0));
+        const delay = 3000 + (maxRetry * 2000);  // 3s, 5s, 7s, 9s, 11s, 13s
         setTimeout(() => {
-          if (alive) setDecryptedMsgs(prev => ({ ...prev }));
-        }, 2000);
+          if (alive) setDecryptedMsgs(prev => ({ ...prev })); // trigger re-render → effect re-run
+        }, delay);
       }
-      // Reconciliation batch
+      // Reconciliation batch — sync all ref entries to state in one pass
       if (alive) {
         const batch = {};
         let needed = false;
