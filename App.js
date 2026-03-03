@@ -1009,40 +1009,66 @@ async function _buildSessionFromX3DH(senderId, x3) {
   try {
     const spkRaw = await SecureStore.getItemAsync(SIG_SPK_STORE);
     const spkStore = spkRaw ? JSON.parse(spkRaw) : null;
-    if (!spkStore || spkStore.id !== x3.SPK_B_id) return false;
 
-    const IK_B  = _sigIdentityKey;
-    if (!IK_B) return false;
-    const SPK_B = { publicKey: _b64dec(spkStore.pub), secretKey: _b64dec(spkStore.sec) };
+    // If SPK ID matches, build as responder (the normal path)
+    if (spkStore && spkStore.id === x3.SPK_B_id) {
+      const IK_B  = _sigIdentityKey;
+      if (!IK_B) return false;
+      const SPK_B = { publicKey: _b64dec(spkStore.pub), secretKey: _b64dec(spkStore.sec) };
 
-    let OPK_B_sec = null;
-    if (x3.OPK_B_id != null) {
-      const otpRaw   = await SecureStore.getItemAsync(SIG_OPK_STORE);
-      const otpStore = otpRaw ? JSON.parse(otpRaw) : null;
-      const opk      = otpStore?.keys?.find(k => k.id === x3.OPK_B_id);
-      if (opk) {
-        OPK_B_sec = _b64dec(opk.sec);
-        // Consume the one-time prekey — remove from local pool to prevent reuse.
-        // OPKs are single-use by design (forward secrecy guarantee).
-        otpStore.keys = otpStore.keys.filter(k => k.id !== x3.OPK_B_id);
-        try {
-          await SecureStore.setItemAsync(SIG_OPK_STORE, JSON.stringify(otpStore));
-        } catch (e) {
-          console.warn('[Signal] Failed to persist OPK removal — forward secrecy risk:', e?.message);
+      let OPK_B_sec = null;
+      if (x3.OPK_B_id != null) {
+        const otpRaw   = await SecureStore.getItemAsync(SIG_OPK_STORE);
+        const otpStore = otpRaw ? JSON.parse(otpRaw) : null;
+        const opk      = otpStore?.keys?.find(k => k.id === x3.OPK_B_id);
+        if (opk) {
+          OPK_B_sec = _b64dec(opk.sec);
+          // Consume the one-time prekey — remove from local pool to prevent reuse.
+          // OPKs are single-use by design (forward secrecy guarantee).
+          otpStore.keys = otpStore.keys.filter(k => k.id !== x3.OPK_B_id);
+          try {
+            await SecureStore.setItemAsync(SIG_OPK_STORE, JSON.stringify(otpStore));
+          } catch (e) {
+            console.warn('[Signal] Failed to persist OPK removal — forward secrecy risk:', e?.message);
+          }
         }
       }
+
+      const IK_A_pub = _b64dec(x3.IK_A_pub);
+      const EK_A_pub = _b64dec(x3.EK_A_pub);
+
+      const SK = SIG.x3dhResponder(
+        IK_B.secretKey, SPK_B.secretKey, OPK_B_sec,
+        IK_A_pub, EK_A_pub
+      );
+
+      _sigSessions[senderId] = SIG.drInitReceiver(SK, SPK_B);
+      return true;
     }
 
-    const IK_A_pub = _b64dec(x3.IK_A_pub);
-    const EK_A_pub = _b64dec(x3.EK_A_pub);
+    // SPK mismatch — our SPK was regenerated since the sender built their session.
+    // This message cannot be decrypted with x3dhResponder because we no longer have
+    // the matching secret key. Log a warning — the sender needs to re-establish
+    // with our current bundle. Try building as INITIATOR so future messages work.
+    console.warn(`[Signal] SPK_B_id mismatch for peer ${senderId} (theirs=${x3.SPK_B_id}, ours=${spkStore?.id}) — cannot decrypt this message, establishing fresh session as initiator`);
+    return false;
+  } catch { return false; }
+}
 
-    const SK = SIG.x3dhResponder(
-      IK_B.secretKey, SPK_B.secretKey, OPK_B_sec,
-      IK_A_pub, EK_A_pub
-    );
-
-    _sigSessions[senderId] = SIG.drInitReceiver(SK, SPK_B);
-    return true;
+/**
+ * Attempt to build a NEW session with a peer as initiator (fetch their current
+ * bundle from server). Used as last-resort recovery when x3dh responder path
+ * fails. The CURRENT message still can't be decrypted (it was encrypted under
+ * the old session), but all FUTURE messages will work.
+ */
+async function _rebuildSessionAsInitiator(peerId, token) {
+  try {
+    // Delete any stale session
+    delete _sigSessions[peerId];
+    try { await SecureStore.deleteItemAsync(sigSessStore(peerId)); } catch {}
+    // Build a brand new session as initiator
+    const sess = await _getOrBuildSession(peerId, token);
+    return !!sess;
   } catch { return false; }
 }
 
@@ -1129,12 +1155,14 @@ async function decryptDM(envelopeStr, senderId, token) {
           }
         }
 
-        // Track consecutive failures — never auto-delete session (exploitable by
-        // injecting malformed messages). Instead log for diagnostics. The user can
-        // manually trigger a session reset from the chat UI if needed.
+        // Last resort: rebuild as initiator using peer's CURRENT bundle from server.
+        // This won't decrypt THIS message (it was encrypted under the old session),
+        // but it establishes a fresh session so FUTURE messages and retries of THIS
+        // message (if the peer re-sends) will succeed.
         _decryptFails[senderId] = (_decryptFails[senderId] || 0) + 1;
-        if (_decryptFails[senderId] >= 5) {
-          console.warn(`[Signal] ${_decryptFails[senderId]} consecutive decrypt failures for peer ${senderId} — session may be corrupted. User should re-establish.`);
+        if (_decryptFails[senderId] >= 3 && token) {
+          console.warn(`[Signal] ${_decryptFails[senderId]} failures for peer ${senderId} — attempting fresh session as initiator`);
+          await _rebuildSessionAsInitiator(senderId, token);
         }
         return null;
       }
@@ -3585,26 +3613,40 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   // Async decrypt all encrypted DMs whenever the message list changes.
   // Each successful decryption IMMEDIATELY updates state (not batched at end)
   // to prevent "[Decrypting…]" from persisting due to effect cancellation races.
-  // On cleanup, releases in-flight markers so the next effect can re-process.
+  // Messages that fail decryption are retried up to 3 times before marking __UNDECRYPTABLE__.
+  const decryptRetryRef = useRef({});  // { [msgId]: retryCount }
   useEffect(() => {
     let alive = true;
     const myInflight = new Set();
     (async () => {
       for (const msg of messages) {
         if (isEncryptedDM(msg.content)) {
-          if (decryptedMsgsRef.current[msg.id]) {
+          const cached = decryptedMsgsRef.current[msg.id];
+          // Skip successfully decrypted messages (but retry __UNDECRYPTABLE__ up to max retries)
+          if (cached && cached !== '__UNDECRYPTABLE__') {
             // Already decrypted — ref is always current
           } else if (_decryptInFlight.has(msg.id)) {
             continue;
           } else {
+            const retryCount = decryptRetryRef.current[msg.id] || 0;
+            // After max retries, mark as permanently undecryptable
+            if (retryCount >= 3) {
+              if (cached !== '__UNDECRYPTABLE__') {
+                decryptedMsgsRef.current[msg.id] = '__UNDECRYPTABLE__';
+                setDecryptedMsgs(prev => ({ ...prev, [msg.id]: '__UNDECRYPTABLE__' }));
+              }
+              continue;
+            }
             _decryptInFlight.add(msg.id);
             myInflight.add(msg.id);
             const sid = String(msg.from_user?.id ?? msg.from_user ?? msg.from ?? msg.from_id ?? '');
             let plain = null;
+            // 1. Check DB cache first — sync may have decrypted and persisted it
             try {
-              const cached = await DB.getMessage(`dm_${peer.id}`, msg.id);
-              if (cached?.content && !isEncryptedDM(cached.content)) plain = cached.content;
+              const dbCached = await DB.getMessage(`dm_${peer.id}`, msg.id);
+              if (dbCached?.content && !isEncryptedDM(dbCached.content)) plain = dbCached.content;
             } catch {}
+            // 2. If not in DB, try live decryption
             if (plain === null) {
               plain = await decryptDM(msg.content, sid, token);
             }
@@ -3613,17 +3655,19 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
             if (plain !== null) {
               decryptedMsgsRef.current[msg.id] = plain;
               setDecryptedMsgs(prev => ({ ...prev, [msg.id]: plain }));
+              delete decryptRetryRef.current[msg.id];
               DB.persistMessage(`dm_${peer.id}`, msg.id, sid, plain, msg.created_at, msg.from_username ?? msg.fromUsername, msg.from_display ?? msg.fromDisplay).catch(() => {});
             } else {
-              // Mark as permanently undecryptable so UI shows [Encrypted] not [Decrypting…]
-              decryptedMsgsRef.current[msg.id] = '__UNDECRYPTABLE__';
-              setDecryptedMsgs(prev => ({ ...prev, [msg.id]: '__UNDECRYPTABLE__' }));
+              // Increment retry counter — will retry on next effect run
+              decryptRetryRef.current[msg.id] = retryCount + 1;
+              // Don't mark __UNDECRYPTABLE__ yet — leave as null so UI shows [Decrypting…]
+              // which is less alarming and signals that retries are in progress
             }
           }
         }
         // Trigger media decryption for any message whose resolved content is a media payload
         const resolved = decryptedMsgsRef.current[msg.id] ?? (isEncryptedDM(msg.content) ? null : msg.content);
-        if (resolved && MEDIA.isMediaPayload(resolved) && !decryptedMedia[msg.id]) {
+        if (resolved && resolved !== '__UNDECRYPTABLE__' && MEDIA.isMediaPayload(resolved) && !decryptedMedia[msg.id]) {
           const mp = MEDIA.parseMediaPayload(resolved);
           if (mp) {
             MEDIA.decryptMedia(mp.url, mp.key, mp.nonce, mp.mime).then(uri => {
@@ -3632,8 +3676,17 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           }
         }
       }
+      // Schedule a retry pass after 2s for any messages still pending decryption.
+      // This gives time for sessions to be established (e.g., x3dh bundle fetch).
+      const pendingRetries = messages.some(m =>
+        isEncryptedDM(m.content) && !decryptedMsgsRef.current[m.id] && (decryptRetryRef.current[m.id] || 0) < 3
+      );
+      if (pendingRetries && alive) {
+        setTimeout(() => {
+          if (alive) setDecryptedMsgs(prev => ({ ...prev })); // trigger re-render → effect re-run
+        }, 2000);
+      }
       // Reconciliation batch: sync all ref entries to state in one pass.
-      // Catches results from concurrent eager decryptions or prior cancelled effects.
       if (alive) {
         const batch = {};
         let needed = false;
@@ -3648,11 +3701,9 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
     })();
     return () => {
       alive = false;
-      // Release in-flight markers from THIS effect instance so the next run
-      // (or a fresh mount) can process these messages instead of skipping them.
       for (const id of myInflight) _decryptInFlight.delete(id);
     };
-  }, [messages, token, peer.id]);
+  }, [messages, token, peer.id, decryptedMsgs]);
 
   const sendMessage = useCallback(async (overrideContent = null) => {
     const content = overrideContent ?? text.trim();
@@ -4226,20 +4277,32 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   // Async decrypt all encrypted group messages whenever the message list changes.
   // Each successful decryption IMMEDIATELY updates state (not batched at end)
   // to prevent "[Decrypting…]" from persisting due to effect cancellation races.
-  // On cleanup, releases in-flight markers so the next effect can re-process.
+  // Messages that fail are retried up to 3 times (after sender keys load) before
+  // being marked permanently __UNDECRYPTABLE__.
+  const decryptRetryRef = useRef({});
   useEffect(() => {
     let alive = true;
     const myInflight = new Set();
     (async () => {
       for (const msg of messages) {
         if (isEncryptedGroup(msg.content)) {
-          // Skip if already SUCCESSFULLY decrypted (but retry __UNDECRYPTABLE__ when sender keys are ready)
           const cached = decryptedMsgsRef.current[msg.id];
           if (cached && cached !== '__UNDECRYPTABLE__') {
-            // Already decrypted — ref is always current
+            // Already decrypted — skip
           } else if (_decryptInFlight.has(msg.id)) {
             continue;
           } else {
+            const retryCount = decryptRetryRef.current[msg.id] || 0;
+            // After max retries AND sender keys are loaded, give up
+            if (retryCount >= 3 && senderKeysReady) {
+              if (cached !== '__UNDECRYPTABLE__') {
+                decryptedMsgsRef.current[msg.id] = '__UNDECRYPTABLE__';
+                setDecryptedMsgs(prev => ({ ...prev, [msg.id]: '__UNDECRYPTABLE__' }));
+              }
+              continue;
+            }
+            // If sender keys not ready yet, don't burn retry attempts
+            if (!senderKeysReady && retryCount > 0) continue;
             _decryptInFlight.add(msg.id);
             myInflight.add(msg.id);
             const sid = String(msg.from_user?.id ?? msg.from_user ?? msg.from ?? msg.from_id ?? '');
@@ -4257,20 +4320,19 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
             myInflight.delete(msg.id);
             if (plain !== null) {
               decryptedMsgsRef.current[msg.id] = plain;
-              // Immediate per-message state update — NOT gated on alive.
               setDecryptedMsgs(prev => ({ ...prev, [msg.id]: plain }));
+              delete decryptRetryRef.current[msg.id];
               DB.persistMessage(`group_${group.id}`, msg.id, sid, plain, msg.created_at, msg.from_username ?? msg.fromUsername, msg.from_display ?? msg.fromDisplay).catch(() => {});
             } else if (senderKeysReady) {
-              // Only mark as permanently undecryptable AFTER sender keys are loaded
-              decryptedMsgsRef.current[msg.id] = '__UNDECRYPTABLE__';
-              setDecryptedMsgs(prev => ({ ...prev, [msg.id]: '__UNDECRYPTABLE__' }));
+              decryptRetryRef.current[msg.id] = retryCount + 1;
+              // Leave as null (not __UNDECRYPTABLE__) — shows [Decrypting…] while retries remain
             }
-            // If !senderKeysReady and decryption failed, leave as null — will retry when keys load
+            // If !senderKeysReady, leave as null — will retry when keys load
           }
         }
         // Trigger media decryption for any message whose resolved content is a media payload
         const resolved = decryptedMsgsRef.current[msg.id] ?? (isEncryptedGroup(msg.content) ? null : msg.content);
-        if (resolved && MEDIA.isMediaPayload(resolved) && !decryptedMedia[msg.id]) {
+        if (resolved && resolved !== '__UNDECRYPTABLE__' && MEDIA.isMediaPayload(resolved) && !decryptedMedia[msg.id]) {
           const mp = MEDIA.parseMediaPayload(resolved);
           if (mp) {
             MEDIA.decryptMedia(mp.url, mp.key, mp.nonce, mp.mime).then(uri => {
@@ -4279,7 +4341,16 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           }
         }
       }
-      // Reconciliation batch: sync all ref entries to state in one pass.
+      // Schedule retry for messages still pending decryption
+      const pendingRetries = messages.some(m =>
+        isEncryptedGroup(m.content) && !decryptedMsgsRef.current[m.id] && (decryptRetryRef.current[m.id] || 0) < 3
+      );
+      if (pendingRetries && alive) {
+        setTimeout(() => {
+          if (alive) setDecryptedMsgs(prev => ({ ...prev }));
+        }, 2000);
+      }
+      // Reconciliation batch
       if (alive) {
         const batch = {};
         let needed = false;
@@ -4296,7 +4367,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       alive = false;
       for (const id of myInflight) _decryptInFlight.delete(id);
     };
-  }, [messages, group.id, senderKeysReady]);
+  }, [messages, group.id, senderKeysReady, decryptedMsgs]);
 
   const sendMessage = useCallback(async (overrideContent = null) => {
     const content = overrideContent ?? text.trim();

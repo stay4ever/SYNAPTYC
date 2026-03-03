@@ -15,7 +15,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.aievolution.synaptyc",
-      "buildNumber": "63",
+      "buildNumber": "65",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
       "infoPlist": {
