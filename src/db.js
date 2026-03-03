@@ -67,6 +67,18 @@ async function openDb() {
     )
   `);
 
+  // Unread message counts — persists across app restarts
+  await _db.executeAsync(`
+    CREATE TABLE IF NOT EXISTS unread_counts (
+      convo_key TEXT PRIMARY KEY,
+      count     INTEGER DEFAULT 0
+    )
+  `);
+
+  // Add from_username / from_display columns to messages table (safe — idempotent)
+  try { await _db.executeAsync(`ALTER TABLE messages ADD COLUMN from_username TEXT`); } catch {}
+  try { await _db.executeAsync(`ALTER TABLE messages ADD COLUMN from_display TEXT`); } catch {}
+
   return _db;
 }
 
@@ -81,6 +93,8 @@ async function upsertMessages(convoKey, msgs) {
   try {
     for (const m of msgs) {
       const fromId = String(m.from_id ?? m.from_user?.id ?? m.from_user ?? m.from ?? '');
+      const fromUsername = m.from_username ?? m.fromUsername ?? null;
+      const fromDisplay = m.from_display ?? m.fromDisplay ?? m.from_display_name ?? null;
       const content = m.content ?? null;
       const isMedia = typeof content === 'string' && content.startsWith('{"type":"media"') ? 1 : 0;
       const mediaUrl = isMedia ? (() => {
@@ -88,13 +102,15 @@ async function upsertMessages(convoKey, msgs) {
       })() : null;
       await db.executeAsync(
         `INSERT INTO messages
-           (id, convo_key, from_id, content, is_media, media_url, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
+           (id, convo_key, from_id, from_username, from_display, content, is_media, media_url, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
-           content   = excluded.content,
-           is_media  = excluded.is_media,
-           media_url = excluded.media_url`,
-        [m.id, convoKey, fromId, content, isMedia, mediaUrl, m.created_at ?? new Date().toISOString()]
+           content       = excluded.content,
+           is_media      = excluded.is_media,
+           media_url     = excluded.media_url,
+           from_username = COALESCE(excluded.from_username, messages.from_username),
+           from_display  = COALESCE(excluded.from_display, messages.from_display)`,
+        [m.id, convoKey, fromId, fromUsername, fromDisplay, content, isMedia, mediaUrl, m.created_at ?? new Date().toISOString()]
       );
     }
     await db.executeAsync('COMMIT');
@@ -140,7 +156,7 @@ async function searchMessages(query) {
   const db = await openDb();
   const pattern = `%${query.trim().replace(/[%_]/g, '\\$&')}%`;
   const result = await db.executeAsync(
-    `SELECT id, convo_key, content, from_id, created_at
+    `SELECT id, convo_key, content, from_id, from_username, from_display, created_at
      FROM messages
      WHERE content LIKE ? ESCAPE '\\'
      ORDER BY created_at DESC
@@ -156,7 +172,7 @@ async function searchMessages(query) {
 async function getLocalMessages(convoKey, limit = 100) {
   const db = await openDb();
   const result = await db.executeAsync(
-    `SELECT id, convo_key, from_id, content, is_media, media_url, created_at
+    `SELECT id, convo_key, from_id, from_username, from_display, content, is_media, media_url, created_at
      FROM messages
      WHERE convo_key = ?
      ORDER BY created_at DESC
@@ -170,7 +186,7 @@ async function getLocalMessages(convoKey, limit = 100) {
 /**
  * Persist a single incoming WS message (after it's been decrypted).
  */
-async function persistMessage(convoKey, msgId, fromId, plaintext, createdAt) {
+async function persistMessage(convoKey, msgId, fromId, plaintext, createdAt, fromUsername, fromDisplay) {
   const db = await openDb();
   const isMedia = typeof plaintext === 'string' && plaintext.startsWith('{"type":"media"') ? 1 : 0;
   const mediaUrl = isMedia ? (() => {
@@ -178,13 +194,15 @@ async function persistMessage(convoKey, msgId, fromId, plaintext, createdAt) {
   })() : null;
   await db.executeAsync(
     `INSERT INTO messages
-       (id, convo_key, from_id, content, is_media, media_url, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+       (id, convo_key, from_id, from_username, from_display, content, is_media, media_url, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
-       content   = excluded.content,
-       is_media  = excluded.is_media,
-       media_url = excluded.media_url`,
-    [msgId, convoKey, String(fromId), plaintext, isMedia, mediaUrl, createdAt ?? new Date().toISOString()]
+       content       = excluded.content,
+       is_media      = excluded.is_media,
+       media_url     = excluded.media_url,
+       from_username = COALESCE(excluded.from_username, messages.from_username),
+       from_display  = COALESCE(excluded.from_display, messages.from_display)`,
+    [msgId, convoKey, String(fromId), fromUsername ?? null, fromDisplay ?? null, plaintext, isMedia, mediaUrl, createdAt ?? new Date().toISOString()]
   );
   // Update cursor if this is a new high-water mark
   await updateCursor(convoKey, msgId);
@@ -213,6 +231,62 @@ async function deleteConversation(convoKey) {
   await db.executeAsync(`DELETE FROM sync_cursors WHERE convo_key = ?`, [convoKey]);
 }
 
+// ─── Unread Counts ──────────────────────────────────────────────────────────
+
+/**
+ * Load all non-zero unread counts.
+ * Returns { 'dm_5': 3, 'group_2': 1, ... }
+ */
+async function getUnreadCounts() {
+  const db = await openDb();
+  const result = await db.executeAsync(
+    'SELECT convo_key, count FROM unread_counts WHERE count > 0'
+  );
+  const rows = result?.rows?._array ?? result?.rows ?? [];
+  const out = {};
+  for (const r of rows) out[r.convo_key] = r.count;
+  return out;
+}
+
+/**
+ * Increment unread count for a conversation by 1.
+ */
+async function incrementUnread(convoKey) {
+  const db = await openDb();
+  await db.executeAsync(
+    `INSERT INTO unread_counts(convo_key, count) VALUES (?, 1)
+     ON CONFLICT(convo_key) DO UPDATE SET count = count + 1`,
+    [convoKey]
+  );
+}
+
+/**
+ * Clear unread count for a conversation (set to 0).
+ */
+async function clearUnread(convoKey) {
+  const db = await openDb();
+  await db.executeAsync(
+    'DELETE FROM unread_counts WHERE convo_key = ?',
+    [convoKey]
+  );
+}
+
+/**
+ * Set unread count to a specific value.
+ */
+async function setUnreadCount(convoKey, count) {
+  const db = await openDb();
+  if (count <= 0) {
+    await db.executeAsync('DELETE FROM unread_counts WHERE convo_key = ?', [convoKey]);
+  } else {
+    await db.executeAsync(
+      `INSERT INTO unread_counts(convo_key, count) VALUES (?, ?)
+       ON CONFLICT(convo_key) DO UPDATE SET count = excluded.count`,
+      [convoKey, count]
+    );
+  }
+}
+
 module.exports = {
   openDb,
   upsertMessages,
@@ -223,4 +297,8 @@ module.exports = {
   persistMessage,
   getMessage,
   deleteConversation,
+  getUnreadCounts,
+  incrementUnread,
+  clearUnread,
+  setUnreadCount,
 };

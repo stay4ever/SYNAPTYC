@@ -13,6 +13,7 @@ import React, {
   useCallback,
   useContext,
   createContext,
+  useMemo,
 } from 'react';
 import {
   ActivityIndicator,
@@ -63,6 +64,10 @@ const DB    = require('./src/db');
 const SYNC  = require('./src/sync');
 // eslint-disable-next-line import/no-commonjs
 const MEDIA = require('./src/media');
+// eslint-disable-next-line import/no-commonjs
+const { PhoenixWS } = require('./src/ws');
+// eslint-disable-next-line import/no-commonjs
+const CONST = require('./src/constants');
 
 // ---------------------------------------------------------------------------
 // COLOUR PALETTES
@@ -657,44 +662,17 @@ function useSkin() {
 }
 
 // ---------------------------------------------------------------------------
-// CONSTANTS
+// CONSTANTS  (extracted to src/constants.js)
 // ---------------------------------------------------------------------------
-const BASE_URL    = 'https://nano-synapsys-server.fly.dev';
-const WS_URL      = 'wss://nano-synapsys-server.fly.dev/socket/websocket';
-const JWT_KEY     = 'nano_jwt';
-const USER_KEY    = 'nano_user';
-const BIO_KEY         = 'nano_bio_enabled';
-const BIO_REFRESH_KEY = 'nano_bio_refresh'; // stores refresh token — never passwords
-// Legacy keys kept for cleanup only (no longer written)
-const BIO_EMAIL_KEY   = 'nano_bio_email';
-const BIO_PASS_KEY    = 'nano_bio_pass';
-const SKIN_KEY      = 'nano_skin';
-const DISAPPEAR_KEY = 'nano_disappear';
-const PROFILE_EXT_KEY = 'nano_profile_ext';
-const LOCATION_KEY    = 'nano_location';
-const NOTIF_KEY       = 'nano_notif_enabled';
-// Banner AI permission keys — each stores '1' (enabled) or '0' (disabled)
-const BANNER_PERM_MSGS_KEY = 'banner_perm_msgs';
-const BANNER_PERM_SEND_KEY = 'banner_perm_send';
-const BANNER_PERM_CAL_KEY  = 'banner_perm_cal';
-const BANNER_PERM_CON_KEY  = 'banner_perm_con';
-// Phase 5 keys
-const DEVICE_ID_KEY      = 'nano_device_id';        // UUID, never changes
-const SKIP_AUTH_KEY      = 'nano_skip_auth';         // Unix ms expiry timestamp
-const BANNER_ENABLED_KEY = 'nano_banner_enabled';    // '1' | '0'
-const PROFILE_IMAGE_KEY  = 'nano_profile_image';     // local URI of chosen avatar
-
-const DISAPPEAR_OPTIONS = [
-  { label: 'OFF',     value: null   },
-  { label: '1 MIN',   value: 60     },
-  { label: '5 MIN',   value: 300    },
-  { label: '10 MIN',  value: 600    },
-  { label: '5 DAYS',  value: 432000 },
-  { label: '10 DAYS', value: 864000 },
-  { label: '30 DAYS', value: 2592000},
-];
-
-const KAV_BEHAVIOR = Platform.OS === 'ios' ? 'padding' : 'height';
+const {
+  BASE_URL, WS_URL, JWT_KEY, USER_KEY, BIO_KEY, BIO_REFRESH_KEY,
+  BIO_EMAIL_KEY, BIO_PASS_KEY, SKIN_KEY, DISAPPEAR_KEY, PROFILE_EXT_KEY,
+  LOCATION_KEY, NOTIF_KEY, BANNER_PERM_MSGS_KEY, BANNER_PERM_SEND_KEY,
+  BANNER_PERM_CAL_KEY, BANNER_PERM_CON_KEY, DEVICE_ID_KEY, SKIP_AUTH_KEY,
+  BANNER_ENABLED_KEY, PROFILE_IMAGE_KEY, DISAPPEAR_OPTIONS, KAV_BEHAVIOR,
+} = CONST;
+// Alias for backward compat (some helpers reference BASE_URL as a local)
+const BASE_URL_LOCAL = BASE_URL;
 
 // ---------------------------------------------------------------------------
 // E2EE — Signal Protocol (X3DH + Double Ratchet + Sender Keys)
@@ -721,6 +699,22 @@ const _sigSessions    = {};   // { [userId]:  drSession  }
 const _sigSenderKeys  = {};   // { [`${gid}_${sid}`]: senderKeyState }
 const _groupKeyCache  = {};   // { [groupId]: groupKey }
 const _pkCache        = {};   // { [userId]: base64PublicKey }
+const _decryptFails   = {};   // { [peerId]: consecutiveFailCount }
+
+// ── Per-peer decryption mutex ─────────────────────────────────────────────────
+// Prevents concurrent Double Ratchet mutations for the same peer (race from
+// effect re-runs when new WS messages trigger a messages state update mid-decrypt).
+const _decryptLocks   = {};   // { [peerId]: Promise }
+function _withDecryptLock(peerId, fn) {
+  const prev = _decryptLocks[peerId] || Promise.resolve();
+  const next = prev.then(fn, fn);
+  _decryptLocks[peerId] = next;
+  return next;
+}
+
+// ── Per-message decryption in-flight guard ────────────────────────────────────
+// Prevents the same message from being decrypted concurrently by overlapping effects.
+const _decryptInFlight = new Set(); // Set<msgId>
 
 // ── Legacy NaCl compat (kept for reading old messages) ───────────────────────
 const _b64enc = (buf) => naclUtil.encodeBase64(buf);
@@ -779,6 +773,35 @@ function _selfSign(ikSecretKey, spkPublicKey) {
  */
 async function initE2EE(token) {
   try {
+    // ── One-time session wipe (v2) ──────────────────────────────────────────
+    // Sessions were corrupted during the broken-WS period (builds 40-45).
+    // Clear all peer sessions to force fresh X3DH exchanges. Identity keys,
+    // SPK, and OPK are preserved — only peer-to-peer ratchet state is wiped.
+    const RESET_FLAG = 'sig_session_reset_v2';
+    const didReset = await SecureStore.getItemAsync(RESET_FLAG).catch(() => null);
+    if (!didReset) {
+      // Wipe all in-memory sessions
+      Object.keys(_sigSessions).forEach(k => delete _sigSessions[k]);
+      Object.keys(_decryptFails).forEach(k => delete _decryptFails[k]);
+      // Wipe persisted sessions — enumerate known contacts from server
+      try {
+        const contacts = await api('/api/contacts', 'GET', null, token).catch(() => []);
+        const users = Array.isArray(contacts) ? contacts : [];
+        for (const c of users) {
+          const uid = c.userId ?? c.user_id ?? c.id;
+          if (uid) await SecureStore.deleteItemAsync(sigSessStore(uid)).catch(() => {});
+        }
+        // Also wipe any sessions cached under user IDs we fetched before
+        const allUsers = await api('/api/users', 'GET', null, token).catch(() => []);
+        if (Array.isArray(allUsers)) {
+          for (const u of allUsers) {
+            if (u.id) await SecureStore.deleteItemAsync(sigSessStore(u.id)).catch(() => {});
+          }
+        }
+      } catch {}
+      await SecureStore.setItemAsync(RESET_FLAG, 'done');
+    }
+
     // ── Identity Key ────────────────────────────────────────────────────────
     const ikRaw = await SecureStore.getItemAsync(SIG_IK_STORE);
     if (ikRaw) {
@@ -819,6 +842,11 @@ async function initE2EE(token) {
         sec: _b64enc(_sigSPK.secretKey),
       }));
     }
+
+    // ═══ Local keys loaded — unblock decryption NOW (before any network calls) ═══
+    // decryptDM/decryptGroupMsg await _e2eeReady. Resolving here avoids blocking
+    // decryption on slow OPK-count / bundle-registration network requests.
+    if (_e2eeReadyResolve) { _e2eeReadyResolve(); _e2eeReadyResolve = null; }
 
     // ── One-Time Pre-Keys ───────────────────────────────────────────────────
     const otpRaw   = await SecureStore.getItemAsync(SIG_OPK_STORE);
@@ -940,24 +968,120 @@ async function _saveSession(peerId) {
  * Returns an envelope JSON string or null on failure.
  */
 async function encryptDM(plaintext, _recipientPkB64_unused, peerId, token) {
-  const sess = await _getOrBuildSession(peerId, token);
-  if (!sess) return null;
+  // Wait for initE2EE to finish loading keys before attempting encryption
+  await _e2eeReady;
+  // Serialize with decryptions for the same peer — both encrypt and decrypt
+  // mutate the Double Ratchet session and must not overlap.
+  return _withDecryptLock(peerId, async () => {
+    let sess = await _getOrBuildSession(peerId, token);
+    // Retry once after 2s if session build failed (peer may not have registered bundle yet)
+    if (!sess) {
+      await new Promise(r => setTimeout(r, 2000));
+      sess = await _getOrBuildSession(peerId, token);
+    }
+    if (!sess) return null;
+    try {
+      const { header, ciphertext } = SIG.drEncrypt(sess, plaintext);
+      await _saveSession(peerId);
+      // Always include x3dh in the header so the receiver can rebuild
+      // a session from ANY message (not just the first one).
+      const envelope = {
+        sig:  true,
+        v:    1,
+        hdr:  JSON.stringify({ ...header, x3dh: sess._x3dh || undefined }),
+        ct:   ciphertext,
+      };
+      // Reset failure counter on successful encrypt
+      delete _decryptFails[peerId];
+      return JSON.stringify(envelope);
+    } catch (e) {
+      console.warn('[Signal] encryptDM error:', e?.message);
+      return null;
+    }
+  });
+}
+
+/**
+ * Build a responder session from x3dh metadata in the header.
+ * Returns true on success, false on failure.
+ */
+async function _buildSessionFromX3DH(senderId, x3) {
   try {
-    const { header, ciphertext } = SIG.drEncrypt(sess, plaintext);
-    await _saveSession(peerId);
-    const envelope = {
-      sig:  true,
-      v:    1,
-      hdr:  JSON.stringify({ ...header, x3dh: sess._x3dh }),
-      ct:   ciphertext,
-    };
-    // Clear x3dh after first message — subsequent messages don't need it
-    delete sess._x3dh;
-    return JSON.stringify(envelope);
-  } catch (e) {
-    console.warn('[Signal] encryptDM error:', e?.message);
-    return null;
+    const spkRaw = await SecureStore.getItemAsync(SIG_SPK_STORE);
+    const spkStore = spkRaw ? JSON.parse(spkRaw) : null;
+    if (!spkStore || spkStore.id !== x3.SPK_B_id) return false;
+
+    const IK_B  = _sigIdentityKey;
+    if (!IK_B) return false;
+    const SPK_B = { publicKey: _b64dec(spkStore.pub), secretKey: _b64dec(spkStore.sec) };
+
+    let OPK_B_sec = null;
+    if (x3.OPK_B_id != null) {
+      const otpRaw   = await SecureStore.getItemAsync(SIG_OPK_STORE);
+      const otpStore = otpRaw ? JSON.parse(otpRaw) : null;
+      const opk      = otpStore?.keys?.find(k => k.id === x3.OPK_B_id);
+      if (opk) {
+        OPK_B_sec = _b64dec(opk.sec);
+        // Consume the one-time prekey — remove from local pool to prevent reuse.
+        // OPKs are single-use by design (forward secrecy guarantee).
+        otpStore.keys = otpStore.keys.filter(k => k.id !== x3.OPK_B_id);
+        try {
+          await SecureStore.setItemAsync(SIG_OPK_STORE, JSON.stringify(otpStore));
+        } catch (e) {
+          console.warn('[Signal] Failed to persist OPK removal — forward secrecy risk:', e?.message);
+        }
+      }
+    }
+
+    const IK_A_pub = _b64dec(x3.IK_A_pub);
+    const EK_A_pub = _b64dec(x3.EK_A_pub);
+
+    const SK = SIG.x3dhResponder(
+      IK_B.secretKey, SPK_B.secretKey, OPK_B_sec,
+      IK_A_pub, EK_A_pub
+    );
+
+    _sigSessions[senderId] = SIG.drInitReceiver(SK, SPK_B);
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * Attempt Signal decrypt with existing or SecureStore-loaded session.
+ * On failure, restores session from backup. Returns plaintext or null.
+ */
+async function _trySignalDecrypt(senderId, hdr, ct) {
+  // Load session from SecureStore if not in memory
+  if (!_sigSessions[senderId]) {
+    try {
+      const raw = await SecureStore.getItemAsync(sigSessStore(senderId));
+      if (raw) _sigSessions[senderId] = SIG.deserialiseSession(raw);
+    } catch {}
   }
+
+  // If still no session and x3dh present, build as responder
+  if (!_sigSessions[senderId] && hdr.x3dh) {
+    await _buildSessionFromX3DH(senderId, hdr.x3dh);
+  }
+
+  if (!_sigSessions[senderId]) return null;
+  return _trySignalDecryptRaw(senderId, hdr, ct);
+}
+
+/**
+ * Low-level decrypt: assumes _sigSessions[senderId] exists.
+ * Backs up session before mutating, restores on failure. Saves on success.
+ */
+async function _trySignalDecryptRaw(senderId, hdr, ct) {
+  if (!_sigSessions[senderId]) return null;
+  const sessBackup = SIG.serialiseSession(_sigSessions[senderId]);
+  const plain = SIG.drDecrypt(_sigSessions[senderId], hdr, ct);
+  if (plain !== null) {
+    await _saveSession(senderId);
+  } else {
+    _sigSessions[senderId] = SIG.deserialiseSession(sessBackup);
+  }
+  return plain;
 }
 
 /**
@@ -969,78 +1093,61 @@ async function decryptDM(envelopeStr, senderId, token) {
   if (!envelopeStr) return null;
   // Wait for initE2EE to finish loading keys before attempting decryption
   await _e2eeReady;
-  try {
-    // Unescape HTML entities — backend may have corrupted the JSON envelope
-    let rawStr = envelopeStr;
-    if (typeof rawStr === 'string' && rawStr.includes('&quot;')) rawStr = _htmlUnescape(rawStr);
-    const env = JSON.parse(rawStr);
+  // Serialize all decryptions for the same peer — Double Ratchet is stateful
+  // and concurrent mutations corrupt the session irreversibly.
+  return _withDecryptLock(senderId, async () => {
+    try {
+      // Unescape HTML entities — backend may have corrupted the JSON envelope
+      let rawStr = envelopeStr;
+      if (typeof rawStr === 'string' && rawStr.includes('&quot;')) rawStr = _htmlUnescape(rawStr);
+      const env = JSON.parse(rawStr);
 
-    // ── Signal Protocol ──────────────────────────────────────────────────────
-    if (env?.sig === true && env?.v === 1) {
-      const hdr = JSON.parse(env.hdr);
+      // ── Signal Protocol ──────────────────────────────────────────────────────
+      if (env?.sig === true && env?.v === 1) {
+        const hdr = JSON.parse(env.hdr);
 
-      // Load session from SecureStore if not in memory (e.g. after app restart)
-      if (!_sigSessions[senderId]) {
-        try {
-          const raw = await SecureStore.getItemAsync(sigSessStore(senderId));
-          if (raw) _sigSessions[senderId] = SIG.deserialiseSession(raw);
-        } catch {}
-      }
-
-      // If still no session and x3dh metadata is present, build session as responder
-      if (!_sigSessions[senderId] && hdr.x3dh) {
-        const x3 = hdr.x3dh;
-        // Load our SPK secret key
-        const spkRaw = await SecureStore.getItemAsync(SIG_SPK_STORE);
-        const spkStore = spkRaw ? JSON.parse(spkRaw) : null;
-        if (!spkStore || spkStore.id !== x3.SPK_B_id) return null;  // SPK rotated
-
-        const IK_B  = _sigIdentityKey;
-        const SPK_B = { publicKey: _b64dec(spkStore.pub), secretKey: _b64dec(spkStore.sec) };
-
-        // Load our OPK secret key (if used)
-        let OPK_B_sec = null;
-        if (x3.OPK_B_id != null) {
-          const otpRaw  = await SecureStore.getItemAsync(SIG_OPK_STORE);
-          const otpStore = otpRaw ? JSON.parse(otpRaw) : null;
-          const opk     = otpStore?.keys?.find(k => k.id === x3.OPK_B_id);
-          if (opk) OPK_B_sec = _b64dec(opk.sec);
+        // Try to decrypt with existing or new session
+        const plain = await _trySignalDecrypt(senderId, hdr, env.ct);
+        if (plain !== null) {
+          delete _decryptFails[senderId];
+          return plain;
         }
 
-        const IK_A_pub = _b64dec(x3.IK_A_pub);
-        const EK_A_pub = _b64dec(x3.EK_A_pub);
+        // Decryption failed — if x3dh present, try rebuilding session from scratch
+        if (hdr.x3dh) {
+          // Delete corrupted session
+          delete _sigSessions[senderId];
+          try { await SecureStore.deleteItemAsync(sigSessStore(senderId)); } catch {}
+          // Rebuild from x3dh and retry
+          const rebuilt = await _buildSessionFromX3DH(senderId, hdr.x3dh);
+          if (rebuilt) {
+            const retryPlain = await _trySignalDecryptRaw(senderId, hdr, env.ct);
+            if (retryPlain !== null) {
+              delete _decryptFails[senderId];
+              return retryPlain;
+            }
+          }
+        }
 
-        const SK = SIG.x3dhResponder(
-          IK_B.secretKey, SPK_B.secretKey, OPK_B_sec,
-          IK_A_pub, EK_A_pub
-        );
-
-        const sess = SIG.drInitReceiver(SK, SPK_B);
-        _sigSessions[senderId] = sess;
+        // Track consecutive failures — never auto-delete session (exploitable by
+        // injecting malformed messages). Instead log for diagnostics. The user can
+        // manually trigger a session reset from the chat UI if needed.
+        _decryptFails[senderId] = (_decryptFails[senderId] || 0) + 1;
+        if (_decryptFails[senderId] >= 5) {
+          console.warn(`[Signal] ${_decryptFails[senderId]} consecutive decrypt failures for peer ${senderId} — session may be corrupted. User should re-establish.`);
+        }
+        return null;
       }
 
-      if (!_sigSessions[senderId]) return null;
-
-      // Backup session before decrypt — drDecrypt mutates state even on failure
-      const sessBackup = SIG.serialiseSession(_sigSessions[senderId]);
-      const plain = SIG.drDecrypt(_sigSessions[senderId], hdr, env.ct);
-      if (plain !== null) {
-        await _saveSession(senderId);
-      } else {
-        // Restore session — failed decryption corrupted the ratchet state
-        _sigSessions[senderId] = SIG.deserialiseSession(sessBackup);
+      // ── Legacy NaCl DM ───────────────────────────────────────────────────────
+      if (env?.enc === 1 && _sigIdentityKey) {
+        return _legacyDecryptDM(envelopeStr, _sigIdentityKey);
       }
-      return plain;
+    } catch (e) {
+      console.warn('[Signal] decryptDM error:', e?.message);
     }
-
-    // ── Legacy NaCl DM ───────────────────────────────────────────────────────
-    if (env?.enc === 1 && _sigIdentityKey) {
-      return _legacyDecryptDM(envelopeStr, _sigIdentityKey);
-    }
-  } catch (e) {
-    console.warn('[Signal] decryptDM error:', e?.message);
-  }
-  return null;
+    return null;
+  });
 }
 
 /**
@@ -1086,10 +1193,13 @@ async function _getMySenderKeyState(groupId, myId) {
       return state;
     }
   } catch {}
-  // Generate fresh sender key
+  // Generate fresh sender key and persist the initial seed for distribution
   const state = SIG.skGenerate();
   _sigSenderKeys[cacheKey] = state;
-  await SecureStore.setItemAsync(sigSKStore(groupId, myId), SIG.serialiseSKState(state));
+  const serialised = SIG.serialiseSKState(state);
+  await SecureStore.setItemAsync(sigSKStore(groupId, myId), serialised);
+  // Store the seed (iteration 0) separately — distribution always uses this
+  await SecureStore.setItemAsync(`sig_sk_seed_${groupId}_${myId}`, serialised);
   return state;
 }
 
@@ -1097,46 +1207,80 @@ async function _getMySenderKeyState(groupId, myId) {
  * Distribute our sender key to all group members (encrypted via their DM sessions).
  * Called when joining or creating a group.
  */
-async function generateAndDistributeGroupKey(groupId, memberPubKeys, token, myId) {
-  const myState    = await _getMySenderKeyState(groupId, myId);
-  const skPayload  = SIG.serialiseSKState(myState);   // JSON string
+async function generateAndDistributeGroupKey(groupId, memberIds, token, myId) {
+  await _e2eeReady;
+  if (!_sigIdentityKey) return;
+  // Ensure our sender key state exists (creates + seeds if needed)
+  await _getMySenderKeyState(groupId, myId);
+  // Always distribute the INITIAL seed (iteration 0) so recipients can decrypt
+  // ALL messages from the start. Never distribute the advanced state.
+  let seedStr = null;
+  try { seedStr = await SecureStore.getItemAsync(`sig_sk_seed_${groupId}_${myId}`); } catch {}
+  if (!seedStr) {
+    // Legacy: no seed stored (key was created before this change).
+    // Use current state as seed and persist for future distributions.
+    const current = await _getMySenderKeyState(groupId, myId);
+    seedStr = SIG.serialiseSKState(current);
+    await SecureStore.setItemAsync(`sig_sk_seed_${groupId}_${myId}`, seedStr);
+  }
+  const skPayload  = naclUtil.decodeUTF8(seedStr);
+  const myIkPub    = _b64enc(_sigIdentityKey.publicKey);
 
   const keys = [];
-  for (const { userId } of memberPubKeys) {
-    if (userId === myId) continue;
+  for (const uid of memberIds) {
+    const userId = typeof uid === 'object' ? (uid.userId ?? uid.user_id ?? uid.id) : uid;
+    if (String(userId) === String(myId)) continue;
     try {
-      // Encrypt the sender key state for this member using their Signal DM session
-      const sess = await _getOrBuildSession(userId, token);
-      if (!sess) continue;
-      const { header, ciphertext } = SIG.drEncrypt(sess, skPayload);
-      await _saveSession(userId);
+      // Fetch recipient's identity public key from their pre-key bundle
+      const bundle = await api(`/api/signal/prekeys/${userId}`, 'GET', null, token);
+      if (!bundle?.identity_key) continue;
+      const recipientIkPub = _b64dec(bundle.identity_key);
+      // Encrypt sender key with NaCl box (our IK secret + their IK public)
+      const nonce = nacl.randomBytes(nacl.box.nonceLength);
+      const ct = nacl.box(skPayload, nonce, recipientIkPub, _sigIdentityKey.secretKey);
+      if (!ct) continue;
       keys.push({
         recipient_id: userId,
-        encrypted_sk: JSON.stringify({ hdr: JSON.stringify(header), ct: ciphertext }),
+        encrypted_sk: JSON.stringify({
+          ik_box: true,
+          ik_sender: myIkPub,
+          nonce: _b64enc(nonce),
+          ct: _b64enc(ct),
+        }),
       });
-    } catch {}
+    } catch (e) {
+      console.warn(`[Signal] distributeSK: error encrypting for member ${userId}:`, e?.message);
+    }
   }
 
   if (keys.length > 0) {
-    api('/api/signal/sender-keys', 'POST', { group_id: groupId, keys }, token).catch(() => {});
+    try {
+      await api('/api/signal/sender-keys', 'POST', { group_id: groupId, keys }, token);
+    } catch (e) {
+      console.warn('[Signal] distributeSK: upload error:', e?.message);
+    }
   }
 }
 
 /**
- * Load all sender keys for a group (from server → decrypt via DM sessions).
+ * Load all sender keys for a group.
+ * Supports both NaCl box (ik_box:true) and legacy DM-encrypted envelopes.
  * Caches in memory and SecureStore.
  */
 async function loadGroupSenderKeys(groupId, token, myId) {
-  // 1. Try loading sender keys from local SecureStore first (instant, no network)
+  await _e2eeReady;
   try {
     const serverKeys = await api(`/api/signal/sender-keys/${groupId}`, 'GET', null, token);
-    for (const { sender_id, encrypted_sk } of (serverKeys || [])) {
-      const cacheKey = `${groupId}_${sender_id}`;
+    if (!serverKeys || !Array.isArray(serverKeys) || serverKeys.length === 0) return;
+
+    for (const { sender_id, encrypted_sk } of serverKeys) {
+      const sid = String(sender_id);
+      const cacheKey = `${groupId}_${sid}`;
       if (_sigSenderKeys[cacheKey]) continue;
 
       // Try SecureStore first (already decrypted and cached from prior session)
       try {
-        const stored = await SecureStore.getItemAsync(sigSKStore(groupId, sender_id));
+        const stored = await SecureStore.getItemAsync(sigSKStore(groupId, sid));
         if (stored) {
           _sigSenderKeys[cacheKey] = SIG.deserialiseSKState(stored);
           continue;
@@ -1145,19 +1289,41 @@ async function loadGroupSenderKeys(groupId, token, myId) {
 
       // Decrypt from server envelope
       try {
-        const env  = JSON.parse(encrypted_sk);
-        const plain = await decryptDM(
-          JSON.stringify({ sig: true, v: 1, hdr: env.hdr, ct: env.ct }),
-          sender_id, token
-        );
-        if (plain) {
-          const state = SIG.deserialiseSKState(plain);
-          _sigSenderKeys[cacheKey] = state;
-          await SecureStore.setItemAsync(sigSKStore(groupId, sender_id), SIG.serialiseSKState(state));
+        const env = JSON.parse(encrypted_sk);
+
+        let plainStr = null;
+
+        // ── New format: NaCl box with identity keys (session-independent) ──
+        if (env.ik_box === true && _sigIdentityKey) {
+          const senderIkPub = _b64dec(env.ik_sender);
+          const nonce       = _b64dec(env.nonce);
+          const ct          = _b64dec(env.ct);
+          const plainBytes  = nacl.box.open(ct, nonce, senderIkPub, _sigIdentityKey.secretKey);
+          if (plainBytes) plainStr = naclUtil.encodeUTF8(plainBytes);
         }
-      } catch {}
+
+        // ── Legacy format: DM-encrypted envelope (hdr + ct) ──
+        if (!plainStr && env.hdr && env.ct) {
+          plainStr = await decryptDM(
+            JSON.stringify({ sig: true, v: 1, hdr: env.hdr, ct: env.ct }),
+            sid, token
+          );
+        }
+
+        if (plainStr) {
+          const state = SIG.deserialiseSKState(plainStr);
+          _sigSenderKeys[cacheKey] = state;
+          await SecureStore.setItemAsync(sigSKStore(groupId, sid), SIG.serialiseSKState(state));
+        } else {
+          console.warn(`[Signal] loadGroupSenderKeys: failed to decrypt sender key from user ${sid} for group ${groupId}`);
+        }
+      } catch (e) {
+        console.warn(`[Signal] loadGroupSenderKeys: error decrypting sender key from user ${sid}:`, e?.message);
+      }
     }
-  } catch {}
+  } catch (e) {
+    console.warn('[Signal] loadGroupSenderKeys: fetch error:', e?.message);
+  }
 }
 
 /**
@@ -1165,11 +1331,28 @@ async function loadGroupSenderKeys(groupId, token, myId) {
  * Returns JSON envelope string or null.
  */
 async function encryptGroupMsg(plaintext, _unusedGroupKey, groupId, myId) {
-  const state = await _getMySenderKeyState(groupId, myId);
-  const { newState, envelope } = SIG.skEncrypt(state, plaintext, myId);
-  _sigSenderKeys[`${groupId}_${myId}`] = newState;
-  await SecureStore.setItemAsync(sigSKStore(groupId, myId), SIG.serialiseSKState(newState));
-  return JSON.stringify(envelope);
+  await _e2eeReady;
+  // Serialize group encryptions to prevent concurrent sends from racing on sender key state.
+  // Two overlapping encryptions would both read the same state, produce duplicate iteration
+  // numbers, and the second message would be undecryptable by recipients.
+  return _withDecryptLock(`grp_${groupId}_${myId}`, async () => {
+    const state = await _getMySenderKeyState(groupId, myId);
+    const result = SIG.skEncrypt(state, plaintext, myId);
+    // Handle iteration overflow — regenerate sender key and redistribute
+    if (!result) {
+      console.warn('[Signal] Sender key iteration overflow — regenerating for group', groupId);
+      await generateAndDistributeGroupKey(groupId, _SESSION_TOKEN || null);
+      const freshState = await _getMySenderKeyState(groupId, myId);
+      const retry = SIG.skEncrypt(freshState, plaintext, myId);
+      if (!retry) return null;  // Should never happen with fresh key
+      _sigSenderKeys[`${groupId}_${myId}`] = retry.newState;
+      await SecureStore.setItemAsync(sigSKStore(groupId, myId), SIG.serialiseSKState(retry.newState));
+      return JSON.stringify(retry.envelope);
+    }
+    _sigSenderKeys[`${groupId}_${myId}`] = result.newState;
+    await SecureStore.setItemAsync(sigSKStore(groupId, myId), SIG.serialiseSKState(result.newState));
+    return JSON.stringify(result.envelope);
+  });
 }
 
 /**
@@ -1180,45 +1363,93 @@ async function encryptGroupMsg(plaintext, _unusedGroupKey, groupId, myId) {
 async function decryptGroupMsg(envelopeStr, _unusedGroupKey, senderId, groupId) {
   if (!envelopeStr) return null;
   await _e2eeReady;
-  try {
-    // Unescape HTML entities — backend may have corrupted the JSON envelope
-    let rawStr = envelopeStr;
-    if (typeof rawStr === 'string' && rawStr.includes('&quot;')) rawStr = _htmlUnescape(rawStr);
-    const env = JSON.parse(rawStr);
+  // Serialize decryptions per sender per group — sender key chain is stateful
+  // and concurrent mutations corrupt it (one decrypt consumes the key another needs).
+  return _withDecryptLock(`grp_${groupId}_${senderId}`, async () => {
+    try {
+      // Unescape HTML entities — backend may have corrupted the JSON envelope
+      let rawStr = envelopeStr;
+      if (typeof rawStr === 'string' && rawStr.includes('&quot;')) rawStr = _htmlUnescape(rawStr);
+      const env = JSON.parse(rawStr);
 
-    // ── Signal Sender Key ────────────────────────────────────────────────────
-    if (env?.gsig === true) {
-      const cacheKey = `${groupId}_${senderId}`;
-      let state = _sigSenderKeys[cacheKey];
-      // Load from SecureStore if not in memory (e.g. after app restart)
-      if (!state) {
+      // ── Signal Sender Key ────────────────────────────────────────────────────
+      if (env?.gsig === true) {
+        const sid = String(senderId);
+        const cacheKey = `${groupId}_${sid}`;
+        let state = _sigSenderKeys[cacheKey];
+        // Load from SecureStore if not in memory (e.g. after app restart)
+        if (!state) {
+          try {
+            const raw = await SecureStore.getItemAsync(sigSKStore(groupId, sid));
+            if (raw) {
+              state = SIG.deserialiseSKState(raw);
+              _sigSenderKeys[cacheKey] = state;
+            }
+          } catch {}
+        }
+        // Last resort: re-fetch sender keys from server (may not have been loaded yet)
+        if (!state) {
+          try {
+            await loadGroupSenderKeys(groupId, _SESSION_TOKEN || null, sid);
+            state = _sigSenderKeys[cacheKey];
+          } catch {}
+        }
+        if (!state) {
+          console.warn(`[Signal] decryptGroupMsg: no sender key for user ${sid} in group ${groupId}`);
+          return null;
+        }
+        // Back up sender key state before mutating — restore on failure
+        // (mirrors DM _trySignalDecryptRaw pattern for safety)
+        const stateBackup = SIG.serialiseSKState(state);
+        const result = SIG.skDecrypt(state, env);
+        if (result) {
+          _sigSenderKeys[cacheKey] = result.newSenderKeyState;
+          await SecureStore.setItemAsync(
+            sigSKStore(groupId, sid),
+            SIG.serialiseSKState(result.newSenderKeyState)
+          );
+          return result.plaintext;
+        }
+
+        // Restore state from backup before retry — skDecrypt may have partially advanced the chain
+        _sigSenderKeys[cacheKey] = SIG.deserialiseSKState(stateBackup);
+
+        // skDecrypt failed — key may be stale (peer regenerated after reinstall).
+        // Clear local cache and re-fetch fresh key from server, then retry once.
+        console.warn(`[Signal] decryptGroupMsg: skDecrypt failed for user ${sid} (iter=${state.iteration}), retrying with fresh key`);
+        delete _sigSenderKeys[cacheKey];
+        try { await SecureStore.deleteItemAsync(sigSKStore(groupId, sid)); } catch {}
         try {
-          const raw = await SecureStore.getItemAsync(sigSKStore(groupId, senderId));
-          if (raw) {
-            state = SIG.deserialiseSKState(raw);
-            _sigSenderKeys[cacheKey] = state;
+          await loadGroupSenderKeys(groupId, _SESSION_TOKEN || null, sid);
+          const freshState = _sigSenderKeys[cacheKey];
+          if (freshState) {
+            const freshBackup = SIG.serialiseSKState(freshState);
+            const retry = SIG.skDecrypt(freshState, env);
+            if (retry) {
+              _sigSenderKeys[cacheKey] = retry.newSenderKeyState;
+              await SecureStore.setItemAsync(
+                sigSKStore(groupId, sid),
+                SIG.serialiseSKState(retry.newSenderKeyState)
+              );
+              return retry.plaintext;
+            }
+            // Restore fresh state on retry failure too
+            _sigSenderKeys[cacheKey] = SIG.deserialiseSKState(freshBackup);
           }
         } catch {}
+        console.warn(`[Signal] decryptGroupMsg: retry also failed for user ${sid} in group ${groupId}`);
+        return null;
       }
-      if (!state) return null;
-      const result = SIG.skDecrypt(state, env);
-      if (!result) return null;
-      _sigSenderKeys[cacheKey] = result.newSenderKeyState;
-      await SecureStore.setItemAsync(
-        sigSKStore(groupId, senderId),
-        SIG.serialiseSKState(result.newSenderKeyState)
-      );
-      return result.plaintext;
-    }
 
-    // ── Legacy NaCl group ────────────────────────────────────────────────────
-    if (env?.enc === 2 && _unusedGroupKey) {
-      return _legacyDecryptGroup(envelopeStr, _unusedGroupKey);
+      // ── Legacy NaCl group ────────────────────────────────────────────────────
+      if (env?.enc === 2 && _unusedGroupKey) {
+        return _legacyDecryptGroup(envelopeStr, _unusedGroupKey);
+      }
+    } catch (e) {
+      console.warn('[Signal] decryptGroupMsg error:', e?.message);
     }
-  } catch (e) {
-    console.warn('[Signal] decryptGroupMsg error:', e?.message);
-  }
-  return null;
+    return null;
+  });
 }
 
 /** Return true if content looks like any encrypted group envelope. */
@@ -1318,6 +1549,8 @@ function _normContacts(data) {
     userId:      c.userId      ?? c.user_id,
     username:    c.username,
     displayName: c.displayName ?? c.display_name,
+    avatar_url:  c.avatar_url,
+    last_seen:   c.last_seen,
     online:      c.online,
     since:       c.since,
   }));
@@ -1730,18 +1963,9 @@ function GroupMembersModal({ token, group, currentUser, visible, onClose }) {
 
   const addMember = (userId) => act(`add_${userId}`, async () => {
     await api(`/api/groups/${group.id}/members`, 'POST', { user_id: userId }, token);
-    // Distribute group key to the new member if we have it cached
-    const cachedKey = _groupKeyCache[group.id];
-    if (cachedKey && e2eeKey()) {
-      const memberPkB64 = await fetchPubKey(userId, token);
-      if (memberPkB64) {
-        const encKey = encryptKeyForMember(cachedKey, memberPkB64);
-        if (encKey) {
-          api(`/api/groups/${group.id}/key`, 'POST', {
-            keys: [{ user_id: userId, encrypted_key: encKey, distributor_pk: _b64enc(e2eeKey().publicKey) }],
-          }, token).catch(() => {});
-        }
-      }
+    // Distribute our Signal sender key to the new member
+    if (e2eeKey()) {
+      generateAndDistributeGroupKey(group.id, [userId], token, String(currentUser.id)).catch(() => {});
     }
   });
 
@@ -2088,6 +2312,7 @@ function AuthScreen({ onAuth, inviteToken = null, inviterName = null }) {
 
   // flow: 'login' | 'register_name' | 'register_pin' | 'register_confirm'
   //       'forgot_name' | 'forgot_pin' | 'forgot_confirm'
+  //       'link_name' | 'link_pin'
   const [flow,         setFlow]         = useState(inviteToken ? 'register_name' : 'login');
   const [username,     setUsername]     = useState('');
   const [pin,          setPin]          = useState('');
@@ -2193,6 +2418,7 @@ function AuthScreen({ onAuth, inviteToken = null, inviterName = null }) {
     try {
       const data = await api('/auth/register', 'POST', {
         username: username.trim(), device_id: deviceId, pin,
+        ...(inviteToken ? { invite_token: inviteToken } : {}),
       });
       await saveToken(data.token); await saveUser(data.user);
       if (data.refresh) await saveBioRefresh(data.refresh);
@@ -2217,6 +2443,22 @@ function AuthScreen({ onAuth, inviteToken = null, inviterName = null }) {
       setErr(e.message); setFlow('forgot_pin'); setPin(''); setConfirmPin('');
     } finally { setLoading(false); }
   }, [deviceId, username, pin, loading, onAuth]);
+
+  // ── Link device (reinstall recovery) ───────────────────────────────────
+  const handleLinkDevice = useCallback(async () => {
+    if (pin.length < 6 || loading) return;
+    setLoading(true); setErr('');
+    try {
+      const data = await api('/auth/link-device', 'POST', {
+        username: username.trim(), pin, device_id: deviceId,
+      });
+      await saveToken(data.token); await saveUser(data.user);
+      if (data.refresh) await saveBioRefresh(data.refresh);
+      onAuth(data.token, data.user);
+    } catch (e) {
+      setErr(e.message); setPin('');
+    } finally { setLoading(false); }
+  }, [username, pin, deviceId, loading, onAuth]);
 
   // ── Unified primary action handler ───────────────────────────────────────
   const handlePrimaryAction = useCallback(() => {
@@ -2249,20 +2491,29 @@ function AuthScreen({ onAuth, inviteToken = null, inviterName = null }) {
         if (confirmPin !== pin) { setErr('PINs do not match. Try again.'); setConfirmPin(''); return; }
         handlePinReset();
         break;
+      case 'link_name':
+        if (!username.trim() || username.trim().length < 3) { setErr('Enter your username.'); return; }
+        setPin(''); setFlow('link_pin');
+        break;
+      case 'link_pin':
+        handleLinkDevice();
+        break;
     }
-  }, [flow, username, pin, confirmPin, handleLogin, handleRegister, handlePinReset]);
+  }, [flow, username, pin, confirmPin, handleLogin, handleRegister, handlePinReset, handleLinkDevice]);
 
   const activePin = (flow === 'register_confirm' || flow === 'forgot_confirm') ? confirmPin : pin;
-  const showKeypad = flow !== 'register_name' && flow !== 'forgot_name';
+  const showKeypad = flow !== 'register_name' && flow !== 'forgot_name' && flow !== 'link_name';
   const TITLES = {
     login: 'ENTER PIN', register_name: 'CREATE ACCOUNT',
     register_pin: 'SET YOUR PIN', register_confirm: 'CONFIRM PIN',
     forgot_name: 'FORGOT PIN', forgot_pin: 'NEW PIN', forgot_confirm: 'CONFIRM NEW PIN',
+    link_name: 'LINK DEVICE', link_pin: 'ENTER YOUR PIN',
   };
   const PRIMARY_LABELS = {
     login: 'UNLOCK', register_name: 'NEXT', register_pin: 'NEXT',
     register_confirm: 'CREATE ACCOUNT', forgot_name: 'NEXT',
     forgot_pin: 'NEXT', forgot_confirm: 'RESET PIN',
+    link_name: 'NEXT', link_pin: 'LINK DEVICE',
   };
   const pinReady = activePin.length === 6;
 
@@ -2396,11 +2647,14 @@ function AuthScreen({ onAuth, inviteToken = null, inviterName = null }) {
           </TouchableOpacity>
         )}
 
-        {/* Register / forgot PIN links — login flow only */}
+        {/* Register / forgot PIN / link device links — login flow only */}
         {flow === 'login' && (
           <View style={{ alignItems: 'center', marginTop: 20, gap: 14 }}>
             <TouchableOpacity onPress={() => { setFlow('register_name'); setPin(''); setErr(''); setUsername(''); }}>
               <Text style={{ fontFamily: mono, fontSize: 11, color: C.dim, letterSpacing: 1 }}>NEW DEVICE? REGISTER</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setFlow('link_name'); setPin(''); setErr(''); setUsername(''); }}>
+              <Text style={{ fontFamily: mono, fontSize: 11, color: C.amber, letterSpacing: 1 }}>REINSTALLED? LINK DEVICE</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { setFlow('forgot_name'); setPin(''); setErr(''); setUsername(''); }}>
               <Text style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 1 }}>FORGOT PIN?</Text>
@@ -3018,8 +3272,8 @@ function ChatsTab({ token, currentUser, onOpenDM, unread = {} }) {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setErr('');
     try {
-      const data = await api('/api/users', 'GET', null, token);
-      setUsers(data.filter((u) => !u.isMe));
+      const data = await api('/api/contacts', 'GET', null, token);
+      setUsers(_normContacts(data).map(c => ({ ...c, id: c.userId })));
     } catch (e) { setErr(e.message); }
     finally { setLoading(false); setRefreshing(false); }
   }, [token, currentUser.id]);
@@ -3088,7 +3342,7 @@ function ChatsTab({ token, currentUser, onOpenDM, unread = {} }) {
             >
               {/* Unread badge */}
               {cnt > 0 && (
-                <View style={{
+                <View accessibilityLabel="unread-badge" style={{
                   position: 'absolute', top: -6, right: -6,
                   backgroundColor: '#ee0011',
                   width: 20, height: 20, borderRadius: 10,
@@ -3186,6 +3440,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   const [decryptedMsgs,  setDecryptedMsgs]  = useState({});
   const decryptedMsgsRef = useRef({});   // always-current mirror — survives effect cancellation
   const [decryptedMedia, setDecryptedMedia] = useState({});
+  const ownPlainRef = useRef({});  // encrypted payload → plaintext for own sent messages
   const [peerTyping,     setPeerTyping]     = useState(false);
   const typingTimeoutRef = useRef(null);
   const lastTypingSentRef = useRef(0);
@@ -3259,14 +3514,18 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           // Remove temp (optimistic) messages from self when real echo arrives
           const base = fromMe ? prev.filter(m => !m._temp) : prev;
           if (base.some(m => m.id === incomingMsg.id)) return base;
-          // Pre-populate decrypted cache — own echoed messages have plaintext in temp
+          // Pre-populate decrypted cache for own echoed messages.
+          // Uses ownPlainRef (keyed by encrypted payload) — reliable even with rapid sends.
+          // Falls back to temp message content for backward compat.
           if (fromMe && isEncryptedDM(incomingMsg.content)) {
-            const tempMsg = prev.find(m => m._temp);
-            if (tempMsg) {
-              decryptedMsgsRef.current[incomingMsg.id] = tempMsg.content;
-              setDecryptedMsgs(p => ({ ...p, [incomingMsg.id]: tempMsg.content }));
+            const plain = ownPlainRef.current[incomingMsg.content]
+              ?? (prev.find(m => m._temp))?.content;
+            if (plain) {
+              delete ownPlainRef.current[incomingMsg.content];
+              decryptedMsgsRef.current[incomingMsg.id] = plain;
+              setDecryptedMsgs(p => ({ ...p, [incomingMsg.id]: plain }));
               // Persist plaintext immediately — sender can never re-decrypt own messages
-              DB.persistMessage(`dm_${peerId}`, incomingMsg.id, meId, tempMsg.content, incomingMsg.created_at).catch(() => {});
+              DB.persistMessage(`dm_${peerId}`, incomingMsg.id, meId, plain, incomingMsg.created_at, currentUser.username, currentUser.display_name).catch(() => {});
             }
           }
           return [...base, incomingMsg];
@@ -3278,6 +3537,22 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
             setMessages(prev => prev.filter(m => m.id !== msgId));
           }, incomingMsg.disappear_after * 1000);
           disappearTimers.current.push(tid);
+        }
+        // Eagerly decrypt incoming encrypted messages from others — don't wait
+        // for the batch decrypt effect. This makes decryption near-instant for
+        // real-time messages arriving via WebSocket.
+        if (!fromMe && isEncryptedDM(incomingMsg.content)) {
+          const mid = incomingMsg.id;
+          const sid = fromId;
+          _decryptInFlight.add(mid);
+          decryptDM(incomingMsg.content, sid, token).then(plain => {
+            _decryptInFlight.delete(mid);
+            if (plain !== null) {
+              decryptedMsgsRef.current[mid] = plain;
+              setDecryptedMsgs(p => ({ ...p, [mid]: plain }));
+              DB.persistMessage(`dm_${peer.id}`, mid, sid, plain, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
+            }
+          }).catch(() => { _decryptInFlight.delete(mid); });
         }
       }
     }
@@ -3295,6 +3570,12 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => setPeerTyping(false), 3000);
     }
+
+    // ── Server error reply (rate limit, invalid, etc.) ──
+    if (incomingMsg.type === 'ws_error') {
+      setErr(incomingMsg.reason || 'Message rejected by server');
+      setTimeout(() => setErr(''), 5000);
+    }
   }, [incomingMsg, peer.id, currentUser.id]);
 
   useEffect(() => {
@@ -3302,55 +3583,75 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   }, [messages]);
 
   // Async decrypt all encrypted DMs whenever the message list changes.
-  // Also persists newly decrypted messages to the local SQLCipher DB.
-  // Uses decryptedMsgsRef (not state) for the "already decrypted?" check
-  // to survive effect cancellation when new messages arrive mid-decrypt.
+  // Each successful decryption IMMEDIATELY updates state (not batched at end)
+  // to prevent "[Decrypting…]" from persisting due to effect cancellation races.
+  // On cleanup, releases in-flight markers so the next effect can re-process.
   useEffect(() => {
     let alive = true;
+    const myInflight = new Set();
     (async () => {
-      const updates = {};
       for (const msg of messages) {
         if (isEncryptedDM(msg.content)) {
-          // Check ref (always current) — state can be stale after effect cancellation
           if (decryptedMsgsRef.current[msg.id]) {
-            updates[msg.id] = decryptedMsgsRef.current[msg.id];
+            // Already decrypted — ref is always current
+          } else if (_decryptInFlight.has(msg.id)) {
+            continue;
           } else {
+            _decryptInFlight.add(msg.id);
+            myInflight.add(msg.id);
             const sid = String(msg.from_user?.id ?? msg.from_user ?? msg.from ?? msg.from_id ?? '');
-            // Try local DB first (fastest, avoids touching session state)
             let plain = null;
             try {
               const cached = await DB.getMessage(`dm_${peer.id}`, msg.id);
               if (cached?.content && !isEncryptedDM(cached.content)) plain = cached.content;
             } catch {}
-            // Only attempt live decryption if DB had no plaintext
             if (plain === null) {
               plain = await decryptDM(msg.content, sid, token);
             }
-            const resolved = plain ?? '[Encrypted — cannot decrypt]';
-            updates[msg.id] = resolved;
-            // Update ref immediately — survives effect cancellation
-            decryptedMsgsRef.current[msg.id] = resolved;
+            _decryptInFlight.delete(msg.id);
+            myInflight.delete(msg.id);
             if (plain !== null) {
-              DB.persistMessage(`dm_${peer.id}`, msg.id, sid, plain, msg.created_at).catch(() => {});
+              decryptedMsgsRef.current[msg.id] = plain;
+              setDecryptedMsgs(prev => ({ ...prev, [msg.id]: plain }));
+              DB.persistMessage(`dm_${peer.id}`, msg.id, sid, plain, msg.created_at, msg.from_username ?? msg.fromUsername, msg.from_display ?? msg.fromDisplay).catch(() => {});
+            } else {
+              // Mark as permanently undecryptable so UI shows [Encrypted] not [Decrypting…]
+              decryptedMsgsRef.current[msg.id] = '__UNDECRYPTABLE__';
+              setDecryptedMsgs(prev => ({ ...prev, [msg.id]: '__UNDECRYPTABLE__' }));
             }
           }
         }
         // Trigger media decryption for any message whose resolved content is a media payload
-        const resolved = isEncryptedDM(msg.content) ? updates[msg.id] : msg.content;
+        const resolved = decryptedMsgsRef.current[msg.id] ?? (isEncryptedDM(msg.content) ? null : msg.content);
         if (resolved && MEDIA.isMediaPayload(resolved) && !decryptedMedia[msg.id]) {
           const mp = MEDIA.parseMediaPayload(resolved);
           if (mp) {
-            MEDIA.decryptMedia(mp.url, mp.key, mp.nonce).then(uri => {
+            MEDIA.decryptMedia(mp.url, mp.key, mp.nonce, mp.mime).then(uri => {
               if (alive) setDecryptedMedia(prev => ({ ...prev, [msg.id]: uri }));
             }).catch(() => {});
           }
         }
       }
-      if (alive && Object.keys(updates).length > 0) {
-        setDecryptedMsgs(prev => ({ ...prev, ...updates }));
+      // Reconciliation batch: sync all ref entries to state in one pass.
+      // Catches results from concurrent eager decryptions or prior cancelled effects.
+      if (alive) {
+        const batch = {};
+        let needed = false;
+        for (const msg of messages) {
+          if (isEncryptedDM(msg.content) && decryptedMsgsRef.current[msg.id]) {
+            batch[msg.id] = decryptedMsgsRef.current[msg.id];
+            needed = true;
+          }
+        }
+        if (needed) setDecryptedMsgs(prev => ({ ...prev, ...batch }));
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+      // Release in-flight markers from THIS effect instance so the next run
+      // (or a fresh mount) can process these messages instead of skipping them.
+      for (const id of myInflight) _decryptInFlight.delete(id);
+    };
   }, [messages, token, peer.id]);
 
   const sendMessage = useCallback(async (overrideContent = null) => {
@@ -3369,6 +3670,12 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           setSending(false);
           return;
         }
+      }
+      // Cache plaintext keyed by encrypted payload — sender can never re-decrypt own
+      // Double Ratchet messages.  ownPlainRef lookup is reliable even with rapid sends
+      // (unlike matching by temp message position).
+      if (payload !== content && isEncryptedDM(payload)) {
+        ownPlainRef.current[payload] = content;
       }
       // Images always go via REST (too large for the WebSocket frame limit).
       // Text goes via WebSocket for real-time delivery; falls back to REST when WS is down.
@@ -3389,7 +3696,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           decryptedMsgsRef.current[msg.id] = content;
           setDecryptedMsgs(p => ({ ...p, [msg.id]: content }));
           // Persist plaintext immediately — sender can never re-decrypt own messages
-          DB.persistMessage(`dm_${peer.id}`, msg.id, String(currentUser.id), content, msg.created_at).catch(() => {});
+          DB.persistMessage(`dm_${peer.id}`, msg.id, String(currentUser.id), content, msg.created_at, currentUser.username, currentUser.display_name).catch(() => {});
         }
         setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
       }
@@ -3403,8 +3710,8 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
       if (!a.base64) { Alert.alert('ERROR', 'Could not read image data.'); return; }
       try {
         const mimeType = a.mimeType ?? 'image/jpeg';
-        const { url, key, iv } = await MEDIA.uploadEncryptedMedia(a.base64, mimeType, token);
-        await sendMessage(MEDIA.mediaPayload(url, key, iv));
+        const { url, key, nonce } = await MEDIA.uploadEncryptedMedia(a.base64, mimeType, token);
+        await sendMessage(MEDIA.mediaPayload(url, key, nonce, mimeType));
       } catch (e) {
         Alert.alert('UPLOAD ERROR', e.message ?? 'Image upload failed.');
       }
@@ -3448,6 +3755,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   const resolveContent = (msg) => {
     const raw = isEncryptedDM(msg.content) ? decryptedMsgs[msg.id] : msg.content;
     const isEnc = isEncryptedDM(msg.content);
+    if (raw === '__UNDECRYPTABLE__') return { text: '[Encrypted]', encrypted: true, failed: true, isMedia: false };
     if (!raw && isEnc) return { text: '[Decrypting…]', encrypted: true, failed: false, isMedia: false };
     if (raw && MEDIA.isMediaPayload(raw)) return { text: '', encrypted: isEnc, failed: false, isMedia: true };
     return { text: raw ?? '[Decrypting…]', encrypted: isEnc, failed: !raw && isEnc, isMedia: false };
@@ -3699,6 +4007,7 @@ function GroupsTab({ token, onOpenGroup, unread = {} }) {
                 padding: 12,
                 alignItems: 'center',
                 position: 'relative',
+                overflow: 'visible',
               }}
               onPress={() => onOpenGroup(item)}
               onLongPress={() => {
@@ -3718,7 +4027,7 @@ function GroupsTab({ token, onOpenGroup, unread = {} }) {
             >
               {/* Unread badge */}
               {cnt > 0 && (
-                <View style={{
+                <View accessibilityLabel="unread-badge" style={{
                   position: 'absolute', top: -6, right: -6,
                   backgroundColor: '#ee0011',
                   width: 20, height: 20, borderRadius: 10,
@@ -3794,16 +4103,28 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   const decryptedMsgsRef = useRef({});   // always-current mirror — survives effect cancellation
   const [decryptedMedia, setDecryptedMedia] = useState({});
   const [senderKeysReady, setSenderKeysReady] = useState(false);
+  const senderKeysPromise = useRef(null);  // awaitable promise for sender key loading
   const ownPlainRef = useRef({});  // encrypted payload hash → plaintext for own sent messages
 
   useEffect(() => () => { disappearTimers.current.forEach(clearTimeout); }, []);
 
   // Load all Signal sender keys for this group (replaces legacy loadGroupKey)
+  // Also auto-distribute our own sender key to all group members
   useEffect(() => {
     setSenderKeysReady(false);
-    loadGroupSenderKeys(group.id, token, String(currentUser.id))
-      .then(() => setSenderKeysReady(true))
-      .catch(() => setSenderKeysReady(true));
+    const p = (async () => {
+      await loadGroupSenderKeys(group.id, token, String(currentUser.id));
+      setSenderKeysReady(true);
+      // Distribute our sender key to all group members so they can decrypt our messages
+      try {
+        const members = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
+        const memberIds = (Array.isArray(members) ? members : []).map(m => m.user_id ?? m.id).filter(Boolean);
+        if (memberIds.length > 0 && e2eeKey()) {
+          await generateAndDistributeGroupKey(group.id, memberIds, token, String(currentUser.id));
+        }
+      } catch {}
+    })().catch(() => setSenderKeysReady(true));
+    senderKeysPromise.current = p;
     // Also load legacy NaCl key for backward compat
     loadGroupKey(group.id, token).then(k => { groupKeyRef.current = k; }).catch(() => {});
   }, [group.id, token, currentUser.id]);
@@ -3818,11 +4139,13 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   const fetchHistory = useCallback(async () => {
     setLoading(true); setErr('');
     try {
-      // 1. Load from local DB immediately
+      // 1. Load from local DB immediately (show cached messages while keys load)
       const local = await DB.getLocalMessages(`group_${group.id}`);
       if (local.length > 0) { setMessages(local); setLoading(false); }
-      // 2. Delta-sync from backend
-      await SYNC.syncGroup(group.id, token, decryptGroupMsg);
+      // 2. Wait for sender keys before syncing — decryptGroupMsg needs them
+      if (senderKeysPromise.current) await senderKeysPromise.current;
+      // 3. Delta-sync from backend
+      await SYNC.syncGroup(group.id, token, decryptGroupMsg, String(currentUser.id));
       // 3. Reload DB
       const fresh = await DB.getLocalMessages(`group_${group.id}`);
       if (fresh.length > 0) {
@@ -3848,7 +4171,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     if (incomingMsg.type === 'group_message' &&
         String(incomingMsg.group?.id ?? incomingMsg.group_id) === String(group.id)) {
       setMessages((prev) => {
-        const fromMe = String(incomingMsg.from_id ?? incomingMsg.from_user?.id) === String(currentUser.id);
+        const fromMe = String(incomingMsg.from_user?.id ?? incomingMsg.from_user ?? incomingMsg.from_id ?? incomingMsg.from) === String(currentUser.id);
         // Remove any temp (optimistic) messages from self when real echo arrives
         const base = fromMe ? prev.filter(m => !m._temp) : prev;
         if (base.some(m => m.id === incomingMsg.id)) return base;
@@ -3859,7 +4182,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           decryptedMsgsRef.current[incomingMsg.id] = plain;
           setDecryptedMsgs(p => ({ ...p, [incomingMsg.id]: plain }));
           // Persist plaintext immediately — sender can never re-decrypt own messages
-          DB.persistMessage(`group_${group.id}`, incomingMsg.id, String(currentUser.id), plain, incomingMsg.created_at).catch(() => {});
+          DB.persistMessage(`group_${group.id}`, incomingMsg.id, String(currentUser.id), plain, incomingMsg.created_at, currentUser.username, currentUser.display_name).catch(() => {});
         }
         return [...base, incomingMsg];
       });
@@ -3870,65 +4193,109 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
         }, incomingMsg.disappear_after * 1000);
         disappearTimers.current.push(tid);
       }
+      // Eagerly decrypt incoming encrypted messages from others — don't wait
+      // for the batch decrypt effect. Near-instant decryption for real-time messages.
+      {
+        const fromId = String(incomingMsg.from_user?.id ?? incomingMsg.from_user ?? incomingMsg.from_id ?? incomingMsg.from);
+        if (fromId !== String(currentUser.id) && isEncryptedGroup(incomingMsg.content)) {
+          const mid = incomingMsg.id;
+          _decryptInFlight.add(mid);
+          decryptGroupMsg(incomingMsg.content, null, fromId, group.id).then(plain => {
+            _decryptInFlight.delete(mid);
+            if (plain !== null) {
+              decryptedMsgsRef.current[mid] = plain;
+              setDecryptedMsgs(p => ({ ...p, [mid]: plain }));
+              DB.persistMessage(`group_${group.id}`, mid, fromId, plain, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
+            }
+          }).catch(() => { _decryptInFlight.delete(mid); });
+        }
+      }
     }
-  }, [incomingMsg, group.id]);
+
+    // ── Server error reply (rate limit, invalid, etc.) ──
+    if (incomingMsg.type === 'ws_error') {
+      setErr(incomingMsg.reason || 'Message rejected by server');
+      setTimeout(() => setErr(''), 5000);
+    }
+  }, [incomingMsg, group.id, currentUser.id]);
 
   useEffect(() => {
     if (messages.length > 0) setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
   }, [messages]);
 
   // Async decrypt all encrypted group messages whenever the message list changes.
-  // Also persists newly decrypted messages to the local SQLCipher DB.
-  // Uses decryptedMsgsRef (not state) for the "already decrypted?" check
-  // to survive effect cancellation when new messages arrive mid-decrypt.
+  // Each successful decryption IMMEDIATELY updates state (not batched at end)
+  // to prevent "[Decrypting…]" from persisting due to effect cancellation races.
+  // On cleanup, releases in-flight markers so the next effect can re-process.
   useEffect(() => {
     let alive = true;
+    const myInflight = new Set();
     (async () => {
-      const updates = {};
       for (const msg of messages) {
         if (isEncryptedGroup(msg.content)) {
-          // Check ref (always current) — state can be stale after effect cancellation
-          if (decryptedMsgsRef.current[msg.id]) {
-            updates[msg.id] = decryptedMsgsRef.current[msg.id];
+          // Skip if already SUCCESSFULLY decrypted (but retry __UNDECRYPTABLE__ when sender keys are ready)
+          const cached = decryptedMsgsRef.current[msg.id];
+          if (cached && cached !== '__UNDECRYPTABLE__') {
+            // Already decrypted — ref is always current
+          } else if (_decryptInFlight.has(msg.id)) {
+            continue;
           } else {
+            _decryptInFlight.add(msg.id);
+            myInflight.add(msg.id);
             const sid = String(msg.from_user?.id ?? msg.from_user ?? msg.from ?? msg.from_id ?? '');
-            // Try local DB first (fastest, avoids touching sender key state)
             let plain = null;
             try {
-              const cached = await DB.getMessage(`group_${group.id}`, msg.id);
-              if (cached?.content && !isEncryptedGroup(cached.content)) plain = cached.content;
+              const dbCached = await DB.getMessage(`group_${group.id}`, msg.id);
+              if (dbCached?.content && !isEncryptedGroup(dbCached.content)) plain = dbCached.content;
             } catch {}
-            // Only attempt live decryption if DB had no plaintext
             if (plain === null) {
               try {
                 plain = await decryptGroupMsg(msg.content, null, sid, group.id);
               } catch {}
             }
-            const resolved = plain ?? '[Encrypted — cannot decrypt]';
-            updates[msg.id] = resolved;
-            // Update ref immediately — survives effect cancellation
-            decryptedMsgsRef.current[msg.id] = resolved;
+            _decryptInFlight.delete(msg.id);
+            myInflight.delete(msg.id);
             if (plain !== null) {
-              DB.persistMessage(`group_${group.id}`, msg.id, sid, plain, msg.created_at).catch(() => {});
+              decryptedMsgsRef.current[msg.id] = plain;
+              // Immediate per-message state update — NOT gated on alive.
+              setDecryptedMsgs(prev => ({ ...prev, [msg.id]: plain }));
+              DB.persistMessage(`group_${group.id}`, msg.id, sid, plain, msg.created_at, msg.from_username ?? msg.fromUsername, msg.from_display ?? msg.fromDisplay).catch(() => {});
+            } else if (senderKeysReady) {
+              // Only mark as permanently undecryptable AFTER sender keys are loaded
+              decryptedMsgsRef.current[msg.id] = '__UNDECRYPTABLE__';
+              setDecryptedMsgs(prev => ({ ...prev, [msg.id]: '__UNDECRYPTABLE__' }));
             }
+            // If !senderKeysReady and decryption failed, leave as null — will retry when keys load
           }
         }
         // Trigger media decryption for any message whose resolved content is a media payload
-        const resolved = isEncryptedGroup(msg.content) ? updates[msg.id] : msg.content;
+        const resolved = decryptedMsgsRef.current[msg.id] ?? (isEncryptedGroup(msg.content) ? null : msg.content);
         if (resolved && MEDIA.isMediaPayload(resolved) && !decryptedMedia[msg.id]) {
           const mp = MEDIA.parseMediaPayload(resolved);
           if (mp) {
-            MEDIA.decryptMedia(mp.url, mp.key, mp.nonce).then(uri => {
+            MEDIA.decryptMedia(mp.url, mp.key, mp.nonce, mp.mime).then(uri => {
               if (alive) setDecryptedMedia(prev => ({ ...prev, [msg.id]: uri }));
             }).catch(() => {});
           }
         }
       }
-      if (alive && Object.keys(updates).length > 0) {
-        setDecryptedMsgs(prev => ({ ...prev, ...updates }));
+      // Reconciliation batch: sync all ref entries to state in one pass.
+      if (alive) {
+        const batch = {};
+        let needed = false;
+        for (const msg of messages) {
+          if (isEncryptedGroup(msg.content) && decryptedMsgsRef.current[msg.id]) {
+            batch[msg.id] = decryptedMsgsRef.current[msg.id];
+            needed = true;
+          }
+        }
+        if (needed) setDecryptedMsgs(prev => ({ ...prev, ...batch }));
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+      for (const id of myInflight) _decryptInFlight.delete(id);
+    };
   }, [messages, group.id, senderKeysReady]);
 
   const sendMessage = useCallback(async (overrideContent = null) => {
@@ -3970,7 +4337,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           setDecryptedMsgs(p => ({ ...p, [msg.id]: plain }));
           delete ownPlainRef.current[payload];
           // Persist plaintext immediately — sender can never re-decrypt own messages
-          DB.persistMessage(`group_${group.id}`, msg.id, String(currentUser.id), plain, msg.created_at).catch(() => {});
+          DB.persistMessage(`group_${group.id}`, msg.id, String(currentUser.id), plain, msg.created_at, currentUser.username, currentUser.display_name).catch(() => {});
         }
         setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
       }
@@ -3984,8 +4351,8 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       if (!a.base64) { Alert.alert('ERROR', 'Could not read image data.'); return; }
       try {
         const mimeType = a.mimeType ?? 'image/jpeg';
-        const { url, key, iv } = await MEDIA.uploadEncryptedMedia(a.base64, mimeType, token);
-        await sendMessage(MEDIA.mediaPayload(url, key, iv));
+        const { url, key, nonce } = await MEDIA.uploadEncryptedMedia(a.base64, mimeType, token);
+        await sendMessage(MEDIA.mediaPayload(url, key, nonce, mimeType));
       } catch (e) {
         Alert.alert('UPLOAD ERROR', e.message ?? 'Image upload failed.');
       }
@@ -4032,6 +4399,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
   const resolveGroupContent = (msg) => {
     const raw = isEncryptedGroup(msg.content) ? decryptedMsgs[msg.id] : msg.content;
     const isEnc = isEncryptedGroup(msg.content);
+    if (raw === '__UNDECRYPTABLE__') return { text: '[Encrypted]', encrypted: true, failed: true, isMedia: false };
     if (!raw && isEnc) return { text: '[Decrypting…]', encrypted: true, failed: false, isMedia: false };
     if (raw && MEDIA.isMediaPayload(raw)) return { text: '', encrypted: isEnc, failed: false, isMedia: true };
     return { text: raw ?? '[Decrypting…]', encrypted: isEnc, failed: !raw && isEnc, isMedia: false };
@@ -4073,7 +4441,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
               ListEmptyComponent={<Text style={styles.emptyText}>NO MESSAGES YET</Text>}
               renderItem={({ item }) => {
                 const mine = isMine(item);
-                const senderName = mine ? 'YOU' : (item.from_display || item.fromDisplay || item.from_username || item.fromUsername || 'UNKNOWN');
+                const senderName = mine ? 'YOU' : (item.from_display || item.fromDisplay || item.from_username || item.fromUsername || item.from_display_name || 'UNKNOWN');
                 const { text: msgText, failed, isMedia } = resolveGroupContent(item);
                 const mediaUri = isMedia ? getGroupMediaUri(item) : null;
                 return (
@@ -5581,9 +5949,9 @@ function HomeScreen({ token, currentUser, onLogout }) {
   const [searchResults,  setSearchResults]  = useState([]);
   const [profileImageUri, setProfileImageUri] = useState(null);
 
+  const [wsStatus, setWsStatus] = useState('disconnected');
+
   const wsRef          = useRef(null);
-  const reconnectRef   = useRef(null);
-  const backoffRef     = useRef(1000);
   const notifRef       = useRef(true);    // mirrors notifEnabled for WS closure
   const activeTabRef   = useRef('CHATS'); // mirrors activeTab for WS closure
   const dmPeerRef      = useRef(null);    // mirrors dmPeer for WS closure
@@ -5630,6 +5998,10 @@ function HomeScreen({ token, currentUser, onLogout }) {
         } catch {}
       })();
     }
+    // Load persisted unread counts from SQLCipher
+    DB.getUnreadCounts().then(counts => {
+      if (counts && Object.keys(counts).length > 0) setUnreadCounts(counts);
+    }).catch(() => {});
     // Initialise E2EE keypair (generate if new, upload public key)
     initE2EE(token);
     // Register Expo push token with backend
@@ -5683,51 +6055,18 @@ function HomeScreen({ token, currentUser, onLogout }) {
     return () => clearTimeout(t);
   }, [searchQuery, showSearch]);
 
-  const connectWS = useCallback(() => {
-    if (reconnectRef.current) { clearTimeout(reconnectRef.current); reconnectRef.current = null; }
-    // Phoenix channel protocol — connect to /socket/websocket?token=<JWT>
-    const ws = new WebSocket(`${WS_URL}?token=${token}`);
-    wsRef.current = ws;
-    let phxRef = 1;
-    const phxJoinedTopics = new Set();
-
-    // Helper: send a Phoenix channel frame
-    const phxSend = (topic, event, payload) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-      ws.send(JSON.stringify({ topic, event, payload: payload ?? {}, ref: String(phxRef++) }));
-    };
-
-    // Attach helpers so DMChatScreen / GroupChatScreen can join topics and push messages
-    ws._phxSend = phxSend;
-    ws._phxJoin = (topic) => {
-      if (!phxJoinedTopics.has(topic)) {
-        phxJoinedTopics.add(topic);
-        phxSend(topic, 'phx_join', {});
-      }
-    };
-
-    ws.onopen = () => {
-      backoffRef.current = 1000;
-      // Phoenix heartbeat every 30 s keeps the connection alive
-      ws._heartbeat = setInterval(() => phxSend('phoenix', 'heartbeat', {}), 30000);
-      // Auto-join own user topic so DMs broadcast by backend are received
-      if (currentUser?.id) ws._phxJoin(`user:${currentUser.id}`);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const frame = JSON.parse(event.data);
-        // Skip Phoenix control frames
-        if (!frame.event || frame.event === 'phx_reply' || frame.event === 'phx_error' || frame.event === 'phx_close') return;
-
+  // ── WebSocket (PhoenixWS) — robust connection with auto-reconnect ────────
+  useEffect(() => {
+    const phoenix = new PhoenixWS({
+      url: WS_URL,
+      token,
+      onMessage: (frame) => {
         const { topic, event: evtName, payload: pl } = frame;
 
-        // ── DM: Phoenix emits "chat.message" on topic "user:<my_id>" ──
+        // ── DM: "chat.message" on topic "user:<my_id>" ──
         if (evtName === 'chat.message') {
-          // Normalise into the shape the rest of the app already expects
           const msg = { ...pl, type: 'chat_message' };
           setIncomingMsg(msg);
-
           const fromId = String(pl.from_user?.id ?? pl.from_user ?? pl.from);
           const meId   = String(currentUser.id);
           if (fromId !== meId) {
@@ -5737,9 +6076,9 @@ function HomeScreen({ token, currentUser, onLogout }) {
               String(dmPeerRef.current.id) === fromId;
             if (!isViewingThisChat) {
               setUnreadCounts(prev => ({ ...prev, [`dm_${fromId}`]: (prev[`dm_${fromId}`] || 0) + 1 }));
+              DB.incrementUnread(`dm_${fromId}`).catch(() => {});
             } else {
-              // Viewing this chat — send read receipt immediately
-              phxSend(`user:${currentUser.id}`, 'mark_read', { from: parseInt(fromId) });
+              phoenix.send(`user:${currentUser.id}`, 'mark_read', { from: parseInt(fromId) });
             }
             if (notifRef.current && !isViewingThisChat) {
               const sender = pl.from_user?.username || pl.from_username || 'Someone';
@@ -5752,10 +6091,9 @@ function HomeScreen({ token, currentUser, onLogout }) {
           }
         }
 
-        // ── Read receipt: sender is notified when recipient reads their messages ──
+        // ── Read receipt ──
         if (evtName === 'messages_read') {
-          const readBy = String(pl.by);
-          setIncomingMsg({ type: 'messages_read', by: readBy });
+          setIncomingMsg({ type: 'messages_read', by: String(pl.by) });
         }
 
         // ── Typing indicator ──
@@ -5763,12 +6101,10 @@ function HomeScreen({ token, currentUser, onLogout }) {
           setIncomingMsg({ type: 'typing', from: String(pl.from) });
         }
 
-        // ── Group: Phoenix emits "group.message" on topic "group:<group_id>" ──
+        // ── Group: "group.message" on topic "group:<group_id>" ──
         if (evtName === 'group.message') {
-          // Server payload: { id, group_id, from_user, from_username, from_display, content, created_at }
           const msg = { ...pl, type: 'group_message' };
           setIncomingMsg(msg);
-
           const fromId  = String(pl.from_user?.id ?? pl.from_user ?? pl.from);
           const meId    = String(currentUser.id);
           const groupId = pl.group_id ?? topic?.split(':')?.[1];
@@ -5779,6 +6115,7 @@ function HomeScreen({ token, currentUser, onLogout }) {
               String(groupChatRef.current.id) === String(groupId);
             if (!isViewingThisGroup) {
               setUnreadCounts(prev => ({ ...prev, [`group_${groupId}`]: (prev[`group_${groupId}`] || 0) + 1 }));
+              DB.incrementUnread(`group_${groupId}`).catch(() => {});
             }
             if (notifRef.current && !isViewingThisGroup) {
               const sender = pl.from_display || pl.from_username || 'Group';
@@ -5790,41 +6127,92 @@ function HomeScreen({ token, currentUser, onLogout }) {
             }
           }
         }
-      } catch {}
-    };
-
-    ws.onerror  = () => {};
-    ws.onclose  = () => {
-      if (ws._heartbeat) clearInterval(ws._heartbeat);
-      const delay = Math.min(backoffRef.current, 30000);
-      backoffRef.current = Math.min(backoffRef.current * 2, 30000);
-      reconnectRef.current = setTimeout(connectWS, delay);
-    };
+      },
+      onStatusChange: (status) => {
+        setWsStatus(status);
+        if (status === 'connected') {
+          // Delta-sync missed messages on every (re)connect
+          (async () => {
+            try {
+              const [contactsData, groupsData] = await Promise.all([
+                api('/api/contacts', 'GET', null, token).catch(() => []),
+                api('/api/groups', 'GET', null, token).catch(() => []),
+              ]);
+              const dmPeerIds = (_normContacts(contactsData)).map(c => c.userId).filter(Boolean);
+              const groups    = Array.isArray(groupsData) ? groupsData : [];
+              const groupIds  = groups.map(g => g.id).filter(Boolean);
+              const myId = String(currentUser?.id);
+              // Pre-load sender keys for all groups BEFORE syncing
+              await Promise.allSettled(
+                groupIds.map(gid => loadGroupSenderKeys(gid, token, myId))
+              );
+              // Join all group topics — persists across reconnects
+              for (const gid of groupIds) phoenix.join(`group:${gid}`);
+              const counts = await SYNC.syncOnConnect(token, dmPeerIds, groupIds, decryptDM, decryptGroupMsg, myId);
+              // Update unread badges for messages missed while offline
+              if (counts) {
+                setUnreadCounts(prev => {
+                  const n = { ...prev };
+                  for (const [pid, c] of Object.entries(counts.dm || {})) {
+                    const key = `dm_${pid}`;
+                    n[key] = (n[key] || 0) + c;
+                    DB.setUnreadCount(key, n[key]).catch(() => {});
+                  }
+                  for (const [gid, c] of Object.entries(counts.group || {})) {
+                    const key = `group_${gid}`;
+                    n[key] = (n[key] || 0) + c;
+                    DB.setUnreadCount(key, n[key]).catch(() => {});
+                  }
+                  return n;
+                });
+              }
+            } catch (e) {
+              console.warn('[WS] syncOnConnect error:', e?.message);
+            }
+          })();
+        }
+      },
+      onError: (reason) => {
+        console.warn('[WS] Server error reply:', reason);
+        setIncomingMsg({ type: 'ws_error', reason });
+      },
+    });
+    // Backward-compat shims so DMChatScreen / GroupChatScreen / BotTab still work
+    phoenix._phxSend = phoenix.send.bind(phoenix);
+    phoenix._phxJoin = phoenix.join.bind(phoenix);
+    Object.defineProperty(phoenix, 'readyState', {
+      get() { return phoenix.getStatus() === 'connected' ? WebSocket.OPEN : WebSocket.CLOSED; },
+    });
+    wsRef.current = phoenix;
+    // Join own user topic (persists across reconnects via PhoenixWS._joinedTopics)
+    if (currentUser?.id) phoenix.join(`user:${currentUser.id}`);
+    phoenix.connect();
+    return () => phoenix.destroy();
   }, [token]);
-
-  useEffect(() => {
-    connectWS();
-    return () => {
-      if (reconnectRef.current) clearTimeout(reconnectRef.current);
-      if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
-    };
-  }, [connectWS]);
 
   const openDM = useCallback((peer) => {
     setDmPeer(peer);
     setUnreadCounts(prev => { const n = { ...prev }; delete n[`dm_${peer.id}`]; return n; });
+    DB.clearUnread(`dm_${peer.id}`).catch(() => {});
   }, []);
 
   const openGroup = useCallback((g) => {
     setGroupChat(g);
     setUnreadCounts(prev => { const n = { ...prev }; delete n[`group_${g.id}`]; return n; });
+    DB.clearUnread(`group_${g.id}`).catch(() => {});
   }, []);
 
-  // Aggregate unread counts for tab bar badges
-  const tabUnread = {
+  // iOS app icon badge — total unread count
+  useEffect(() => {
+    const total = Object.values(unreadCounts).reduce((s, v) => s + v, 0);
+    Notifications.setBadgeCountAsync(total).catch(() => {});
+  }, [unreadCounts]);
+
+  // Aggregate unread counts for tab bar badges (memoized)
+  const tabUnread = useMemo(() => ({
     CHATS:  Object.entries(unreadCounts).filter(([k]) => k.startsWith('dm_')).reduce((s, [, v]) => s + v, 0),
     GROUPS: Object.entries(unreadCounts).filter(([k]) => k.startsWith('group_')).reduce((s, [, v]) => s + v, 0),
-  };
+  }), [unreadCounts]);
 
   // Dynamic tab list — hide BOT when Banner is disabled
   const visibleTabs = TABS.filter(t => t !== 'BOT' || bannerEnabled);
@@ -5859,6 +6247,13 @@ function HomeScreen({ token, currentUser, onLogout }) {
           <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 28, color: C.accent }}>⌕</Text>
         </TouchableOpacity>
       </View>
+      {wsStatus !== 'connected' && (
+        <View style={{ backgroundColor: C.amber + '33', paddingVertical: 4, alignItems: 'center' }}>
+          <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.amber, letterSpacing: 1 }}>
+            {wsStatus === 'connecting' ? 'CONNECTING…' : 'RECONNECTING…'}
+          </Text>
+        </View>
+      )}
 
       {/* Search overlay */}
       <Modal visible={showSearch} animationType="slide" onRequestClose={() => setShowSearch(false)}>

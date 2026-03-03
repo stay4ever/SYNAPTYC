@@ -20,8 +20,7 @@
 
 const nacl     = require('tweetnacl');
 const naclUtil = require('tweetnacl-util');
-
-const BASE_URL = 'https://nano-synapsys-server.fly.dev';
+const { BASE_URL } = require('./constants');
 
 /**
  * Encrypt raw image bytes with XSalsa20-Poly1305 (nacl.secretbox).
@@ -48,8 +47,9 @@ function encryptMedia(base64Data) {
 /**
  * Decrypt XSalsa20-Poly1305 encrypted media fetched from R2.
  * Returns a data URI string (e.g. 'data:image/jpeg;base64,...').
+ * @param {string} mime - MIME type (default: 'image/jpeg' for backward compat)
  */
-async function decryptMedia(url, key64, nonce64) {
+async function decryptMedia(url, key64, nonce64, mime) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`R2 fetch failed: ${res.status}`);
   const cipherBuf = await res.arrayBuffer();
@@ -62,7 +62,8 @@ async function decryptMedia(url, key64, nonce64) {
   if (!plainBytes) throw new Error('Media decryption failed — wrong key or corrupted data');
 
   const b64 = naclUtil.encodeBase64(plainBytes);
-  return `data:image/jpeg;base64,${b64}`;
+  const mimeType = mime || 'image/jpeg';
+  return `data:${mimeType};base64,${b64}`;
 }
 
 /**
@@ -103,9 +104,12 @@ async function uploadEncryptedMedia(base64Data, mimeType, token) {
 /**
  * Build the JSON payload string for an encrypted media message.
  * This string is then passed to sendMessage(), which Signal-encrypts it.
+ * @param {string} mime - MIME type of the media (e.g. 'image/png')
  */
-function mediaPayload(url, key, nonce) {
-  return JSON.stringify({ type: 'media', url, key, nonce });
+function mediaPayload(url, key, nonce, mime) {
+  const obj = { type: 'media', url, key, nonce };
+  if (mime) obj.mime = mime;
+  return JSON.stringify(obj);
 }
 
 /**
@@ -121,14 +125,14 @@ function isMediaPayload(content) {
 
 /**
  * Parse a media payload JSON string.
- * Returns { url, key, nonce } or null.
+ * Returns { url, key, nonce, mime } or null.
  * Supports both new format (nonce) and old format (iv) for backward compat.
  */
 function parseMediaPayload(content) {
   try {
     const obj = JSON.parse(content);
     if (obj?.type === 'media' && obj.url && obj.key && (obj.nonce || obj.iv)) {
-      return { url: obj.url, key: obj.key, nonce: obj.nonce || obj.iv };
+      return { url: obj.url, key: obj.key, nonce: obj.nonce || obj.iv, mime: obj.mime || 'image/jpeg' };
     }
   } catch {}
   return null;

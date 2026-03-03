@@ -274,6 +274,12 @@ function _skipMessageKeys(session, until) {
     session.skipped[skipKey] = mk;
     session.Nr += 1;
   }
+  // Prune oldest skipped keys if map exceeds limit (prevent unbounded memory growth)
+  const keys = Object.keys(session.skipped);
+  if (keys.length > MAX_SKIP) {
+    const toRemove = keys.length - MAX_SKIP;
+    for (let i = 0; i < toRemove; i++) delete session.skipped[keys[i]];
+  }
 }
 
 function _drDecryptWithKey(mk, ciphertextB64) {
@@ -301,58 +307,96 @@ function _arraysEqual(a, b) {
 // Sender Keys — group encryption (Signal-style)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Maximum iteration value — must fit in uint32 LE wire encoding (4 bytes)
+const SK_MAX_ITERATION = 0xFFFFFFFF;  // 2^32 - 1
+// Maximum number of out-of-order message keys to cache per sender key
+const SK_MAX_SKIP = 256;
+
 /**
  * Generate a fresh sender key chain state for a group.
- * Returns { chainKey: Uint8Array, iteration: number }
+ * Returns { chainKey: Uint8Array, iteration: number, skipped: {} }
  */
 function skGenerate() {
   return {
     chainKey:  nacl.randomBytes(32),
     iteration: 0,
+    skipped:   {},  // { "<iteration>": messageKey (Uint8Array) }
   };
 }
 
 /**
  * Derive the message key for the current iteration, advance chain.
  * Returns [newChainState, messageKey (32B)]
+ * Throws if iteration would exceed uint32 max (caller must regenerate key).
  */
 function skAdvance(senderKeyState) {
+  if (senderKeyState.iteration >= SK_MAX_ITERATION) {
+    throw new Error('Sender key iteration overflow — must regenerate key');
+  }
   const mk      = new Uint8Array(hmacSHA256(senderKeyState.chainKey, new Uint8Array([0x01])));
   const newCK   = new Uint8Array(hmacSHA256(senderKeyState.chainKey, new Uint8Array([0x02])));
   return [
-    { chainKey: newCK, iteration: senderKeyState.iteration + 1 },
+    { chainKey: newCK, iteration: senderKeyState.iteration + 1, skipped: senderKeyState.skipped || {} },
     mk,
   ];
 }
 
 /**
  * Advance sender key state N times (to catch up to a given iteration).
+ * Caches intermediate message keys for out-of-order decryption.
  * Returns [finalChainState, messageKey_at_target]
  */
 function skAdvanceTo(senderKeyState, targetIteration) {
-  let state = { ...senderKeyState };
+  // Guard: prevent advancing past uint32 max
+  if (targetIteration > SK_MAX_ITERATION) return [senderKeyState, null];
+  // Guard: prevent excessive skip (DoS protection)
+  const gap = targetIteration - senderKeyState.iteration;
+  if (gap > SK_MAX_SKIP) return [senderKeyState, null];
+
+  let state = { ...senderKeyState, skipped: { ...(senderKeyState.skipped || {}) } };
   let mk    = null;
   while (state.iteration <= targetIteration) {
     [state, mk] = skAdvance(state);
+    // Cache intermediate keys (all except the target itself)
+    if (state.iteration - 1 < targetIteration) {
+      state.skipped[String(state.iteration - 1)] = mk;
+    }
   }
+
+  // Prune oldest skipped keys if map exceeds limit
+  const keys = Object.keys(state.skipped);
+  if (keys.length > SK_MAX_SKIP) {
+    // Sort numerically and remove oldest
+    keys.sort((a, b) => Number(a) - Number(b));
+    const toRemove = keys.length - SK_MAX_SKIP;
+    for (let i = 0; i < toRemove; i++) delete state.skipped[keys[i]];
+  }
+
   return [state, mk];
 }
 
 /**
  * Encrypt a group message with the sender key.
  * Returns wire envelope object.
+ * Returns null if the sender key needs regeneration (iteration overflow).
  */
 function skEncrypt(senderKeyState, plaintext, senderId) {
+  if (senderKeyState.iteration >= SK_MAX_ITERATION) {
+    return null;  // Caller must regenerate and redistribute sender key
+  }
   const [newState, mk] = skAdvance(senderKeyState);
   const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
   const ct    = nacl.secretbox(utf8enc(plaintext), nonce, mk);
+  // Encode iteration as uint32 LE explicitly (endian-safe — matches skDecrypt's LE read)
+  const iterBuf = new ArrayBuffer(4);
+  new DataView(iterBuf).setUint32(0, senderKeyState.iteration, true);
   return {
     newState,
     envelope: {
       gsig: true,
       v:    1,
       sid:  senderId,
-      hdr:  b64enc(new Uint8Array(new Uint32Array([senderKeyState.iteration]).buffer)),
+      hdr:  b64enc(new Uint8Array(iterBuf)),
       ct:   b64enc(concat(nonce, ct)),
     },
   };
@@ -361,6 +405,7 @@ function skEncrypt(senderKeyState, plaintext, senderId) {
 /**
  * Decrypt a group message.
  * Returns { plaintext, newSenderKeyState } or null.
+ * Supports out-of-order messages via skipped key cache.
  */
 function skDecrypt(senderKeyState, envelope) {
   try {
@@ -369,18 +414,43 @@ function skDecrypt(senderKeyState, envelope) {
     const iteration = hdrBytes.length >= 4
       ? new DataView(hdrBytes.buffer, hdrBytes.byteOffset, 4).getUint32(0, true)
       : hdrBytes[0];
-    const [state, mk] = senderKeyState.iteration <= iteration
-      ? skAdvanceTo(senderKeyState, iteration)
-      : [senderKeyState, null];                 // out-of-order — key may be cached
 
-    if (!mk) return null;  // can't go backwards; drop the message
+    // Ensure skipped cache exists (backward compat with old serialised states)
+    const skipped = senderKeyState.skipped || {};
 
-    const raw   = b64dec(envelope.ct);
-    const nonce = raw.slice(0, nacl.secretbox.nonceLength);
-    const ct    = raw.slice(nacl.secretbox.nonceLength);
-    const plain = nacl.secretbox.open(ct, nonce, mk);
-    if (!plain) return null;
-    return { plaintext: utf8dec(plain), newSenderKeyState: state };
+    // Check skipped-key cache first (out-of-order message)
+    const skipKey = String(iteration);
+    if (skipped[skipKey]) {
+      const cachedMk = skipped[skipKey];
+      const raw   = b64dec(envelope.ct);
+      const nonce = raw.slice(0, nacl.secretbox.nonceLength);
+      const ct    = raw.slice(nacl.secretbox.nonceLength);
+      const plain = nacl.secretbox.open(ct, nonce, cachedMk);
+      if (!plain) return null;
+      // Remove used key from cache
+      const newSkipped = { ...skipped };
+      delete newSkipped[skipKey];
+      return {
+        plaintext: utf8dec(plain),
+        newSenderKeyState: { ...senderKeyState, skipped: newSkipped },
+      };
+    }
+
+    // Forward advance — cache intermediate keys
+    if (senderKeyState.iteration <= iteration) {
+      const [state, mk] = skAdvanceTo(senderKeyState, iteration);
+      if (!mk) return null;  // gap too large or overflow
+
+      const raw   = b64dec(envelope.ct);
+      const nonce = raw.slice(0, nacl.secretbox.nonceLength);
+      const ct    = raw.slice(nacl.secretbox.nonceLength);
+      const plain = nacl.secretbox.open(ct, nonce, mk);
+      if (!plain) return null;
+      return { plaintext: utf8dec(plain), newSenderKeyState: state };
+    }
+
+    // Iteration is behind current state and not in skip cache — truly lost
+    return null;
   } catch (_) {
     return null;
   }
@@ -391,7 +461,7 @@ function skDecrypt(senderKeyState, envelope) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function serialiseSession(session) {
-  return JSON.stringify({
+  const obj = {
     RK:      b64enc(session.RK),
     CKs:     session.CKs ? b64enc(session.CKs) : null,
     CKr:     session.CKr ? b64enc(session.CKr) : null,
@@ -404,12 +474,15 @@ function serialiseSession(session) {
     skipped: Object.fromEntries(
       Object.entries(session.skipped).map(([k, v]) => [k, b64enc(v)])
     ),
-  });
+  };
+  // Persist x3dh metadata so it survives app restarts — needed for session recovery
+  if (session._x3dh) obj._x3dh = session._x3dh;
+  return JSON.stringify(obj);
 }
 
 function deserialiseSession(json) {
   const d = JSON.parse(json);
-  return {
+  const sess = {
     RK:   b64dec(d.RK),
     CKs:  d.CKs ? b64dec(d.CKs) : null,
     CKr:  d.CKr ? b64dec(d.CKr) : null,
@@ -422,15 +495,32 @@ function deserialiseSession(json) {
       Object.entries(d.skipped || {}).map(([k, v]) => [k, b64dec(v)])
     ),
   };
+  if (d._x3dh) sess._x3dh = d._x3dh;
+  return sess;
 }
 
 function serialiseSKState(state) {
-  return JSON.stringify({ chainKey: b64enc(state.chainKey), iteration: state.iteration });
+  const obj = { chainKey: b64enc(state.chainKey), iteration: state.iteration };
+  // Persist skipped key cache for out-of-order message support
+  if (state.skipped && Object.keys(state.skipped).length > 0) {
+    obj.skipped = Object.fromEntries(
+      Object.entries(state.skipped).map(([k, v]) => [k, b64enc(v)])
+    );
+  }
+  return JSON.stringify(obj);
 }
 
 function deserialiseSKState(json) {
   const d = JSON.parse(json);
-  return { chainKey: b64dec(d.chainKey), iteration: d.iteration };
+  const state = { chainKey: b64dec(d.chainKey), iteration: d.iteration };
+  // Restore skipped key cache (backward compat: old states won't have this field)
+  state.skipped = {};
+  if (d.skipped) {
+    state.skipped = Object.fromEntries(
+      Object.entries(d.skipped).map(([k, v]) => [k, b64dec(v)])
+    );
+  }
+  return state;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,7 +537,7 @@ function isSignalGroup(content) {
 
 // Legacy NaCl DM detection (for backward-compat decryption)
 function isLegacyNaClDM(content) {
-  try { const o = JSON.parse(content); return typeof o?.enc === 'string' && typeof o?.nonce === 'string'; } catch { return false; }
+  try { const o = JSON.parse(content); return o?.enc != null && typeof o?.nonce === 'string'; } catch { return false; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
