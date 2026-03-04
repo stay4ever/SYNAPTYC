@@ -1380,7 +1380,14 @@ async function encryptGroupMsg(plaintext, _unusedGroupKey, groupId, myId) {
     // Handle iteration overflow — regenerate sender key and redistribute
     if (!result) {
       console.warn('[Signal] Sender key iteration overflow — regenerating for group', groupId);
-      await generateAndDistributeGroupKey(groupId, _SESSION_TOKEN || null);
+      // Fetch current group members for redistribution
+      const tok = _SESSION_TOKEN || null;
+      let overflowMemberIds = [];
+      try {
+        const mems = await api(`/api/groups/${groupId}/members`, 'GET', null, tok);
+        overflowMemberIds = (Array.isArray(mems) ? mems : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
+      } catch {}
+      await generateAndDistributeGroupKey(groupId, overflowMemberIds, tok, myId);
       const freshState = await _getMySenderKeyState(groupId, myId);
       const retry = SIG.skEncrypt(freshState, plaintext, myId);
       if (!retry) return null;  // Should never happen with fresh key
@@ -3861,7 +3868,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
                 const mediaUri = isMedia ? getMediaUri(item) : null;
                 return (
                   <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
-                    <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                    <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs, failed && { borderColor: C.red, borderWidth: 1.5 }]}>
                       {isImageContent(item.content) ? (
                         <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
                       ) : isMedia ? (
@@ -3885,7 +3892,7 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
                           </Text>
                         </TouchableOpacity>
                       ) : (
-                        <Text style={[styles.msgText, failed && { color: C.amber }]}>{msgText}</Text>
+                        <Text style={[styles.msgText, failed && { color: C.red }]}>{msgText}</Text>
                       )}
                       <View style={styles.msgMeta}>
                         <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
@@ -4186,7 +4193,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       // Phase 2: Distribute our sender key to ALL current members
       try {
         const members = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
-        const memberIds = (Array.isArray(members) ? members : []).map(m => m.user_id ?? m.id).filter(Boolean);
+        const memberIds = (Array.isArray(members) ? members : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
         if (memberIds.length > 0 && e2eeKey()) {
           await generateAndDistributeGroupKey(group.id, memberIds, token, String(currentUser.id));
         }
@@ -4280,15 +4287,30 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
               setDecryptedMsgs(p => ({ ...p, [mid]: plain }));
               DB.persistMessage(`group_${group.id}`, mid, fromId, plain, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
             } else {
-              // First attempt failed — wait 1.5s, reload sender keys, retry
-              await new Promise(r => setTimeout(r, 1500));
-              try { await loadGroupSenderKeys(group.id, token, String(currentUser.id)); } catch {}
-              const plain2 = await decryptGroupMsg(incomingMsg.content, null, fromId, group.id).catch(() => null);
+              // Multiple retry attempts with escalating delays — sender key may arrive shortly after message
+              const delays = [1500, 3000, 5000];
+              let decrypted = null;
+              for (const delay of delays) {
+                await new Promise(r => setTimeout(r, delay));
+                try { await loadGroupSenderKeys(group.id, token, String(currentUser.id)); } catch {}
+                decrypted = await decryptGroupMsg(incomingMsg.content, null, fromId, group.id).catch(() => null);
+                if (decrypted !== null) break;
+                // After second attempt, also distribute OUR sender key to ensure two-way comms
+                if (delay === 3000) {
+                  try {
+                    const mems = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
+                    const mids = (Array.isArray(mems) ? mems : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
+                    if (mids.length > 0 && e2eeKey()) {
+                      await generateAndDistributeGroupKey(group.id, mids, token, String(currentUser.id));
+                    }
+                  } catch {}
+                }
+              }
               _decryptInFlight.delete(mid);
-              if (plain2 !== null) {
-                decryptedMsgsRef.current[mid] = plain2;
-                setDecryptedMsgs(p => ({ ...p, [mid]: plain2 }));
-                DB.persistMessage(`group_${group.id}`, mid, fromId, plain2, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
+              if (decrypted !== null) {
+                decryptedMsgsRef.current[mid] = decrypted;
+                setDecryptedMsgs(p => ({ ...p, [mid]: decrypted }));
+                DB.persistMessage(`group_${group.id}`, mid, fromId, decrypted, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
               }
               // If still null, the batch decrypt effect will retry with longer delays
             }
@@ -4430,6 +4452,15 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       let payload = content;
       if (!isImage && e2eeKey()) {
         try {
+          // Ensure our sender key is distributed to all members before encrypting.
+          // This guarantees recipients can decrypt even if the group-open effect hasn't completed.
+          try {
+            const mems = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
+            const mids = (Array.isArray(mems) ? mems : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
+            if (mids.length > 0) {
+              await generateAndDistributeGroupKey(group.id, mids, token, String(currentUser.id));
+            }
+          } catch {}
           const enc = await encryptGroupMsg(content, null, group.id, String(currentUser.id));
           if (enc !== null) {
             payload = enc;
@@ -4567,7 +4598,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
                 const mediaUri = isMedia ? getGroupMediaUri(item) : null;
                 return (
                   <View style={[styles.msgRow, mine ? styles.msgRowMine : styles.msgRowTheirs]}>
-                    <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                    <View style={[styles.msgBubble, mine ? styles.bubbleMine : styles.bubbleTheirs, failed && { borderColor: C.red, borderWidth: 1.5 }]}>
                       {!mine && <Text style={styles.msgSender}>{senderName}</Text>}
                       {isImageContent(item.content) ? (
                         <Image source={{ uri: item.content }} style={styles.imageMsg} resizeMode="contain" />
@@ -4589,7 +4620,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
                           </Text>
                         </TouchableOpacity>
                       ) : (
-                        <Text style={[styles.msgText, failed && { color: C.amber }]}>{msgText}</Text>
+                        <Text style={[styles.msgText, failed && { color: C.red }]}>{msgText}</Text>
                       )}
                       <View style={styles.msgMeta}>
                         <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
