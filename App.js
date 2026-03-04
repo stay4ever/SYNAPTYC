@@ -915,9 +915,12 @@ async function _getOrBuildSession(peerId, token) {
     }
   } catch {}
 
-  // 3. Build new session via X3DH
+  // 3. Build new session via X3DH (8s timeout)
   try {
-    const bundle = await api(`/api/signal/prekeys/${peerId}`, 'GET', null, token);
+    const bundle = await Promise.race([
+      api(`/api/signal/prekeys/${peerId}`, 'GET', null, token),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('bundle fetch timeout')), 8000)),
+    ]);
     if (!bundle?.identity_key || !bundle?.signed_prekey) return null;
 
     const IK_B_pub   = _b64dec(bundle.identity_key);
@@ -968,8 +971,9 @@ async function _saveSession(peerId) {
  * Returns an envelope JSON string or null on failure.
  */
 async function encryptDM(plaintext, _recipientPkB64_unused, peerId, token) {
-  // Wait for initE2EE to finish loading keys before attempting encryption
-  await _e2eeReady;
+  // Wait for initE2EE to finish loading keys before attempting encryption (5s timeout)
+  await Promise.race([_e2eeReady, new Promise(r => setTimeout(r, 5000))]);
+  if (!_sigIdentityKey) return null;
   // Serialize with decryptions for the same peer — both encrypt and decrypt
   // mutate the Double Ratchet session and must not overlap.
   return _withDecryptLock(peerId, async () => {
@@ -1236,7 +1240,7 @@ async function _getMySenderKeyState(groupId, myId) {
  * Called when joining or creating a group.
  */
 async function generateAndDistributeGroupKey(groupId, memberIds, token, myId) {
-  await _e2eeReady;
+  await Promise.race([_e2eeReady, new Promise(r => setTimeout(r, 5000))]);
   if (!_sigIdentityKey) return;
   // Ensure our sender key state exists (creates + seeds if needed)
   await _getMySenderKeyState(groupId, myId);
@@ -1259,8 +1263,11 @@ async function generateAndDistributeGroupKey(groupId, memberIds, token, myId) {
     const userId = typeof uid === 'object' ? (uid.userId ?? uid.user_id ?? uid.id) : uid;
     if (String(userId) === String(myId)) continue;
     try {
-      // Fetch recipient's identity public key from their pre-key bundle
-      const bundle = await api(`/api/signal/prekeys/${userId}`, 'GET', null, token);
+      // Fetch recipient's identity public key from their pre-key bundle (5s timeout per member)
+      const bundle = await Promise.race([
+        api(`/api/signal/prekeys/${userId}`, 'GET', null, token),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000)),
+      ]);
       if (!bundle?.identity_key) continue;
       const recipientIkPub = _b64dec(bundle.identity_key);
       // Encrypt sender key with NaCl box (our IK secret + their IK public)
@@ -1370,7 +1377,8 @@ async function loadGroupSenderKeys(groupId, token, _myId) {
  * Returns JSON envelope string or null.
  */
 async function encryptGroupMsg(plaintext, _unusedGroupKey, groupId, myId) {
-  await _e2eeReady;
+  await Promise.race([_e2eeReady, new Promise(r => setTimeout(r, 5000))]);
+  if (!_sigIdentityKey) return null;
   // Serialize group encryptions to prevent concurrent sends from racing on sender key state.
   // Two overlapping encryptions would both read the same state, produce duplicate iteration
   // numbers, and the second message would be undecryptable by recipients.
@@ -1380,14 +1388,18 @@ async function encryptGroupMsg(plaintext, _unusedGroupKey, groupId, myId) {
     // Handle iteration overflow — regenerate sender key and redistribute
     if (!result) {
       console.warn('[Signal] Sender key iteration overflow — regenerating for group', groupId);
-      // Fetch current group members for redistribution
+      // Fetch current group members for redistribution (with timeout)
       const tok = _SESSION_TOKEN || null;
-      let overflowMemberIds = [];
       try {
-        const mems = await api(`/api/groups/${groupId}/members`, 'GET', null, tok);
-        overflowMemberIds = (Array.isArray(mems) ? mems : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
+        await Promise.race([
+          (async () => {
+            const mems = await api(`/api/groups/${groupId}/members`, 'GET', null, tok).catch(() => []);
+            const ids = (Array.isArray(mems) ? mems : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
+            if (ids.length > 0) await generateAndDistributeGroupKey(groupId, ids, tok, myId);
+          })(),
+          new Promise(r => setTimeout(r, 10000)),  // 10s hard timeout
+        ]);
       } catch {}
-      await generateAndDistributeGroupKey(groupId, overflowMemberIds, tok, myId);
       const freshState = await _getMySenderKeyState(groupId, myId);
       const retry = SIG.skEncrypt(freshState, plaintext, myId);
       if (!retry) return null;  // Should never happen with fresh key
@@ -1408,7 +1420,8 @@ async function encryptGroupMsg(plaintext, _unusedGroupKey, groupId, myId) {
  */
 async function decryptGroupMsg(envelopeStr, _unusedGroupKey, senderId, groupId) {
   if (!envelopeStr) return null;
-  await _e2eeReady;
+  await Promise.race([_e2eeReady, new Promise(r => setTimeout(r, 5000))]);
+  if (!_sigIdentityKey) return null;
   // Serialize decryptions per sender per group — sender key chain is stateful
   // and concurrent mutations corrupt it (one decrypt consumes the key another needs).
   return _withDecryptLock(`grp_${groupId}_${senderId}`, async () => {
@@ -3563,12 +3576,17 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           if (base.some(m => m.id === incomingMsg.id)) return base;
           // Pre-populate decrypted cache for own echoed messages.
           // Uses ownPlainRef (keyed by encrypted payload) — reliable even with rapid sends.
+          // Server may HTML-escape the JSON (&quot;), so try unescaped key too.
           // Falls back to temp message content for backward compat.
           if (fromMe && isEncryptedDM(incomingMsg.content)) {
-            const plain = ownPlainRef.current[incomingMsg.content]
-              ?? (prev.find(m => m._temp))?.content;
+            const dmOwnKey = ownPlainRef.current[incomingMsg.content] ? incomingMsg.content
+              : (typeof incomingMsg.content === 'string' && incomingMsg.content.includes('&quot;'))
+                ? _htmlUnescape(incomingMsg.content) : null;
+            const plain = (dmOwnKey && ownPlainRef.current[dmOwnKey])
+              ? ownPlainRef.current[dmOwnKey]
+              : (prev.find(m => m._temp))?.content;
             if (plain) {
-              delete ownPlainRef.current[incomingMsg.content];
+              if (dmOwnKey) delete ownPlainRef.current[dmOwnKey];
               decryptedMsgsRef.current[incomingMsg.id] = plain;
               setDecryptedMsgs(p => ({ ...p, [incomingMsg.id]: plain }));
               // Persist plaintext immediately — sender can never re-decrypt own messages
@@ -3734,11 +3752,15 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
       // E2EE: encrypt text messages (not images — images are large binary data)
       let payload = content;
       if (!isImage && e2eeKey()) {
-        payload = await encryptDM(content, null, peer.id, token);
+        // 10s timeout prevents spinner from hanging forever if session build stalls
+        payload = await Promise.race([
+          encryptDM(content, null, peer.id, token),
+          new Promise(r => setTimeout(() => r(null), 10000)),
+        ]);
         if (payload === null) {
-          Alert.alert('ENCRYPTION ERROR', 'Could not encrypt message. Send aborted.');
-          setSending(false);
-          return;
+          // Don't block the user — send plaintext as fallback instead of aborting
+          payload = content;
+          console.warn('[Signal] DM encrypt timeout/failure — sending plaintext');
         }
       }
       // Cache plaintext keyed by encrypted payload — sender can never re-decrypt own
@@ -4190,13 +4212,18 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       await loadGroupSenderKeys(group.id, token, String(currentUser.id));
       setSenderKeysReady(true);  // Unblock decryption attempts with what we have
 
-      // Phase 2: Distribute our sender key to ALL current members
+      // Phase 2: Distribute our sender key to ALL current members (15s timeout)
       try {
-        const members = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
-        const memberIds = (Array.isArray(members) ? members : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
-        if (memberIds.length > 0 && e2eeKey()) {
-          await generateAndDistributeGroupKey(group.id, memberIds, token, String(currentUser.id));
-        }
+        await Promise.race([
+          (async () => {
+            const members = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
+            const memberIds = (Array.isArray(members) ? members : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
+            if (memberIds.length > 0 && e2eeKey()) {
+              await generateAndDistributeGroupKey(group.id, memberIds, token, String(currentUser.id));
+            }
+          })(),
+          new Promise(r => setTimeout(r, 15000)),
+        ]);
       } catch {}
 
       // Phase 3: Re-fetch sender keys (other members may have distributed during phase 2)
@@ -4253,10 +4280,14 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
         // Remove any temp (optimistic) messages from self when real echo arrives
         const base = fromMe ? prev.filter(m => !m._temp) : prev;
         if (base.some(m => m.id === incomingMsg.id)) return base;
-        // For own encrypted messages, pre-populate decrypted cache from ownPlainRef
-        if (fromMe && isEncryptedGroup(incomingMsg.content) && ownPlainRef.current[incomingMsg.content]) {
-          const plain = ownPlainRef.current[incomingMsg.content];
-          delete ownPlainRef.current[incomingMsg.content];
+        // For own encrypted messages, pre-populate decrypted cache from ownPlainRef.
+        // Server may HTML-escape the JSON envelope (&quot; etc.), so try both raw and unescaped keys.
+        const ownKey = ownPlainRef.current[incomingMsg.content] ? incomingMsg.content
+          : (typeof incomingMsg.content === 'string' && incomingMsg.content.includes('&quot;'))
+            ? _htmlUnescape(incomingMsg.content) : null;
+        if (fromMe && isEncryptedGroup(incomingMsg.content) && ownKey && ownPlainRef.current[ownKey]) {
+          const plain = ownPlainRef.current[ownKey];
+          delete ownPlainRef.current[ownKey];
           decryptedMsgsRef.current[incomingMsg.id] = plain;
           setDecryptedMsgs(p => ({ ...p, [incomingMsg.id]: plain }));
           // Persist plaintext immediately — sender can never re-decrypt own messages
@@ -4287,7 +4318,8 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
               setDecryptedMsgs(p => ({ ...p, [mid]: plain }));
               DB.persistMessage(`group_${group.id}`, mid, fromId, plain, incomingMsg.created_at, incomingMsg.from_username ?? incomingMsg.fromUsername, incomingMsg.from_display ?? incomingMsg.fromDisplay).catch(() => {});
             } else {
-              // Multiple retry attempts with escalating delays — sender key may arrive shortly after message
+              // Retry with escalating delays — sender key may arrive shortly after message.
+              // Only reload sender keys (lightweight GET), never distribute (expensive POST loop).
               const delays = [1500, 3000, 5000];
               let decrypted = null;
               for (const delay of delays) {
@@ -4295,16 +4327,6 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
                 try { await loadGroupSenderKeys(group.id, token, String(currentUser.id)); } catch {}
                 decrypted = await decryptGroupMsg(incomingMsg.content, null, fromId, group.id).catch(() => null);
                 if (decrypted !== null) break;
-                // After second attempt, also distribute OUR sender key to ensure two-way comms
-                if (delay === 3000) {
-                  try {
-                    const mems = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
-                    const mids = (Array.isArray(mems) ? mems : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
-                    if (mids.length > 0 && e2eeKey()) {
-                      await generateAndDistributeGroupKey(group.id, mids, token, String(currentUser.id));
-                    }
-                  } catch {}
-                }
               }
               _decryptInFlight.delete(mid);
               if (decrypted !== null) {
@@ -4452,22 +4474,19 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       let payload = content;
       if (!isImage && e2eeKey()) {
         try {
-          // Ensure our sender key is distributed to all members before encrypting.
-          // This guarantees recipients can decrypt even if the group-open effect hasn't completed.
-          try {
-            const mems = await api(`/api/groups/${group.id}/members`, 'GET', null, token).catch(() => []);
-            const mids = (Array.isArray(mems) ? mems : []).map(m => m.userId ?? m.user_id ?? m.id).filter(Boolean);
-            if (mids.length > 0) {
-              await generateAndDistributeGroupKey(group.id, mids, token, String(currentUser.id));
-            }
-          } catch {}
-          const enc = await encryptGroupMsg(content, null, group.id, String(currentUser.id));
+          // Sender key distribution happens in the group-open effect (phases 1-3).
+          // DO NOT distribute here — it blocks the send with multiple sequential
+          // network calls and can hang the spinner indefinitely.
+          const enc = await Promise.race([
+            encryptGroupMsg(content, null, group.id, String(currentUser.id)),
+            new Promise(r => setTimeout(() => r(null), 8000)),  // 8s timeout — fallback to plaintext
+          ]);
           if (enc !== null) {
             payload = enc;
             // Cache plaintext keyed by ciphertext — sender can't decrypt own ratcheted message
             ownPlainRef.current[enc] = content;
           }
-          // If null: E2EE key not ready — fall back to plaintext silently
+          // If null: E2EE key not ready or timeout — fall back to plaintext silently
         } catch { /* fallback to plaintext */ }
       }
       // Phoenix channel: join the group topic, then push via group_message event
