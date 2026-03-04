@@ -704,10 +704,16 @@ const _decryptFails   = {};   // { [peerId]: consecutiveFailCount }
 // ── Per-peer decryption mutex ─────────────────────────────────────────────────
 // Prevents concurrent Double Ratchet mutations for the same peer (race from
 // effect re-runs when new WS messages trigger a messages state update mid-decrypt).
+// Each operation has a 20s hard timeout to prevent chain poisoning — if one op
+// hangs, subsequent operations for the same key will still proceed after the timeout.
 const _decryptLocks   = {};   // { [peerId]: Promise }
 function _withDecryptLock(peerId, fn) {
   const prev = _decryptLocks[peerId] || Promise.resolve();
-  const next = prev.then(fn, fn);
+  const guarded = () => Promise.race([
+    fn().catch(e => { console.warn('[Lock] operation failed:', e?.message); return null; }),
+    new Promise(r => setTimeout(() => { console.warn('[Lock] timeout for', peerId); r(null); }, 20000)),
+  ]);
+  const next = prev.then(guarded, guarded);
   _decryptLocks[peerId] = next;
   return next;
 }
@@ -1121,8 +1127,9 @@ async function _trySignalDecryptRaw(senderId, hdr, ct) {
  */
 async function decryptDM(envelopeStr, senderId, token) {
   if (!envelopeStr) return null;
-  // Wait for initE2EE to finish loading keys before attempting decryption
-  await _e2eeReady;
+  // Wait for initE2EE to finish loading keys before attempting decryption (5s timeout)
+  await Promise.race([_e2eeReady, new Promise(r => setTimeout(r, 5000))]);
+  if (!_sigIdentityKey) return null;
   // Serialize all decryptions for the same peer — Double Ratchet is stateful
   // and concurrent mutations corrupt the session irreversibly.
   return _withDecryptLock(senderId, async () => {
@@ -1558,7 +1565,16 @@ async function api(path, method = 'GET', body = null, token = null, _isRetry = f
   if (tok) headers['Authorization'] = `Bearer ${tok}`;
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${BASE_URL}${path}`, opts);
+  // 15s timeout on all API calls — prevents spinner from hanging forever
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  opts.signal = controller.signal;
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, opts);
+  } finally {
+    clearTimeout(timeoutId);
+  }
   let data;
   try { data = await res.json(); } catch { data = {}; }
 
@@ -3640,6 +3656,8 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
     if (incomingMsg.type === 'ws_error') {
       setErr(incomingMsg.reason || 'Message rejected by server');
       setTimeout(() => setErr(''), 5000);
+      // Clean up stuck temp messages — server rejected the send
+      setMessages(prev => prev.filter(m => !m._temp));
     }
   }, [incomingMsg, peer.id, currentUser.id]);
 
@@ -3781,6 +3799,12 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           id: tempId, from_user: currentUser, from: currentUser.id,
           to: peer.id, content, created_at: new Date().toISOString(), _temp: true,
         }]);
+        // Safety: auto-expire temp message after 15s if server echo never arrives
+        // (handles silent WS send failure — connection may drop right after send)
+        setTimeout(() => {
+          setMessages(prev => prev.some(m => m.id === tempId) ?
+            prev.map(m => m.id === tempId ? { ...m, _temp: false, _failed: true } : m) : prev);
+        }, 15000);
       } else {
         const msg = await api('/api/messages', 'POST', { to: peer.id, content: payload }, token);
         // Pre-populate decrypted cache for own encrypted message
@@ -4345,6 +4369,8 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     if (incomingMsg.type === 'ws_error') {
       setErr(incomingMsg.reason || 'Message rejected by server');
       setTimeout(() => setErr(''), 5000);
+      // Clean up stuck temp messages — server rejected the send
+      setMessages(prev => prev.filter(m => !m._temp));
     }
   }, [incomingMsg, group.id, currentUser.id]);
 
@@ -4499,6 +4525,11 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
           id: tempId, from_id: String(currentUser.id),
           from_user: currentUser, content, created_at: new Date().toISOString(), _temp: true,
         }]);
+        // Safety: auto-expire temp message after 15s if server echo never arrives
+        setTimeout(() => {
+          setMessages(prev => prev.some(m => m.id === tempId) ?
+            prev.map(m => m.id === tempId ? { ...m, _temp: false, _failed: true } : m) : prev);
+        }, 15000);
       } else {
         const msg = await api(`/api/groups/${group.id}/messages`, 'POST', { content: payload }, token);
         // Pre-populate decrypted cache for own encrypted messages
@@ -6169,10 +6200,30 @@ function HomeScreen({ token, currentUser, onLogout }) {
         } catch {}
       })();
     }
-    // Load persisted unread counts from SQLCipher
-    DB.getUnreadCounts().then(counts => {
-      if (counts && Object.keys(counts).length > 0) setUnreadCounts(counts);
-    }).catch(() => {});
+    // Load persisted unread counts from SQLCipher — validate against actual conversations.
+    // Stale counts for deleted groups/contacts cause phantom red badges on app launch.
+    (async () => {
+      try {
+        const [counts, groups, contacts] = await Promise.all([
+          DB.getUnreadCounts(),
+          api('/api/groups', 'GET', null, token).catch(() => []),
+          api('/api/contacts', 'GET', null, token).catch(() => []),
+        ]);
+        if (!counts || Object.keys(counts).length === 0) return;
+        const validGroupIds = new Set((Array.isArray(groups) ? groups : []).map(g => `group_${g.id}`));
+        const validDmIds    = new Set((_normContacts(Array.isArray(contacts) ? contacts : [])).map(c => `dm_${c.userId}`));
+        const validated = {};
+        for (const [key, count] of Object.entries(counts)) {
+          if (count > 0 && (validGroupIds.has(key) || validDmIds.has(key))) {
+            validated[key] = count;
+          } else if (count > 0) {
+            // Clean up stale unread count from DB
+            DB.clearUnread(key).catch(() => {});
+          }
+        }
+        if (Object.keys(validated).length > 0) setUnreadCounts(validated);
+      } catch {}
+    })();
     // Initialise E2EE keypair (generate if new, upload public key)
     initE2EE(token);
     // Register Expo push token with backend
