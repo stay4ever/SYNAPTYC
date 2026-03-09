@@ -2,7 +2,7 @@
   "expo": {
     "name": "SYNAPTYC",
     "slug": "nano-synapsys",
-    "version": "1.4.1",
+    "version": "1.4.2",
     "scheme": "synaptyc",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,7 +15,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.aievolution.synaptyc",
-      "buildNumber": "70",
+      "buildNumber": "72",
       "supportsTablet": false,
       "icon": "./assets/icon.png",
       "infoPlist": {

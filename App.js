@@ -93,23 +93,23 @@ const GREEN_C = {
 };
 
 const TACTICAL_C = {
-  bg:          '#0c0c0e',
-  surface:     '#141418',
-  panel:       '#1a1a22',
-  border:      '#28283a',
-  borderBright:'#6878a050',
-  text:        '#9090a8',
-  bright:      '#d8d8ec',
-  dim:         '#505068',
-  muted:       '#484860',   // was #2c2c3c — brightened for readable placeholder text
-  accent:      '#a8b8cc',
-  green:       '#6888a0',
-  amber:       '#b89060',
-  red:         '#c04848',
-  silver:      '#A0A0B0',
-  accentFaint: 'rgba(168,184,204,0.07)',
-  accentDim:   'rgba(168,184,204,0.15)',
-  accentMid:   'rgba(168,184,204,0.30)',
+  bg:          '#0a0a0f',
+  surface:     '#13131a',
+  panel:       '#1c1c28',
+  border:      '#2a2a40',
+  borderBright:'#7888b060',
+  text:        '#9898b4',
+  bright:      '#e0e0f4',
+  dim:         '#585878',
+  muted:       '#505068',   // was #2c2c3c — brightened for readable placeholder text
+  accent:      '#b0c4de',
+  green:       '#7090b0',
+  amber:       '#c89860',
+  red:         '#c85050',
+  silver:      '#B8B8CC',
+  accentFaint: 'rgba(176,196,222,0.08)',
+  accentDim:   'rgba(176,196,222,0.18)',
+  accentMid:   'rgba(176,196,222,0.35)',
 };
 
 // ---------------------------------------------------------------------------
@@ -121,19 +121,37 @@ function makeRawStyles(C) {
   // Body text, inputs, messages → system font (SF Pro on iOS, Roboto on Android)
   const body = undefined;
 
-  // Reusable shadow helpers
-  const cardShadow = {
+  // Detect tactical (glossy steel) skin
+  const isTactical = C.accent === '#b0c4de';
+
+  // Reusable shadow helpers — tactical gets deeper shadows for glossy depth
+  const cardShadow = isTactical ? {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.50, shadowRadius: 16, elevation: 8,
+  } : {
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 12, elevation: 6,
   };
-  const inputShadow = {
+  const inputShadow = isTactical ? {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 4,
+  } : {
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25, shadowRadius: 8, elevation: 3,
   };
-  const btnShadow = {
+  const btnShadow = isTactical ? {
+    shadowColor: C.accent, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.30, shadowRadius: 14, elevation: 6,
+  } : {
     shadowColor: C.green, shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.22, shadowRadius: 10, elevation: 4,
   };
+
+  // Glossy highlight — a subtle bright top-border for metallic sheen (tactical only)
+  const glossyHighlight = isTactical ? {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(200,210,230,0.12)',
+  } : {};
 
   return {
     flex:       { flex: 1 },
@@ -157,6 +175,7 @@ function makeRawStyles(C) {
       backgroundColor: C.surface,
       borderBottomWidth: 1, borderBottomColor: C.border,
       paddingHorizontal: 12, paddingVertical: 10,
+      ...glossyHighlight,
     },
     appHeaderTitle: {
       fontFamily: mono, fontSize: 16, fontWeight: '700',
@@ -182,6 +201,7 @@ function makeRawStyles(C) {
       borderBottomWidth: 1, borderBottomColor: C.border,
       paddingHorizontal: 16, paddingVertical: 12,
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+      ...glossyHighlight,
     },
     homeTitle: {
       fontFamily: mono, fontSize: 22, fontWeight: '800',
@@ -199,13 +219,14 @@ function makeRawStyles(C) {
       marginBottom: Platform.OS === 'ios' ? 6 : 8,
       paddingVertical: 10,
       paddingHorizontal: 2,
-      shadowColor: C.accent,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.22,
-      shadowRadius: 22,
+      shadowColor: isTactical ? '#000' : C.accent,
+      shadowOffset: { width: 0, height: isTactical ? 8 : 6 },
+      shadowOpacity: isTactical ? 0.45 : 0.22,
+      shadowRadius: isTactical ? 28 : 22,
       elevation: 24,
       borderWidth: 1,
-      borderColor: C.borderBright,
+      borderColor: isTactical ? 'rgba(200,210,230,0.14)' : C.borderBright,
+      ...glossyHighlight,
     },
     tabItem:    { flex: 1, alignItems: 'center', paddingVertical: 4, position: 'relative', gap: 4 },
     tabIcon:    { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
@@ -246,6 +267,7 @@ function makeRawStyles(C) {
       fontFamily: body, fontSize: 15,
       borderRadius: 12,
       ...inputShadow,
+      ...glossyHighlight,
     },
     inputMultiline: { minHeight: 90, textAlignVertical: 'top', paddingTop: 13 },
 
@@ -253,6 +275,7 @@ function makeRawStyles(C) {
       backgroundColor: C.panel, borderWidth: 1, borderColor: C.green,
       alignItems: 'center', paddingVertical: 14,
       borderRadius: 10, ...btnShadow,
+      ...glossyHighlight,
     },
     primaryBtnDisabled: { borderColor: C.muted, opacity: 0.6 },
     primaryBtnText: {
@@ -295,16 +318,18 @@ function makeRawStyles(C) {
     },
     // WhatsApp-style bubbles: flat corner on sender side
     bubbleMine: {
-      backgroundColor: C.panel, borderColor: C.borderBright,
+      backgroundColor: isTactical ? '#1e1e2c' : C.panel, borderColor: C.borderBright,
       borderRadius: 18, borderTopRightRadius: 4,
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
+      shadowColor: '#000', shadowOffset: { width: 0, height: isTactical ? 4 : 2 },
+      shadowOpacity: isTactical ? 0.35 : 0.2, shadowRadius: isTactical ? 10 : 6, elevation: isTactical ? 5 : 3,
+      ...(isTactical ? { borderTopWidth: 1, borderTopColor: 'rgba(200,210,230,0.10)' } : {}),
     },
     bubbleTheirs: {
       backgroundColor: C.surface, borderColor: C.border,
       borderRadius: 18, borderTopLeftRadius: 4,
-      shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.2, shadowRadius: 6, elevation: 3,
+      shadowColor: '#000', shadowOffset: { width: 0, height: isTactical ? 4 : 2 },
+      shadowOpacity: isTactical ? 0.35 : 0.2, shadowRadius: isTactical ? 10 : 6, elevation: isTactical ? 5 : 3,
+      ...(isTactical ? { borderTopWidth: 1, borderTopColor: 'rgba(200,210,230,0.08)' } : {}),
     },
     bubbleBotMsg: {
       backgroundColor: C.panel, borderColor: C.borderBright,
@@ -387,6 +412,7 @@ function makeRawStyles(C) {
       backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
       padding: 16, marginBottom: 10, borderRadius: 12,
       ...cardShadow,
+      ...glossyHighlight,
     },
     profileLabel: { fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: 2, marginBottom: 4 },
     profileValue: { fontFamily: body, fontSize: 15, color: C.bright, fontWeight: '600' },
@@ -419,6 +445,7 @@ function makeRawStyles(C) {
     skinBtn: {
       flex: 1, backgroundColor: C.panel, borderWidth: 1, borderColor: C.border,
       paddingVertical: 14, alignItems: 'center', gap: 4, borderRadius: 10,
+      ...glossyHighlight,
     },
     skinBtnActive:     { borderColor: C.accent },
     skinDot:           { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
@@ -557,6 +584,7 @@ function makeRawStyles(C) {
       backgroundColor: C.surface, borderWidth: 1, borderColor: C.borderBright,
       padding: 24, width: '100%', maxWidth: 380,
       borderRadius: 16, ...cardShadow,
+      ...glossyHighlight,
     },
     modalTitle: {
       fontFamily: mono, fontSize: 16, fontWeight: '800',
@@ -3206,6 +3234,10 @@ function PhoneContactsSheet({ visible, onClose, token, currentUser, onOpenDM }) 
               keyExtractor={c => c.id}
               style={{ flex: 1 }}
               keyboardShouldPersistTaps="handled"
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={12}
+              windowSize={7}
+              initialNumToRender={15}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadAll(true)} tintColor={C.accent} />}
               ListEmptyComponent={<Text style={styles.emptyText}>NO CONTACTS FOUND</Text>}
               ListHeaderComponent={deviceContacts.length > 0 ? (
@@ -3330,6 +3362,8 @@ function PhoneContactsSheet({ visible, onClose, token, currentUser, onOpenDM }) 
 // ---------------------------------------------------------------------------
 const CHAT_CARD_GAP    = 6;
 const CHAT_CARD_MARGIN = 10;
+const AVATAR_COLORS = ['#1a472a','#14213d','#4a1942','#7b2d00','#003049','#1b4332','#312244','#3d1c02'];
+const GROUP_COLORS  = ['#1a2e1a','#1a1a3a','#2e1a2e','#2e1a0a','#0a1a2e','#1a2e24','#24152e','#2e1a10'];
 
 function ChatsTab({ token, currentUser, onOpenDM, unread = {} }) {
   const { styles, C } = useSkin();
@@ -3341,8 +3375,6 @@ function ChatsTab({ token, currentUser, onOpenDM, unread = {} }) {
   const [showContacts, setShowContacts] = useState(false);
   const screenW = Dimensions.get('window').width;
   const cardW   = (screenW - CHAT_CARD_MARGIN * 2 - CHAT_CARD_GAP) / 2;
-
-  const AVATAR_COLORS = ['#1a472a','#14213d','#4a1942','#7b2d00','#003049','#1b4332','#312244','#3d1c02'];
 
   const fetchUsers = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -3391,6 +3423,10 @@ function ChatsTab({ token, currentUser, onOpenDM, unread = {} }) {
         columnWrapperStyle={{ gap: CHAT_CARD_GAP, paddingHorizontal: CHAT_CARD_MARGIN }}
         contentContainerStyle={{ paddingTop: 10, paddingBottom: 100, gap: CHAT_CARD_GAP }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchUsers(true)} tintColor={C.accent} />}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        initialNumToRender={10}
         ListEmptyComponent={<Text style={[styles.emptyText, { textAlign: 'center', marginTop: 40 }]}>NO CHATS YET{'\n'}Tap + to find contacts</Text>}
         renderItem={({ item }) => {
           const cnt  = unread[`dm_${item.id}`] || 0;
@@ -3758,7 +3794,8 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
       alive = false;
       for (const id of myInflight) _decryptInFlight.delete(id);
     };
-  }, [messages, token, peer.id, decryptedMsgs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, token, peer.id]);
 
   const sendMessage = useCallback(async (overrideContent = null) => {
     const content = overrideContent ?? text.trim();
@@ -3907,6 +3944,10 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
             <FlatList
               ref={listRef} data={messages} keyExtractor={(m) => String(m.id)}
               contentContainerStyle={styles.msgList}
+              removeClippedSubviews={Platform.OS !== 'ios'}
+              maxToRenderPerBatch={15}
+              windowSize={11}
+              initialNumToRender={20}
               ListEmptyComponent={<Text style={styles.emptyText}>NO MESSAGES YET</Text>}
               renderItem={({ item }) => {
                 const mine = isMine(item);
@@ -4066,7 +4107,6 @@ function GroupsTab({ token, onOpenGroup, unread = {} }) {
 
   if (loading) return <View style={styles.centerFill}><Spinner size="large" /></View>;
 
-  const GROUP_COLORS = ['#1a2e1a','#1a1a3a','#2e1a2e','#2e1a0a','#0a1a2e','#1a2e24','#24152e','#2e1a10'];
   const screenW2 = Dimensions.get('window').width;
   const cardW2   = (screenW2 - CHAT_CARD_MARGIN * 2 - CHAT_CARD_GAP) / 2;
   const mono2    = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
@@ -4097,6 +4137,10 @@ function GroupsTab({ token, onOpenGroup, unread = {} }) {
         columnWrapperStyle={{ gap: CHAT_CARD_GAP, paddingHorizontal: CHAT_CARD_MARGIN }}
         contentContainerStyle={{ paddingTop: 10, paddingBottom: 100, gap: CHAT_CARD_GAP }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchGroups(true)} tintColor={C.accent} />}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        initialNumToRender={10}
         ListHeaderComponent={!showForm ? (
           <View style={{ paddingHorizontal: CHAT_CARD_MARGIN, paddingBottom: 8 }}>
             <TouchableOpacity style={styles.createGroupBtn} onPress={() => setShowForm(true)}>
@@ -4487,7 +4531,8 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       alive = false;
       for (const id of myInflight) _decryptInFlight.delete(id);
     };
-  }, [messages, group.id, senderKeysReady, decryptedMsgs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, group.id, senderKeysReady]);
 
   const sendMessage = useCallback(async (overrideContent = null) => {
     const content = overrideContent ?? text.trim();
@@ -4640,6 +4685,10 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
             <FlatList
               ref={listRef} data={messages} keyExtractor={(m) => String(m.id)}
               contentContainerStyle={styles.msgList}
+              removeClippedSubviews={Platform.OS !== 'ios'}
+              maxToRenderPerBatch={15}
+              windowSize={11}
+              initialNumToRender={20}
               ListEmptyComponent={<Text style={styles.emptyText}>NO MESSAGES YET</Text>}
               renderItem={({ item }) => {
                 const mine = isMine(item);
@@ -4948,6 +4997,10 @@ function BotTab({ token, wsRef }) {
         ref={listRef} data={messages} keyExtractor={(m) => String(m.id)}
         style={styles.flex}
         contentContainerStyle={styles.msgList}
+        removeClippedSubviews={Platform.OS !== 'ios'}
+        maxToRenderPerBatch={10}
+        windowSize={9}
+        initialNumToRender={15}
         renderItem={({ item }) => {
           const isBot = item.role === 'bot';
           return (
@@ -5204,8 +5257,7 @@ function ProfileTab({ token, currentUser, onLogout, profileImageUri, setProfileI
     ]);
   };
 
-  const AVATAR_COLORS_P = ['#1a472a','#14213d','#4a1942','#7b2d00','#003049','#1b4332','#312244','#3d1c02'];
-  const avatarBg = AVATAR_COLORS_P[currentUser.id % AVATAR_COLORS_P.length];
+  const avatarBg = AVATAR_COLORS[currentUser.id % AVATAR_COLORS.length];
   const initials = (currentUser.display_name || currentUser.username || '?')[0].toUpperCase();
 
   return (
@@ -5962,7 +6014,7 @@ function SettingsTab({ token, currentUser, notifEnabled, onSetNotifEnabled,
 
   const SKIN_OPTS = [
     { key: 'green',    label: 'PHANTOM', sub: 'GREEN',  dot: '#00FF41', desc: 'Classic matrix terminal' },
-    { key: 'tactical', label: 'TACTICAL', sub: 'STEEL', dot: '#a8b8cc', desc: 'Metallic Magpul texture' },
+    { key: 'tactical', label: 'TACTICAL', sub: 'STEEL', dot: '#b0c4de', desc: 'Glossy steel Magpul finish' },
   ];
 
   return (
@@ -6021,7 +6073,7 @@ function SettingsTab({ token, currentUser, notifEnabled, onSetNotifEnabled,
         ))}
       </View>
       <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.dim, marginTop: 8, letterSpacing: 1 }}>
-        {skin === 'tactical' ? 'TACTICAL: gunmetal + Magpul texture overlay' : 'PHANTOM: classic green terminal matrix'}
+        {skin === 'tactical' ? 'TACTICAL: glossy steel + Magpul finish' : 'PHANTOM: classic green terminal matrix'}
       </Text>
 
       <View style={styles.profileDivider} />
@@ -6494,6 +6546,10 @@ function HomeScreen({ token, currentUser, onLogout }) {
           <FlatList
             data={searchResults}
             keyExtractor={(r) => String(r.id)}
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            initialNumToRender={15}
             ListEmptyComponent={
               <Text style={[styles.emptyText, { marginTop: 32 }]}>
                 {searchQuery.trim() ? 'NO RESULTS' : 'TYPE TO SEARCH'}
