@@ -3906,6 +3906,8 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
   const isMine = (msg) => String(msg.from_user?.id ?? msg.from_user ?? msg.from ?? msg.from_id) === String(currentUser.id);
   // Resolve plaintext from a message — reads from async-decrypted cache or DB-loaded content
   const resolveContent = (msg) => {
+    // Delivery failure — temp message that server never echoed back
+    if (msg._failed) return { text: msg.content || '[Failed to send]', encrypted: false, failed: true, isMedia: false };
     const raw = isEncryptedDM(msg.content) ? decryptedMsgs[msg.id] : msg.content;
     const isEnc = isEncryptedDM(msg.content);
     if (raw === '__UNDECRYPTABLE__') return { text: '[Encrypted]', encrypted: true, failed: true, isMedia: false };
@@ -3983,7 +3985,8 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
                       )}
                       <View style={styles.msgMeta}>
                         <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
-                        {mine && <Text style={styles.msgRead}>{item.read ? ' \u2713\u2713' : ' \u2713'}</Text>}
+                        {mine && item._failed && <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 9, color: C.red, fontWeight: '700' }}>{' FAILED'}</Text>}
+                        {mine && !item._failed && <Text style={styles.msgRead}>{item.read ? ' \u2713\u2713' : ' \u2713'}</Text>}
                       </View>
                     </View>
                   </View>
@@ -4248,7 +4251,7 @@ function GroupsTab({ token, onOpenGroup, unread = {} }) {
 // ---------------------------------------------------------------------------
 // GROUP CHAT SCREEN
 // ---------------------------------------------------------------------------
-function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg }) {
+function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg, disappear }) {
   const { styles, C } = useSkin();
   const [messages, setMessages]     = useState([]);
   const [text, setText]             = useState('');
@@ -4563,7 +4566,9 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       // Phoenix channel: join the group topic, then push via group_message event
       if (!isImage && wsRef.current && wsRef.current.readyState === WebSocket.OPEN && wsRef.current._phxSend) {
         wsRef.current._phxJoin(`group:${group.id}`);
-        wsRef.current._phxSend(`group:${group.id}`, 'group_message', { content: payload, group_id: group.id });
+        const grpPayload = { content: payload, group_id: group.id };
+        if (disappear) grpPayload.disappear_after = disappear;
+        wsRef.current._phxSend(`group:${group.id}`, 'group_message', grpPayload);
         // Optimistic push — show plaintext immediately; server echo will replace temp on arrival
         const tempId = `temp_${Date.now()}`;
         setMessages(prev => [...prev, {
@@ -4590,7 +4595,7 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
       }
     } catch (e) { setErr(e.message); if (!overrideContent) setText(content); }
     finally { setSending(false); }
-  }, [text, group.id, currentUser, wsRef, token]);
+  }, [text, group.id, currentUser, wsRef, token, disappear]);
 
   const handleAttachment = useCallback(async () => {
     const pickerOpts = { quality: 0.4, base64: true, exif: false };
@@ -4644,6 +4649,8 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     return String(id) === String(currentUser.id);
   };
   const resolveGroupContent = (msg) => {
+    // Delivery failure — temp message that server never echoed back
+    if (msg._failed) return { text: msg.content || '[Failed to send]', encrypted: false, failed: true, isMedia: false };
     const raw = isEncryptedGroup(msg.content) ? decryptedMsgs[msg.id] : msg.content;
     const isEnc = isEncryptedGroup(msg.content);
     if (raw === '__UNDECRYPTABLE__') return { text: '[Encrypted]', encrypted: true, failed: true, isMedia: false };
@@ -4723,13 +4730,21 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
                       )}
                       <View style={styles.msgMeta}>
                         <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
-                        {mine && <Text style={styles.msgRead}>{' \u2713'}</Text>}
+                        {mine && item._failed && <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 9, color: C.red, fontWeight: '700' }}>{' FAILED'}</Text>}
+                        {mine && !item._failed && <Text style={styles.msgRead}>{' \u2713'}</Text>}
                       </View>
                     </View>
                   </View>
                 );
               }}
             />
+            {disappear && (
+              <View style={{ backgroundColor: C.panel, paddingHorizontal: 14, paddingVertical: 4, alignItems: 'center' }}>
+                <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace', fontSize: 10, color: C.amber, letterSpacing: 1 }}>
+                  {'\u23F1'} MESSAGES DISAPPEAR AFTER {DISAPPEAR_OPTIONS.find(o => o.value === disappear)?.label ?? ''}
+                </Text>
+              </View>
+            )}
             <View style={styles.inputRow}>
               <TouchableOpacity style={styles.attachBtn} onPress={handleAttachment}>
                 <Text style={styles.attachBtnText}>+</Text>
@@ -6505,6 +6520,7 @@ function HomeScreen({ token, currentUser, onLogout }) {
       <GroupChatScreen
         token={token} currentUser={currentUser} group={groupChat}
         onBack={() => setGroupChat(null)} wsRef={wsRef} incomingMsg={incomingMsg}
+        disappear={disappear}
       />
     );
   }
