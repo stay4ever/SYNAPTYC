@@ -216,11 +216,15 @@ function drEncrypt(session, plaintext) {
  */
 function drDecrypt(session, header, ciphertextB64) {
   // Check skipped message keys first
-  const skipKey = `${header.spk}_${header.n}`;
+  // Use canonical base64 form: decode then re-encode to match the key used in _skipMessageKeys
+  const senderPkCanonical = b64enc(b64dec(header.spk));
+  const skipKey = `${senderPkCanonical}_${header.n}`;
   if (session.skipped[skipKey]) {
     const mk  = session.skipped[skipKey];
-    delete session.skipped[skipKey];
-    return _drDecryptWithKey(mk, ciphertextB64);
+    const plain = _drDecryptWithKey(mk, ciphertextB64);
+    // Only delete from cache on successful decryption — preserve key for legitimate retry
+    if (plain !== null) delete session.skipped[skipKey];
+    return plain;
   }
 
   const senderPk = b64dec(header.spk);
@@ -266,7 +270,8 @@ function _dhRatchetStep(session, theirNewPk) {
 
 function _skipMessageKeys(session, until) {
   const MAX_SKIP = 1000;
-  if (session.Nr + MAX_SKIP < until) return;  // safety: don't skip too many
+  if (until > session.Nr + MAX_SKIP) return;  // safety: don't skip too many
+  if (!session.CKr) return;                    // CKr not yet seeded — nothing to skip
   while (session.Nr < until) {
     const [newCKr, mk] = kdfCK(session.CKr);
     session.CKr = newCKr;

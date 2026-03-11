@@ -23,14 +23,21 @@ async function getDbKey() {
 }
 
 let _db = null;
+let _dbPromise = null;
 
 /**
  * Open (or return cached) the encrypted SQLite database.
  * Creates all tables on first run.
+ * Uses a promise lock to prevent double-initialization from concurrent callers.
  */
 async function openDb() {
   if (_db) return _db;
+  if (_dbPromise) return _dbPromise;
+  _dbPromise = _openDbOnce();
+  return _dbPromise;
+}
 
+async function _openDbOnce() {
   const key = await getDbKey();
   _db = open({ name: 'synaptyc.db', encryptionKey: key });
 
@@ -203,12 +210,21 @@ async function persistMessage(convoKey, msgId, fromId, plaintext, createdAt, fro
   const mediaUrl = isMedia ? (() => {
     try { return JSON.parse(plaintext).url ?? null; } catch { return null; }
   })() : null;
+  // CRITICAL: Same guard as upsertMessages — never overwrite existing plaintext
+  // with an encrypted envelope. If the DB already has decrypted content, keep it.
   await db.executeAsync(
     `INSERT INTO messages
        (id, convo_key, from_id, from_username, from_display, content, is_media, media_url, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
-       content       = excluded.content,
+       content       = CASE
+         WHEN excluded.content LIKE '{"gsig":true%'
+           OR excluded.content LIKE '{"sig":true%'
+           OR excluded.content LIKE '{"enc":1%'
+           OR excluded.content LIKE '{"enc":2%'
+         THEN COALESCE(messages.content, excluded.content)
+         ELSE excluded.content
+       END,
        is_media      = excluded.is_media,
        media_url     = excluded.media_url,
        from_username = COALESCE(excluded.from_username, messages.from_username),

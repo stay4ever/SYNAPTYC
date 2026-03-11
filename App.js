@@ -743,6 +743,10 @@ function _withDecryptLock(peerId, fn) {
   ]);
   const next = prev.then(guarded, guarded);
   _decryptLocks[peerId] = next;
+  // Break the promise chain after settling to prevent linear memory growth
+  next.finally(() => {
+    if (_decryptLocks[peerId] === next) _decryptLocks[peerId] = Promise.resolve();
+  });
   return next;
 }
 
@@ -1423,6 +1427,11 @@ async function encryptGroupMsg(plaintext, _unusedGroupKey, groupId, myId) {
     // Handle iteration overflow — regenerate sender key and redistribute
     if (!result) {
       console.warn('[Signal] Sender key iteration overflow — regenerating for group', groupId);
+      // Evict stale/overflowed key from cache and SecureStore before regeneration
+      const cacheKey = `${groupId}_${myId}`;
+      delete _sigSenderKeys[cacheKey];
+      try { await SecureStore.deleteItemAsync(sigSKStore(groupId, myId)); } catch {}
+      try { await SecureStore.deleteItemAsync(`sig_sk_seed_${groupId}_${myId}`); } catch {}
       // Fetch current group members for redistribution (with timeout)
       const tok = _SESSION_TOKEN || null;
       try {
@@ -3577,18 +3586,44 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
   }, []);
 
+  // Schedule disappear timers for history-loaded messages that have a TTL.
+  // Calculates remaining time from created_at and removes expired messages.
+  const scheduleHistoryDisappearTimers = useCallback((msgs) => {
+    const toRemoveNow = [];
+    for (const msg of msgs) {
+      if (msg.disappear_after && msg.disappear_after > 0 && msg.created_at) {
+        const elapsed = (Date.now() - new Date(msg.created_at).getTime()) / 1000;
+        const remaining = msg.disappear_after - elapsed;
+        if (remaining > 0) {
+          const msgId = msg.id;
+          const tid = setTimeout(() => {
+            setMessages(prev => prev.filter(m => m.id !== msgId));
+          }, remaining * 1000);
+          disappearTimers.current.push(tid);
+        } else {
+          toRemoveNow.push(msg.id);
+        }
+      }
+    }
+    // Remove already-expired messages immediately
+    if (toRemoveNow.length > 0) {
+      setMessages(prev => prev.filter(m => !toRemoveNow.includes(m.id)));
+    }
+  }, []);
+
   const fetchHistory = useCallback(async () => {
     setLoading(true); setErr('');
     try {
       // 1. Load cached messages from local DB immediately (instant)
       const local = await DB.getLocalMessages(`dm_${peer.id}`);
-      if (local.length > 0) { setMessages(local); setLoading(false); }
+      if (local.length > 0) { setMessages(local); scheduleHistoryDisappearTimers(local); setLoading(false); }
       // 2. Delta-sync new messages from backend (decrypt + persist in SYNC)
-      await SYNC.syncDM(peer.id, token, decryptDM);
+      await SYNC.syncDM(peer.id, token, decryptDM, currentUser.id);
       // 3. Reload DB to show any new messages
       const fresh = await DB.getLocalMessages(`dm_${peer.id}`);
       if (fresh.length > 0) {
         setMessages(fresh);
+        scheduleHistoryDisappearTimers(fresh);
       } else if (local.length === 0) {
         // No local cache at all — try direct API fetch
         const data = await api(`/api/messages/${peer.id}`, 'GET', null, token);
@@ -3634,9 +3669,11 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
             const dmOwnKey = ownPlainRef.current[incomingMsg.content] ? incomingMsg.content
               : (typeof incomingMsg.content === 'string' && incomingMsg.content.includes('&quot;'))
                 ? _htmlUnescape(incomingMsg.content) : null;
+            // Only use ownPlainRef (reliable keyed lookup) — do NOT fall back to
+            // temp message content which can assign wrong plaintext with rapid sends
             const plain = (dmOwnKey && ownPlainRef.current[dmOwnKey])
               ? ownPlainRef.current[dmOwnKey]
-              : (prev.find(m => m._temp))?.content;
+              : null;
             if (plain) {
               if (dmOwnKey) delete ownPlainRef.current[dmOwnKey];
               decryptedMsgsRef.current[incomingMsg.id] = plain;
@@ -3813,9 +3850,12 @@ function DMChatScreen({ token, currentUser, peer, onBack, wsRef, incomingMsg, di
           new Promise(r => setTimeout(() => r(null), 10000)),
         ]);
         if (payload === null) {
-          // Don't block the user — send plaintext as fallback instead of aborting
-          payload = content;
-          console.warn('[Signal] DM encrypt timeout/failure — sending plaintext');
+          // Security: warn user instead of silently sending plaintext
+          console.warn('[Signal] DM encrypt timeout/failure — aborting send');
+          setErr('Encryption failed. Message not sent — please try again.');
+          setTimeout(() => setErr(''), 5000);
+          setSending(false);
+          return;
         }
       }
       // Cache plaintext keyed by encrypted payload — sender can never re-decrypt own
@@ -4271,6 +4311,29 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
 
   useEffect(() => () => { disappearTimers.current.forEach(clearTimeout); }, []);
 
+  // Schedule disappear timers for history-loaded messages that have a TTL.
+  const scheduleHistoryDisappearTimers = useCallback((msgs) => {
+    const toRemoveNow = [];
+    for (const msg of msgs) {
+      if (msg.disappear_after && msg.disappear_after > 0 && msg.created_at) {
+        const elapsed = (Date.now() - new Date(msg.created_at).getTime()) / 1000;
+        const remaining = msg.disappear_after - elapsed;
+        if (remaining > 0) {
+          const msgId = msg.id;
+          const tid = setTimeout(() => {
+            setMessages(prev => prev.filter(m => m.id !== msgId));
+          }, remaining * 1000);
+          disappearTimers.current.push(tid);
+        } else {
+          toRemoveNow.push(msg.id);
+        }
+      }
+    }
+    if (toRemoveNow.length > 0) {
+      setMessages(prev => prev.filter(m => !toRemoveNow.includes(m.id)));
+    }
+  }, []);
+
   // Load all Signal sender keys for this group.
   // 1. Fetch existing sender keys from server (detects stale/regenerated keys)
   // 2. Distribute OUR sender key to ALL current members (covers new members)
@@ -4317,15 +4380,16 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
     try {
       // 1. Load from local DB immediately (show cached messages while keys load)
       const local = await DB.getLocalMessages(`group_${group.id}`);
-      if (local.length > 0) { setMessages(local); setLoading(false); }
+      if (local.length > 0) { setMessages(local); scheduleHistoryDisappearTimers(local); setLoading(false); }
       // 2. Wait for sender keys before syncing — decryptGroupMsg needs them
       if (senderKeysPromise.current) await senderKeysPromise.current;
       // 3. Delta-sync from backend
       await SYNC.syncGroup(group.id, token, decryptGroupMsg, String(currentUser.id));
-      // 3. Reload DB
+      // 4. Reload DB
       const fresh = await DB.getLocalMessages(`group_${group.id}`);
       if (fresh.length > 0) {
         setMessages(fresh);
+        scheduleHistoryDisappearTimers(fresh);
       } else if (local.length === 0) {
         const data = await api(`/api/groups/${group.id}/messages`, 'GET', null, token);
         setMessages(Array.isArray(data) ? data : []);
@@ -4559,9 +4623,20 @@ function GroupChatScreen({ token, currentUser, group, onBack, wsRef, incomingMsg
             payload = enc;
             // Cache plaintext keyed by ciphertext — sender can't decrypt own ratcheted message
             ownPlainRef.current[enc] = content;
+          } else {
+            // Security: warn user instead of silently sending plaintext
+            console.warn('[Signal] Group encrypt timeout/failure — aborting send');
+            setErr('Encryption failed. Message not sent — please try again.');
+            setTimeout(() => setErr(''), 5000);
+            setSending(false);
+            return;
           }
-          // If null: E2EE key not ready or timeout — fall back to plaintext silently
-        } catch { /* fallback to plaintext */ }
+        } catch {
+          setErr('Encryption error. Message not sent.');
+          setTimeout(() => setErr(''), 5000);
+          setSending(false);
+          return;
+        }
       }
       // Phoenix channel: join the group topic, then push via group_message event
       if (!isImage && wsRef.current && wsRef.current.readyState === WebSocket.OPEN && wsRef.current._phxSend) {
@@ -6707,6 +6782,8 @@ function AppInner() {
     Object.keys(_groupKeyCache).forEach(k => delete _groupKeyCache[k]);
     Object.keys(_sigSessions).forEach(k => delete _sigSessions[k]);
     Object.keys(_sigSenderKeys).forEach(k => delete _sigSenderKeys[k]);
+    Object.keys(_decryptLocks).forEach(k => delete _decryptLocks[k]);
+    Object.keys(_decryptFails).forEach(k => delete _decryptFails[k]);
     setToken(null); setUser(null); setAppState('auth');
   }, []);
 
