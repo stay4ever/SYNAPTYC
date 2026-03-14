@@ -26,6 +26,12 @@ const JWT_EXPIRES = process.env.JWT_EXPIRES || "30d";
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "nano-synapsys.db");
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 const BCRYPT_ROUNDS = 12;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",")
+  : null; // null = allow all (dev), set in production
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "100", 10);
 
 // ---------------------------------------------------------------------------
 // Database
@@ -49,8 +55,58 @@ if (!tableCheck) {
 // ---------------------------------------------------------------------------
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// Production: trust reverse proxy (Railway, Fly, nginx)
+if (NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+// CORS — lock to specific origins in production
+app.use(
+  cors(
+    ALLOWED_ORIGINS
+      ? { origin: ALLOWED_ORIGINS, credentials: true }
+      : undefined
+  )
+);
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  if (NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
+// Rate limiting (in-memory, per-IP)
+const rateLimitMap = new Map();
+app.use((req, res, next) => {
+  const ip = req.ip || req.socket.remoteAddress;
+  const now = Date.now();
+  let entry = rateLimitMap.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    entry = { windowStart: now, count: 0 };
+    rateLimitMap.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "Too many requests. Try again later." });
+  }
+  next();
+});
+
+// Clean up stale rate limit entries every 5 minutes
+setInterval(() => {
+  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS * 2;
+  for (const [ip, entry] of rateLimitMap) {
+    if (entry.windowStart < cutoff) rateLimitMap.delete(ip);
+  }
+}, 300_000);
+
+app.use(express.json({ limit: "1mb" }));
 
 const server = http.createServer(app);
 
@@ -602,6 +658,34 @@ server.listen(PORT, () => {
   ╚══════════════════════════════════════════════════╝
   `);
 });
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Graceful shutdown
+// ---------------------------------------------------------------------------
+
+function shutdown(signal) {
+  console.log(`\n${signal} received — shutting down gracefully...`);
+  // Close WebSocket connections
+  for (const [, sockets] of clients) {
+    for (const ws of sockets) ws.close(1001, "Server shutting down");
+  }
+  clients.clear();
+  // Close HTTP server
+  server.close(() => {
+    db.close();
+    console.log("Database closed. Goodbye.");
+    process.exit(0);
+  });
+  // Force exit after 10s
+  setTimeout(() => process.exit(1), 10_000);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 // ---------------------------------------------------------------------------
 // Helpers
