@@ -48,7 +48,7 @@ final class AuthViewModel: ObservableObject {
             currentUser = resp.user
             isLoggedIn  = true
             WebSocketService.shared.connect()
-            await NotificationService.requestPermission()
+            _ = await NotificationService.requestPermission()
         } catch {
             errorMessage = error.localizedDescription
         }

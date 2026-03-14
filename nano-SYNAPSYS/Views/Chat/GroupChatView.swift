@@ -43,7 +43,7 @@ struct GroupChatView: View {
                             }
                         }
                         .padding(.vertical, 10)
-                        .onChange(of: vm.messages.count) { _ in
+                        .onChange(of: vm.messages.count) { _, _ in
                             withAnimation {
                                 proxy.scrollTo(vm.messages.last?.id, anchor: .bottom)
                             }

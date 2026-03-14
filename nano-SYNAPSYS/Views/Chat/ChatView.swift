@@ -63,11 +63,11 @@ struct ChatView: View {
                             }
                         }
                         .padding(.vertical, 10)
-                        .onChange(of: vm.messages.count) { _ in
+                        .onChange(of: vm.messages.count) { _, _ in
                             withAnimation { proxy.scrollTo(vm.messages.last?.id, anchor: .bottom) }
                         }
-                        .onChange(of: vm.isTyping) { typing in
-                            if typing { withAnimation { proxy.scrollTo("typing", anchor: .bottom) } }
+                        .onChange(of: vm.isTyping) { _, newTyping in
+                            if newTyping { withAnimation { proxy.scrollTo("typing", anchor: .bottom) } }
                         }
                     }
                 }
@@ -96,7 +96,7 @@ struct ChatView: View {
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                         .focused($inputFocused)
-                        .onChange(of: inputText) { _ in
+                        .onChange(of: inputText) { _, _ in
                             vm.sendTypingIndicator()
                         }
 

@@ -53,9 +53,9 @@ struct nano_SYNAPSYSApp: App {
                 }
             }
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase) { _, newPhase in
             withAnimation {
-                isBlurred = (phase == .background || phase == .inactive) && auth.isLoggedIn
+                isBlurred = (newPhase == .background || newPhase == .inactive) && auth.isLoggedIn
             }
         }
     }

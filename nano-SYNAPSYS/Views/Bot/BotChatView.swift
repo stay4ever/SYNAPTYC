@@ -41,11 +41,11 @@ struct BotChatView: View {
                             }
                         }
                         .padding(.vertical, 14)
-                        .onChange(of: vm.messages.count) { _ in
+                        .onChange(of: vm.messages.count) { _, _ in
                             withAnimation { proxy.scrollTo(vm.messages.last?.id, anchor: .bottom) }
                         }
-                        .onChange(of: vm.isLoading) { loading in
-                            if loading { withAnimation { proxy.scrollTo("loading", anchor: .bottom) } }
+                        .onChange(of: vm.isLoading) { _, newLoading in
+                            if newLoading { withAnimation { proxy.scrollTo("loading", anchor: .bottom) } }
                         }
                     }
                 }
