@@ -16,9 +16,11 @@ nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app. Fully 
 
 ```
 nano-SYNAPSYS/
-├── Config/           # API endpoints, Keychain keys, app constants
+├── Config/           # API endpoints, environment config, app constants
 ├── Models/           # Data structures: User, Message, Contact, Group, BotMessage
 ├── Services/         # Singletons: API, WebSocket, Encryption, Keychain, Notifications
+├── Protocols/        # Service protocols for dependency injection and testing
+├── Extensions/       # Reusable Swift extensions (accessibility, localization)
 ├── Theme/            # Design system: colors, typography, neon view modifiers
 ├── ViewModels/       # @MainActor ObservableObjects with @Published state
 ├── Views/            # SwiftUI views organized by feature
@@ -29,7 +31,8 @@ nano-SYNAPSYS/
 │   ├── Contacts/     #   Contact list, Contact row
 │   ├── Settings/     #   Security info, notifications, account
 │   └── Components/   #   Reusable: NeonButton, NeonTextField, EncryptionBadge, OnlineDot
-├── Assets.xcassets/  # Image assets and app icons
+├── Resources/        # Localization strings (en.lproj/Localizable.strings)
+├── Assets.xcassets/  # Image assets, color assets, app icons
 └── Info.plist        # Capabilities, permissions, TLS enforcement
 ```
 
@@ -50,14 +53,20 @@ xcodebuild -project nano-SYNAPSYS.xcodeproj -scheme nano-SYNAPSYS -sdk iphonesim
 
 ## Testing
 
-Tests live in `nano-SYNAPSYSTests/nano_SYNAPSYSTests.swift` — 35 unit tests using XCTest.
+Tests are split across separate files in `nano-SYNAPSYSTests/` (unit) and `nano-SYNAPSYSUITests/` (UI).
 
-**Test suites:**
-- **EncryptionServiceTests** (10) — Round-trip encryption, ECDH key exchange, public key serialization, edge cases
-- **KeychainServiceTests** (6) — Save/load strings, data, symmetric keys, overwrites, deletion
-- **ModelCodingTests** (11) — JSON decoding of AppUser, Message, Contact; name/initials handling
-- **ConfigTests** (5) — HTTPS/WSS validation, endpoint URL construction
-- **BotMessageTests** (3) — Bot message initialization, uniqueness, encoding
+**Unit test files:**
+- **EncryptionServiceTests.swift** (12) — Round-trip encryption, ECDH key exchange, public key serialization, nonce uniqueness
+- **KeychainServiceTests.swift** (8) — Save/load strings, data, symmetric keys, overwrites, deletion, edge cases
+- **ModelCodingTests.swift** (16) — JSON decoding of AppUser, Message, Contact, Group, GroupMessage; name/initials handling
+- **ConfigTests.swift** (10) — HTTPS/WSS validation, endpoint URL construction, semver format
+- **BotMessageTests.swift** (6) — Bot message initialization, uniqueness, encoding, timestamps
+- **WebSocketServiceTests.swift** (8) — WSMessage decoding for all message types, KeyExchangeEvent
+- **APIServiceTests.swift** (3) — Error descriptions, error types
+
+**UI test files:**
+- **nano_SYNAPSYSUITests.swift** — Splash screen, login screen, registration flow, accessibility
+- **nano_SYNAPSYSUITestsLaunchTests.swift** — Launch screenshot capture
 
 **Test naming convention:** `test_<function>_<scenario>()` (e.g., `test_encryptDecrypt_roundTrip()`)
 

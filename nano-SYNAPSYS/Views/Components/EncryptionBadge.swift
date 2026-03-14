@@ -23,5 +23,7 @@ struct EncryptionBadge: View {
             )
         )
         .clipShape(Capsule())
+        .accessibilityLabel(isActive ? "End-to-end encryption active" : "Establishing encryption")
+        .accessibilityAddTraits(.isStaticText)
     }
 }

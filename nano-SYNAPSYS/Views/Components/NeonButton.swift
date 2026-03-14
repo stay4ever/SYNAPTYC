@@ -35,6 +35,9 @@ struct NeonButton: View {
             .shadow(color: style.glow, radius: 6)
         }
         .disabled(isLoading)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(isLoading ? "Loading" : "")
     }
 }
 

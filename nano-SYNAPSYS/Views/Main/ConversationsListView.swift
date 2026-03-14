@@ -99,6 +99,7 @@ struct ConversationRow: View {
                 OnlineDot(isOnline: user.isOnline ?? false)
                     .offset(x: 2, y: 2)
             }
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(user.name)
                     .font(.monoBody).fontWeight(.semibold)
@@ -113,6 +114,8 @@ struct ConversationRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(user.name), @\(user.username), \(user.isOnline == true ? "Online" : "Offline"), Encrypted")
     }
 }
 
@@ -128,15 +131,19 @@ struct BotRowView: View {
                     .font(.system(size: 18))
                     .foregroundColor(.neonGreen)
             }
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Banner AI").font(.monoBody).fontWeight(.semibold).foregroundColor(.neonGreen)
                 Text("AI assistant — always online").font(.monoCaption).foregroundColor(.matrixGreen)
             }
             Spacer()
             PulsatingDot(color: .neonGreen, size: 7)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Banner AI, AI assistant, always online")
     }
 }

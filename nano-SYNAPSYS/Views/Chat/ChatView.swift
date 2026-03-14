@@ -112,6 +112,8 @@ struct ChatView: View {
                             .shadow(color: .neonGreen.opacity(0.3), radius: 4)
                     }
                     .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityLabel("Send message")
+                    .accessibilityAddTraits(.isButton)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)

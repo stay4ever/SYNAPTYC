@@ -35,3 +35,18 @@ Thumbs.db
 # Secrets
 *.env
 Secrets.swift
+
+# Backend
+backend/node_modules/
+backend/nano-synapsys.db
+backend/*.db-journal
+backend/*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# SwiftLint
+.swiftlint/

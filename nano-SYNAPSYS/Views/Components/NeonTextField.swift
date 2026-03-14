@@ -48,5 +48,7 @@ struct NeonTextField: View {
                 .stroke(Color.neonGreen.opacity(0.25), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(placeholder)
     }
 }
