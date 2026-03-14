@@ -21,7 +21,7 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 // Encryption status bar
                 HStack {
-                    EncryptionBadge()
+                    EncryptionBadge(isActive: vm.encryptionReady)
                     Spacer()
                     Button { showTimerPicker = true } label: {
                         HStack(spacing: 4) {

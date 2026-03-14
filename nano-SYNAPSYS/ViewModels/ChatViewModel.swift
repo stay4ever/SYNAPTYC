@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 
 @MainActor
 final class ChatViewModel: ObservableObject {
@@ -8,20 +9,21 @@ final class ChatViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var disappearTimer: DisappearTimer = .off
     @Published var isTyping                = false
+    @Published var encryptionReady         = false
 
     let peer: AppUser
     private var cancellables               = Set<AnyCancellable>()
-    /// Per-conversation shared key from ECDH exchange; nil if no key exchange has occurred yet.
     private var symmetricKey: SymmetricKey?
-
-    /// Whether E2E encryption is active for this conversation.
-    var isEncrypted: Bool { symmetricKey != nil }
+    private var pendingOutgoing: [String]  = []
+    private static let maxRetries          = 3
 
     init(peer: AppUser) {
         self.peer = peer
-        // Load per-conversation symmetric key if a key exchange has completed
+        // Restore shared key if a previous key exchange completed
         self.symmetricKey = EncryptionService.loadSymmetricKey(conversationId: peer.id)
+        self.encryptionReady = symmetricKey != nil
 
+        // MARK: Incoming DM messages
         WebSocketService.shared.$incomingMessage
             .compactMap { $0 }
             .filter { [weak self] msg in
@@ -39,6 +41,18 @@ final class ChatViewModel: ObservableObject {
                     return
                 }
                 var m = msg
+                // Filter out KEX protocol messages from display
+                if m.content.hasPrefix("KEX:") {
+                    // This is a key-exchange message persisted via REST — extract peer's public key
+                    if m.fromUser == self.peer.id {
+                        let base64 = String(m.content.dropFirst(4))
+                        if let pubKeyData = Data(base64Encoded: base64) {
+                            self.completeKeyExchange(theirPublicKeyData: pubKeyData)
+                        }
+                    }
+                    return
+                }
+                // Decrypt — all real messages MUST be encrypted
                 if let key = self.symmetricKey {
                     m.content = (try? EncryptionService.decrypt(m.content, using: key)) ?? m.content
                 }
@@ -53,51 +67,176 @@ final class ChatViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // MARK: Incoming key exchange events (real-time via WebSocket)
+        WebSocketService.shared.$incomingKeyExchange
+            .compactMap { $0 }
+            .filter { [weak self] kex in kex.from == self?.peer.id }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] kex in
+                self?.completeKeyExchange(theirPublicKeyData: kex.publicKeyData)
+            }
+            .store(in: &cancellables)
+
+        // MARK: Typing indicator
         WebSocketService.shared.$typingUsers
             .receive(on: RunLoop.main)
             .map { [weak self] ids in ids.contains(self?.peer.id ?? -1) }
             .assign(to: &$isTyping)
     }
 
+    // MARK: - Load messages
+
     func load() async {
         isLoading = true
         defer { isLoading = false }
         do {
-            var fetched = try await APIService.shared.messages(with: peer.id)
-            if let key = symmetricKey {
-                fetched = fetched.map { msg in
-                    var m = msg
-                    m.content = (try? EncryptionService.decrypt(m.content, using: key)) ?? m.content
-                    return m
+            let fetched = try await APIService.shared.messages(with: peer.id)
+
+            // Scan history for peer's KEX message if no shared key yet
+            if symmetricKey == nil {
+                for msg in fetched where msg.content.hasPrefix("KEX:") && msg.fromUser == peer.id {
+                    let base64 = String(msg.content.dropFirst(4))
+                    if let pubKeyData = Data(base64Encoded: base64) {
+                        completeKeyExchange(theirPublicKeyData: pubKeyData)
+                        break
+                    }
                 }
             }
-            messages = fetched
+
+            // If still no key, initiate key exchange
+            if symmetricKey == nil {
+                await initiateKeyExchange()
+            }
+
+            // Decrypt messages and filter out KEX protocol messages
+            let displayMessages: [Message] = fetched.compactMap { msg in
+                if msg.content.hasPrefix("KEX:") { return nil }
+                var m = msg
+                if let key = self.symmetricKey {
+                    m.content = (try? EncryptionService.decrypt(m.content, using: key)) ?? m.content
+                }
+                return m
+            }
+            messages = displayMessages
             purgeExpired()
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
+    // MARK: - Send (always encrypted)
+
     func send(_ text: String) async {
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let outgoing: String
-        if let key = symmetricKey {
-            outgoing = (try? EncryptionService.encrypt(text, using: key)) ?? text
-        } else {
-            outgoing = text
+
+        guard let key = symmetricKey else {
+            // Queue until key exchange completes — never send plaintext
+            pendingOutgoing.append(text)
+            if pendingOutgoing.count == 1 {
+                await initiateKeyExchange()
+            }
+            return
         }
+
+        await sendEncrypted(text, using: key)
+    }
+
+    func sendTypingIndicator() {
+        WebSocketService.shared.sendTyping(to: peer.id)
+    }
+
+    // MARK: - ECDH Key Exchange
+
+    /// Initiate key exchange: generate our keypair and broadcast public key
+    private func initiateKeyExchange() async {
+        let privateKey: P384.KeyAgreement.PrivateKey
+        if let existing = EncryptionService.loadPrivateKey(conversationId: peer.id) {
+            privateKey = existing
+        } else {
+            privateKey = EncryptionService.generateKeyPair()
+            EncryptionService.storePrivateKey(privateKey, conversationId: peer.id)
+        }
+
+        let pubKeyData   = EncryptionService.publicKeyData(from: privateKey)
+        let pubKeyBase64 = pubKeyData.base64EncodedString()
+
+        // Real-time exchange via WebSocket
+        WebSocketService.shared.sendKeyExchange(to: peer.id, publicKey: pubKeyBase64)
+
+        // Persist via REST for offline exchange (peer will find it when they load history)
+        let kexContent = "KEX:\(pubKeyBase64)"
+        _ = try? await APIService.shared.sendMessage(toUser: peer.id, content: kexContent)
+    }
+
+    /// Complete key exchange with peer's public key — derive shared secret
+    private func completeKeyExchange(theirPublicKeyData: Data) {
+        // Already have a shared key — skip
+        guard symmetricKey == nil else { return }
+
+        // Load or generate our private key
+        let privateKey: P384.KeyAgreement.PrivateKey
+        if let existing = EncryptionService.loadPrivateKey(conversationId: peer.id) {
+            privateKey = existing
+        } else {
+            privateKey = EncryptionService.generateKeyPair()
+            EncryptionService.storePrivateKey(privateKey, conversationId: peer.id)
+            // Send our public key back so the peer can also derive the shared key
+            let pubKeyBase64 = EncryptionService.publicKeyData(from: privateKey).base64EncodedString()
+            WebSocketService.shared.sendKeyExchange(to: peer.id, publicKey: pubKeyBase64)
+            Task {
+                _ = try? await APIService.shared.sendMessage(toUser: peer.id, content: "KEX:\(pubKeyBase64)")
+            }
+        }
+
+        guard let sharedKey = try? EncryptionService.deriveSharedKey(
+            myPrivateKey: privateKey,
+            theirPublicKeyData: theirPublicKeyData
+        ) else {
+            errorMessage = "Key exchange failed — unable to derive shared secret"
+            return
+        }
+
+        symmetricKey = sharedKey
+        EncryptionService.storeSymmetricKey(sharedKey, conversationId: peer.id)
+        encryptionReady = true
+
+        // Flush all queued messages now that encryption is ready
+        let pending = pendingOutgoing
+        pendingOutgoing.removeAll()
+        Task {
+            for text in pending {
+                await sendEncrypted(text, using: sharedKey)
+            }
+        }
+    }
+
+    // MARK: - Encrypted send with retry
+
+    private func sendEncrypted(_ text: String, using key: SymmetricKey) async {
         do {
-            var sent = try await APIService.shared.sendMessage(toUser: peer.id, content: outgoing)
-            sent.content = text // show decrypted locally
-            applyDisappearTimer(to: &sent)
-            messages.append(sent)
+            let encrypted = try EncryptionService.encrypt(text, using: key)
+            let sent = try await sendWithRetry(content: encrypted)
+            var msg = sent
+            msg.content = text // show decrypted content locally
+            applyDisappearTimer(to: &msg)
+            messages.append(msg)
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    func sendTypingIndicator() {
-        WebSocketService.shared.sendTyping(to: peer.id)
+    /// Retry send with exponential backoff: 1s, 2s, 4s
+    private func sendWithRetry(content: String, attempt: Int = 0) async throws -> Message {
+        do {
+            return try await APIService.shared.sendMessage(toUser: peer.id, content: content)
+        } catch {
+            if attempt < Self.maxRetries {
+                let delay = UInt64(pow(2.0, Double(attempt))) * 1_000_000_000
+                try? await Task.sleep(nanoseconds: delay)
+                return try await sendWithRetry(content: content, attempt: attempt + 1)
+            }
+            throw error
+        }
     }
 
     // MARK: - Disappearing messages

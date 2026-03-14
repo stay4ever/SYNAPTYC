@@ -26,7 +26,7 @@ struct GroupChatView: View {
                         .font(.monoSmall)
                         .foregroundColor(.matrixGreen)
                     Spacer()
-                    EncryptionBadge()
+                    EncryptionBadge(isActive: vm.encryptionReady)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -60,7 +60,7 @@ struct GroupChatView: View {
 
                 // Input bar
                 HStack(spacing: 10) {
-                    TextField("Message group…", text: $inputText, axis: .vertical)
+                    TextField("Encrypted message…", text: $inputText, axis: .vertical)
                         .font(.monoBody)
                         .foregroundColor(.neonGreen)
                         .tint(.neonGreen)
