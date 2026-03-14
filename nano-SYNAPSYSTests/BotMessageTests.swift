@@ -1,6 +1,7 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
+// swiftlint:disable force_cast force_unwrapping
 final class BotMessageTests: XCTestCase {
 
     func test_botMessage_initAssignsFields() {
@@ -17,16 +18,16 @@ final class BotMessageTests: XCTestCase {
     }
 
     func test_botChatRequest_encode() throws {
-        let req  = BotChatRequest(message: "What is nano-SYNAPSYS?")
+        let req = BotChatRequest(message: "What is nano-SYNAPSYS?")
         let data = try JSONEncoder().encode(req)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
         XCTAssertEqual(dict["message"] as? String, "What is nano-SYNAPSYS?")
     }
 
     func test_botChatResponse_decode() throws {
-        let json = """
+        let json = Data("""
         {"reply": "Hello! I'm Banner AI."}
-        """.data(using: .utf8)!
+        """.utf8)
         let resp = try JSONDecoder().decode(BotChatResponse.self, from: json)
         XCTAssertEqual(resp.reply, "Hello! I'm Banner AI.")
     }

@@ -67,10 +67,14 @@ actor APIService {
     func register(username: String, email: String, password: String, displayName: String) async throws -> AuthResponse {
         struct Body: Encodable {
             let username, email, password: String
-            let display_name: String
+            let displayName: String
+            enum CodingKeys: String, CodingKey {
+                case username, email, password
+                case displayName = "display_name"
+            }
         }
         return try await request(Config.API.register, method: "POST",
-                                 body: Body(username: username, email: email, password: password, display_name: displayName),
+                                 body: Body(username: username, email: email, password: password, displayName: displayName),
                                  responseType: AuthResponse.self)
     }
 
@@ -164,16 +168,22 @@ actor APIService {
     }
 
     func addGroupMember(groupId: Int, userId: Int) async throws -> Group {
-        struct Body: Encodable { let user_id: Int }
+        struct Body: Encodable {
+            let userId: Int
+            enum CodingKeys: String, CodingKey { case userId = "user_id" }
+        }
         return try await request("\(Config.API.groups)/\(groupId)/members", method: "POST",
-                                 body: Body(user_id: userId), responseType: Group.self)
+                                 body: Body(userId: userId), responseType: Group.self)
     }
 
     func removeGroupMember(groupId: Int, userId: Int) async throws {
-        struct Body: Encodable { let user_id: Int }
+        struct Body: Encodable {
+            let userId: Int
+            enum CodingKeys: String, CodingKey { case userId = "user_id" }
+        }
         struct Resp: Decodable { let removed: Bool }
         _ = try await request("\(Config.API.groups)/\(groupId)/members", method: "DELETE",
-                              body: Body(user_id: userId), responseType: Resp.self)
+                              body: Body(userId: userId), responseType: Resp.self)
     }
 
     func deleteGroup(groupId: Int) async throws {

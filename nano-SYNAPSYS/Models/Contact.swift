@@ -19,9 +19,9 @@ struct Contact: Codable, Identifiable {
 }
 
 enum ContactStatus: String, Codable {
-    case pending  = "pending"
-    case accepted = "accepted"
-    case blocked  = "blocked"
+    case pending
+    case accepted
+    case blocked
 }
 
 struct ContactsResponse: Codable {

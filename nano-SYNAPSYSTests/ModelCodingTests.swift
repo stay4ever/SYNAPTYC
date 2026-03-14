@@ -1,12 +1,13 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
+// swiftlint:disable force_cast force_unwrapping
 final class ModelCodingTests: XCTestCase {
 
     // MARK: - AppUser
 
     func test_appUser_decode() throws {
-        let json = """
+        let json = Data("""
         {
             "id": 42,
             "username": "alice",
@@ -15,7 +16,7 @@ final class ModelCodingTests: XCTestCase {
             "is_approved": true,
             "online": true
         }
-        """.data(using: .utf8)!
+        """.utf8)
         let user = try JSONDecoder().decode(AppUser.self, from: json)
         XCTAssertEqual(user.id,          42)
         XCTAssertEqual(user.username,    "alice")
@@ -25,9 +26,9 @@ final class ModelCodingTests: XCTestCase {
     }
 
     func test_appUser_decode_minimalFields() throws {
-        let json = """
+        let json = Data("""
         {"id": 1, "username": "bob", "email": "b@t.com", "is_approved": false}
-        """.data(using: .utf8)!
+        """.utf8)
         let user = try JSONDecoder().decode(AppUser.self, from: json)
         XCTAssertEqual(user.id, 1)
         XCTAssertNil(user.displayName)
@@ -66,7 +67,7 @@ final class ModelCodingTests: XCTestCase {
     // MARK: - Message
 
     func test_message_decode() throws {
-        let json = """
+        let json = Data("""
         {
             "id": 7,
             "from_user": 1,
@@ -75,7 +76,7 @@ final class ModelCodingTests: XCTestCase {
             "read": false,
             "created_at": "2025-01-15T10:30:00.000Z"
         }
-        """.data(using: .utf8)!
+        """.utf8)
         let msg = try JSONDecoder().decode(Message.self, from: json)
         XCTAssertEqual(msg.id,       7)
         XCTAssertEqual(msg.fromUser, 1)
@@ -92,9 +93,9 @@ final class ModelCodingTests: XCTestCase {
     }
 
     func test_message_timestampParsing() throws {
-        let json = """
+        let json = Data("""
         {"id": 1, "from_user": 1, "to_user": 2, "content": "x", "read": true, "created_at": "2025-06-15T12:00:00.000Z"}
-        """.data(using: .utf8)!
+        """.utf8)
         let msg = try JSONDecoder().decode(Message.self, from: json)
         XCTAssertFalse(msg.timeString.isEmpty)
     }
@@ -102,7 +103,7 @@ final class ModelCodingTests: XCTestCase {
     // MARK: - Contact
 
     func test_contact_decode() throws {
-        let json = """
+        let json = Data("""
         {
             "id": 3,
             "requester_id": 10,
@@ -110,7 +111,7 @@ final class ModelCodingTests: XCTestCase {
             "status": "accepted",
             "created_at": "2025-01-01T00:00:00Z"
         }
-        """.data(using: .utf8)!
+        """.utf8)
         let contact = try JSONDecoder().decode(Contact.self, from: json)
         XCTAssertEqual(contact.status, .accepted)
         XCTAssertEqual(contact.requesterId, 10)
@@ -118,9 +119,9 @@ final class ModelCodingTests: XCTestCase {
 
     func test_contact_statusValues() throws {
         for status in ["pending", "accepted", "blocked"] {
-            let json = """
+            let json = Data("""
             {"id": 1, "requester_id": 1, "receiver_id": 2, "status": "\(status)", "created_at": "2025-01-01T00:00:00Z"}
-            """.data(using: .utf8)!
+            """.utf8)
             let contact = try JSONDecoder().decode(Contact.self, from: json)
             XCTAssertEqual(contact.status.rawValue, status)
         }
@@ -129,7 +130,7 @@ final class ModelCodingTests: XCTestCase {
     // MARK: - Group
 
     func test_group_decode() throws {
-        let json = """
+        let json = Data("""
         {
             "id": 1,
             "name": "Test Group",
@@ -140,7 +141,7 @@ final class ModelCodingTests: XCTestCase {
                 {"id": 1, "user_id": 42, "username": "alice", "display_name": "Alice", "role": "admin"}
             ]
         }
-        """.data(using: .utf8)!
+        """.utf8)
         let group = try JSONDecoder().decode(Group.self, from: json)
         XCTAssertEqual(group.name, "Test Group")
         XCTAssertEqual(group.members.count, 1)
@@ -148,7 +149,7 @@ final class ModelCodingTests: XCTestCase {
     }
 
     func test_groupMessage_decode() throws {
-        let json = """
+        let json = Data("""
         {
             "id": 1,
             "group_id": 5,
@@ -158,7 +159,7 @@ final class ModelCodingTests: XCTestCase {
             "content": "Hello group!",
             "created_at": "2025-01-15T10:30:00.000Z"
         }
-        """.data(using: .utf8)!
+        """.utf8)
         let msg = try JSONDecoder().decode(GroupMessage.self, from: json)
         XCTAssertEqual(msg.groupId, 5)
         XCTAssertEqual(msg.fromDisplay, "Alice")

@@ -24,12 +24,12 @@ struct WSMessage: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case type, id, content, from, to, users, read
-        case createdAt    = "created_at"
-        case messageId    = "message_id"
-        case publicKey    = "public_key"
-        case groupId      = "group_id"
-        case fromUsername  = "from_username"
-        case fromDisplay   = "from_display"
+        case createdAt = "created_at"
+        case messageId = "message_id"
+        case publicKey = "public_key"
+        case groupId = "group_id"
+        case fromUsername = "from_username"
+        case fromDisplay = "from_display"
         case encryptedKey = "encrypted_key"
     }
 }

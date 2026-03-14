@@ -50,6 +50,11 @@ identifier_name:
     - i
     - r
     - g
+    - m
+    - c
+    - u
+    - d
+    - e
 
 type_name:
   min_length:
@@ -58,6 +63,8 @@ type_name:
   max_length:
     warning: 50
     error: 60
+  excluded:
+    - nano_SYNAPSYSApp
 
 function_body_length:
   warning: 60

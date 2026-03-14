@@ -8,7 +8,7 @@ extension View {
         self
             .accessibilityLabel(label)
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint(hint != nil ? Text(hint!) : Text(""))
+            .accessibilityHint(hint.map { Text($0) } ?? Text(""))
     }
 
     /// Adds accessibility label for static content

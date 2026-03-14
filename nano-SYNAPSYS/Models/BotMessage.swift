@@ -15,8 +15,8 @@ struct BotMessage: Identifiable, Equatable {
 }
 
 enum BotRole: String {
-    case user      = "user"
-    case assistant = "assistant"
+    case user
+    case assistant
 }
 
 struct BotChatRequest: Codable {

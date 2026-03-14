@@ -2,6 +2,7 @@ import XCTest
 import CryptoKit
 @testable import nano_SYNAPSYS
 
+// swiftlint:disable force_cast force_unwrapping
 final class EncryptionServiceTests: XCTestCase {
 
     // MARK: - Symmetric encrypt / decrypt round-trip
@@ -82,7 +83,7 @@ final class EncryptionServiceTests: XCTestCase {
         )
 
         let aliceBytes = aliceShared.withUnsafeBytes { Data($0) }
-        let bobBytes   = bobShared.withUnsafeBytes   { Data($0) }
+        let bobBytes = bobShared.withUnsafeBytes { Data($0) }
         XCTAssertEqual(aliceBytes, bobBytes, "ECDH must produce the same shared secret on both sides")
     }
 

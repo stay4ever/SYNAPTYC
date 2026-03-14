@@ -56,7 +56,7 @@ struct MessagesResponse: Codable {
 
 // Disappearing message timer options
 enum DisappearTimer: String, CaseIterable, Identifiable {
-    case off   = "off"
+    case off
     case h24   = "24h"
     case d7    = "7d"
     case d30   = "30d"

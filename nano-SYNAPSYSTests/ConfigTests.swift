@@ -19,7 +19,7 @@ final class ConfigTests: XCTestCase {
             Config.API.users,
             Config.API.contacts,
             Config.API.messages,
-            Config.API.botChat,
+            Config.API.botChat
         ]
         for ep in endpoints {
             XCTAssertTrue(ep.hasPrefix(Config.baseURL), "Endpoint \(ep) must start with baseURL")
@@ -29,7 +29,7 @@ final class ConfigTests: XCTestCase {
     func test_apiEndpoints_areValidURLs() {
         let endpoints = [
             Config.API.register, Config.API.login, Config.API.me,
-            Config.API.users, Config.API.contacts, Config.API.messages, Config.API.botChat,
+            Config.API.users, Config.API.contacts, Config.API.messages, Config.API.botChat
         ]
         for ep in endpoints {
             XCTAssertNotNil(URL(string: ep), "\(ep) must be a valid URL")

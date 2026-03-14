@@ -2,6 +2,7 @@ import XCTest
 import CryptoKit
 @testable import nano_SYNAPSYS
 
+// swiftlint:disable force_cast force_unwrapping
 final class KeychainServiceTests: XCTestCase {
 
     private let testKey = "nano_test_keychain_\(UUID().uuidString)"
@@ -18,7 +19,7 @@ final class KeychainServiceTests: XCTestCase {
     }
 
     func test_overwrite_updatesValue() {
-        KeychainService.save("first",  for: testKey)
+        KeychainService.save("first", for: testKey)
         KeychainService.save("second", for: testKey)
         XCTAssertEqual(KeychainService.load(testKey), "second")
     }
@@ -40,7 +41,7 @@ final class KeychainServiceTests: XCTestCase {
     }
 
     func test_saveAndLoad_symmetricKey() {
-        let key   = SymmetricKey(size: .bits256)
+        let key = SymmetricKey(size: .bits256)
         let bytes = key.withUnsafeBytes { Data($0) }
         KeychainService.saveData(bytes, for: testKey)
         guard let loaded = KeychainService.loadData(testKey) else {
