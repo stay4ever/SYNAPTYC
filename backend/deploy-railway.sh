@@ -38,8 +38,8 @@ railway variables set \
   JWT_SECRET="$JWT_SECRET" \
   JWT_EXPIRES=30d \
   DB_PATH=/data/nano-synapsys.db \
-  BASE_URL=https://www.ai-evolution.com.au \
-  ALLOWED_ORIGINS=https://www.ai-evolution.com.au \
+  BASE_URL=https://www.api.nanosynapsys.com \
+  ALLOWED_ORIGINS=https://www.api.nanosynapsys.com \
   RATE_LIMIT_MAX=100 2>/dev/null || true
 
 # Add persistent volume for SQLite
@@ -57,5 +57,5 @@ echo ""
 echo "Next steps:"
 echo "  1. Get your deployment URL:  railway open"
 echo "  2. Set custom domain:        railway domain"
-echo "  3. Point DNS for ai-evolution.com.au to the Railway domain"
+echo "  3. Point DNS for api.nanosynapsys.com to the Railway domain"
 echo "  4. Verify health:            curl https://your-domain/health"

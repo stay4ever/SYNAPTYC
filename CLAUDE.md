@@ -2,12 +2,12 @@
 
 ## Project Overview
 
-nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app built for the AI Evolution ecosystem. No phone number required. No metadata harvested. It uses ECDH P-384 key exchange with AES-256-GCM encryption, real-time WebSocket communication, and a cyberpunk neon-green Matrix aesthetic.
+nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app. Fully standalone — no shared infrastructure with any other service. No phone number required. No metadata harvested. It uses ECDH P-384 key exchange with AES-256-GCM encryption, real-time WebSocket communication, and a cyberpunk neon-green Matrix aesthetic.
 
 - **Platform:** iOS 17.0+ (iPhone only, portrait)
 - **Language:** Swift 5.0 / SwiftUI
-- **Bundle ID:** `com.aievolve.nanosynapsys`
-- **Backend:** `https://www.ai-evolution.com.au` (REST API + WSS)
+- **Bundle ID:** `com.nanosynapsys`
+- **Backend:** `https://api.nanosynapsys.com` (REST API + WSS)
 - **No external dependencies** — purely Apple-native frameworks (CryptoKit, Combine, Security, UserNotifications)
 
 ## Architecture

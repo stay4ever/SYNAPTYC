@@ -52,8 +52,8 @@ Environment=PORT=3000
 Environment=JWT_SECRET=${JWT_SECRET}
 Environment=JWT_EXPIRES=30d
 Environment=DB_PATH=${APP_DIR}/data/nano-synapsys.db
-Environment=BASE_URL=https://www.ai-evolution.com.au
-Environment=ALLOWED_ORIGINS=https://www.ai-evolution.com.au
+Environment=BASE_URL=https://www.api.nanosynapsys.com
+Environment=ALLOWED_ORIGINS=https://www.api.nanosynapsys.com
 Environment=RATE_LIMIT_MAX=100
 ExecStart=/usr/bin/node server.js
 Restart=always
@@ -74,7 +74,7 @@ ssh "$TARGET" "apt-get install -y nginx certbot python3-certbot-nginx 2>/dev/nul
 cat > /etc/nginx/sites-available/${SERVICE_NAME} << 'NGINX'
 server {
     listen 80;
-    server_name www.ai-evolution.com.au ai-evolution.com.au;
+    server_name www.api.nanosynapsys.com api.nanosynapsys.com;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -95,7 +95,7 @@ ln -sf /etc/nginx/sites-available/${SERVICE_NAME} /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
-echo 'Run: certbot --nginx -d www.ai-evolution.com.au -d ai-evolution.com.au'
+echo 'Run: certbot --nginx -d www.api.nanosynapsys.com -d api.nanosynapsys.com'
 "
 
 echo ""
@@ -105,9 +105,9 @@ echo "Service status:"
 ssh "$TARGET" "systemctl status ${SERVICE_NAME} --no-pager -l | head -15"
 echo ""
 echo "Next steps:"
-echo "  1. Point DNS A record for ai-evolution.com.au to your server IP"
-echo "  2. Run on server: certbot --nginx -d www.ai-evolution.com.au -d ai-evolution.com.au"
-echo "  3. Verify: curl https://www.ai-evolution.com.au/health"
+echo "  1. Point DNS A record for api.nanosynapsys.com to your server IP"
+echo "  2. Run on server: certbot --nginx -d www.api.nanosynapsys.com -d api.nanosynapsys.com"
+echo "  3. Verify: curl https://www.api.nanosynapsys.com/health"
 echo ""
 echo "JWT_SECRET has been set to: ${JWT_SECRET}"
 echo "Save this securely — you'll need it if you redeploy."

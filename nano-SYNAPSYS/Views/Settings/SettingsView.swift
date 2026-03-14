@@ -72,7 +72,7 @@ struct SettingsView: View {
                         settingsSection(title: "ABOUT") {
                             settingsRow(icon: "info.circle", label: "Version", value: Config.App.version)
                             Divider().background(Color.neonGreen.opacity(0.08))
-                            settingsRow(icon: "server.rack", label: "Backend", value: "ai-evolution.com.au")
+                            settingsRow(icon: "server.rack", label: "Backend", value: "api.nanosynapsys.com")
                         }
 
                         // Logout

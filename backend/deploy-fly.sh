@@ -36,7 +36,7 @@ if ! flyctl status &>/dev/null; then
   JWT_SECRET=$(openssl rand -hex 32)
   flyctl secrets set \
     JWT_SECRET="$JWT_SECRET" \
-    ALLOWED_ORIGINS="https://www.ai-evolution.com.au"
+    ALLOWED_ORIGINS="https://www.api.nanosynapsys.com"
 fi
 
 # Deploy
@@ -50,6 +50,6 @@ echo ""
 flyctl status
 echo ""
 echo "Next steps:"
-echo "  1. Add custom domain:  flyctl certs create www.ai-evolution.com.au"
-echo "  2. Point DNS CNAME:    www.ai-evolution.com.au → nano-synapsys.fly.dev"
+echo "  1. Add custom domain:  flyctl certs create www.api.nanosynapsys.com"
+echo "  2. Point DNS CNAME:    www.api.nanosynapsys.com → nano-synapsys.fly.dev"
 echo "  3. Verify health:      curl https://nano-synapsys.fly.dev/health"

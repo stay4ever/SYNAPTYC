@@ -10,7 +10,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-change-this-in-production}
       - JWT_EXPIRES=30d
       - DB_PATH=/data/nano-synapsys.db
-      - BASE_URL=https://www.ai-evolution.com.au
+      - BASE_URL=https://www.api.nanosynapsys.com
     volumes:
       - db-data:/data
     restart: unless-stopped
