@@ -9,6 +9,8 @@ struct WSMessage: Decodable {
     let to: Int?
     let content: String?
     let createdAt: String?
+    let read: Bool?
+    let messageId: Int?
     // Group message fields
     let groupId: Int?
     let fromUsername: String?
@@ -17,11 +19,12 @@ struct WSMessage: Decodable {
     let users: [WSUser]?
 
     enum CodingKeys: String, CodingKey {
-        case type, id, content, from, to, users
-        case createdAt    = "createdAt"
+        case type, id, content, from, to, users, read
+        case createdAt    = "created_at"
+        case messageId    = "message_id"
         case groupId      = "group_id"
-        case fromUsername = "fromUsername"
-        case fromDisplay  = "fromDisplay"
+        case fromUsername  = "from_username"
+        case fromDisplay   = "from_display"
     }
 }
 
@@ -33,7 +36,7 @@ struct WSUser: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case id, username, online
-        case displayName = "displayName"
+        case displayName = "display_name"
     }
 }
 
@@ -81,6 +84,11 @@ final class WebSocketService: ObservableObject {
         send(payload)
     }
 
+    func markRead(messageId: Int) {
+        let payload: [String: Any] = ["type": "mark_read", "message_id": messageId]
+        send(payload)
+    }
+
     func sendGroupMessage(groupId: Int, content: String) {
         let payload: [String: Any] = ["type": "group_message", "group_id": groupId, "content": content]
         send(payload)
@@ -120,7 +128,7 @@ final class WebSocketService: ObservableObject {
             if let from = msg.from, let to = msg.to, let content = msg.content, let id = msg.id {
                 let message = Message(
                     id: id, fromUser: from, toUser: to,
-                    content: content, read: false,
+                    content: content, read: msg.read ?? false,
                     createdAt: msg.createdAt ?? ISO8601DateFormatter().string(from: Date())
                 )
                 incomingMessage = message
@@ -140,6 +148,18 @@ final class WebSocketService: ObservableObject {
                     createdAt: msg.createdAt ?? ISO8601DateFormatter().string(from: Date())
                 )
                 incomingGroupMessage = gm
+            }
+
+        case "mark_read":
+            // Server acknowledges a message was read — update via incomingMessage
+            if let id = msg.messageId ?? msg.id, let from = msg.from, let to = msg.to {
+                var readMsg = Message(
+                    id: id, fromUser: from, toUser: to,
+                    content: "", read: true,
+                    createdAt: msg.createdAt ?? ISO8601DateFormatter().string(from: Date())
+                )
+                readMsg.isEncrypted = false
+                incomingMessage = readMsg
             }
 
         case "user_list":

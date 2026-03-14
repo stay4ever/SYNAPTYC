@@ -11,16 +11,16 @@ final class ChatViewModel: ObservableObject {
 
     let peer: AppUser
     private var cancellables               = Set<AnyCancellable>()
-    private var symmetricKey               = EncryptionService.localKey()
+    /// Per-conversation shared key from ECDH exchange; nil if no key exchange has occurred yet.
+    private var symmetricKey: SymmetricKey?
+
+    /// Whether E2E encryption is active for this conversation.
+    var isEncrypted: Bool { symmetricKey != nil }
 
     init(peer: AppUser) {
         self.peer = peer
-        // Load per-conversation symmetric key if available
-        if let key = EncryptionService.loadSymmetricKey(conversationId: peer.id) {
-            self.symmetricKey = key
-        } else {
-            EncryptionService.storeSymmetricKey(symmetricKey, conversationId: peer.id)
-        }
+        // Load per-conversation symmetric key if a key exchange has completed
+        self.symmetricKey = EncryptionService.loadSymmetricKey(conversationId: peer.id)
 
         WebSocketService.shared.$incomingMessage
             .compactMap { $0 }
@@ -33,15 +33,22 @@ final class ChatViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] msg in
                 guard let self else { return }
+                // Handle read-receipt updates for existing messages
+                if msg.read, let idx = self.messages.firstIndex(where: { $0.id == msg.id }) {
+                    self.messages[idx].read = true
+                    return
+                }
                 var m = msg
-                m.content = (try? EncryptionService.decrypt(m.content, using: self.symmetricKey)) ?? m.content
+                if let key = self.symmetricKey {
+                    m.content = (try? EncryptionService.decrypt(m.content, using: key)) ?? m.content
+                }
                 if !self.messages.contains(where: { $0.id == m.id }) {
                     self.messages.append(m)
                     self.applyDisappearTimer(to: &self.messages[self.messages.count - 1])
                 }
                 if m.fromUser == self.peer.id {
                     WebSocketService.shared.markRead(messageId: m.id)
-                    NotificationService.scheduleLocal(title: self.peer.name, body: m.content)
+                    NotificationService.scheduleLocal(title: self.peer.name, body: "New encrypted message")
                 }
             }
             .store(in: &cancellables)
@@ -57,10 +64,12 @@ final class ChatViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             var fetched = try await APIService.shared.messages(with: peer.id)
-            fetched = fetched.map { msg in
-                var m = msg
-                m.content = (try? EncryptionService.decrypt(m.content, using: symmetricKey)) ?? m.content
-                return m
+            if let key = symmetricKey {
+                fetched = fetched.map { msg in
+                    var m = msg
+                    m.content = (try? EncryptionService.decrypt(m.content, using: key)) ?? m.content
+                    return m
+                }
             }
             messages = fetched
             purgeExpired()
@@ -71,9 +80,14 @@ final class ChatViewModel: ObservableObject {
 
     func send(_ text: String) async {
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let encrypted = (try? EncryptionService.encrypt(text, using: symmetricKey)) ?? text
+        let outgoing: String
+        if let key = symmetricKey {
+            outgoing = (try? EncryptionService.encrypt(text, using: key)) ?? text
+        } else {
+            outgoing = text
+        }
         do {
-            var sent = try await APIService.shared.sendMessage(toUser: peer.id, content: encrypted)
+            var sent = try await APIService.shared.sendMessage(toUser: peer.id, content: outgoing)
             sent.content = text // show decrypted locally
             applyDisappearTimer(to: &sent)
             messages.append(sent)

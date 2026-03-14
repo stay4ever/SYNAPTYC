@@ -39,6 +39,7 @@ enum KeychainService {
         return SecItemDelete(query as CFDictionary) == errSecSuccess
     }
 
+    @discardableResult
     static func saveData(_ data: Data, for key: String) -> Bool {
         let query: [String: Any] = [
             kSecClass as String:       kSecClassGenericPassword,
