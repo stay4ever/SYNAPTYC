@@ -1,6 +1,7 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
+// swiftlint:disable force_cast force_unwrapping
 final class APIServiceTests: XCTestCase {
 
     func test_apiError_descriptions() {

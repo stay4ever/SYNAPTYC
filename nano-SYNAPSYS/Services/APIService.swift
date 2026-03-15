@@ -9,11 +9,11 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL:          return "Invalid URL"
-        case .noData:              return "No data received"
-        case .serverError(let m):  return m
-        case .unauthorized:        return "Session expired. Please log in again."
-        case .decodingError(let e):return "Data error: \(e.localizedDescription)"
+        case .invalidURL: return "Invalid URL"
+        case .noData: return "No data received"
+        case .serverError(let m): return m
+        case .unauthorized: return "Session expired. Please log in again."
+        case .decodingError(let e): return "Data error: \(e.localizedDescription)"
         }
     }
 }

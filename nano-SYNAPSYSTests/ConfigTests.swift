@@ -1,6 +1,7 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
+// swiftlint:disable force_cast force_unwrapping
 final class ConfigTests: XCTestCase {
 
     func test_baseURL_isHTTPS() {

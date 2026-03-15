@@ -14,8 +14,8 @@ struct Message: Codable, Identifiable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case id
-        case fromUser  = "from_user"
-        case toUser    = "to_user"
+        case fromUser = "from_user"
+        case toUser = "to_user"
         case content
         case read
         case createdAt = "created_at"
@@ -64,18 +64,18 @@ enum DisappearTimer: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .off:  return "Off"
-        case .h24:  return "24 hours"
-        case .d7:   return "7 days"
-        case .d30:  return "30 days"
+        case .off: return "Off"
+        case .h24: return "24 hours"
+        case .d7: return "7 days"
+        case .d30: return "30 days"
         }
     }
     var interval: TimeInterval? {
         switch self {
-        case .off:  return nil
-        case .h24:  return 86400
-        case .d7:   return 604800
-        case .d30:  return 2592000
+        case .off: return nil
+        case .h24: return 86400
+        case .d7: return 604800
+        case .d30: return 2592000
         }
     }
 }

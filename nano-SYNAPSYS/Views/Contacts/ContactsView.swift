@@ -81,8 +81,11 @@ struct ContactsView: View {
                                         if let user = contact.otherUser {
                                             ContactRow(user: user, status: .pendingIncoming) { action in
                                                 Task {
-                                                    if action == .accept { await vm.accept(contact: contact) }
-                                                    else { await vm.reject(contact: contact) }
+                                                    if action == .accept {
+                                                        await vm.accept(contact: contact)
+                                                    } else {
+                                                        await vm.reject(contact: contact)
+                                                    }
                                                 }
                                             }
                                             Divider().background(Color.neonGreen.opacity(0.07))

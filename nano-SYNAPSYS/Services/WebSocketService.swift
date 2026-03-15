@@ -163,8 +163,8 @@ final class WebSocketService: ObservableObject {
     // MARK: - Message handler
 
     private func handle(_ text: String) {
-        guard let data = text.data(using: .utf8),
-              let msg  = try? JSONDecoder().decode(WSMessage.self, from: data) else { return }
+        let data = Data(text.utf8)
+        guard let msg = try? JSONDecoder().decode(WSMessage.self, from: data) else { return }
 
         switch msg.type {
         case "chat_message":

@@ -80,7 +80,7 @@ final class ModelCodingTests: XCTestCase {
         let msg = try JSONDecoder().decode(Message.self, from: json)
         XCTAssertEqual(msg.id,       7)
         XCTAssertEqual(msg.fromUser, 1)
-        XCTAssertEqual(msg.content,  "Hello!")
+        XCTAssertEqual(msg.content, "Hello!")
         XCTAssertFalse(msg.read)
     }
 
@@ -169,9 +169,9 @@ final class ModelCodingTests: XCTestCase {
 
     func test_disappearTimer_intervals() {
         XCTAssertNil(DisappearTimer.off.interval)
-        XCTAssertEqual(DisappearTimer.h24.interval,  86400)
+        XCTAssertEqual(DisappearTimer.h24.interval, 86400)
         XCTAssertEqual(DisappearTimer.d7.interval,   604800)
-        XCTAssertEqual(DisappearTimer.d30.interval,  2592000)
+        XCTAssertEqual(DisappearTimer.d30.interval, 2592000)
     }
 
     func test_disappearTimer_allCases_count() {

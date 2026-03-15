@@ -1,6 +1,7 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
+// swiftlint:disable force_cast force_unwrapping
 final class WebSocketServiceTests: XCTestCase {
 
     func test_wsMessage_decodeChatMessage() throws {

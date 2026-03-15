@@ -46,30 +46,30 @@ enum NeonButtonStyle {
 
     var foreground: Color {
         switch self {
-        case .primary:   return .neonGreen
+        case .primary: return .neonGreen
         case .secondary: return .matrixGreen
-        case .danger:    return .alertRed
+        case .danger: return .alertRed
         }
     }
     var background: Color {
         switch self {
-        case .primary:   return Color.darkGreen.opacity(0.5)
+        case .primary: return Color.darkGreen.opacity(0.5)
         case .secondary: return Color.dimGreen.opacity(0.3)
-        case .danger:    return Color.red.opacity(0.12)
+        case .danger: return Color.red.opacity(0.12)
         }
     }
     var border: Color {
         switch self {
-        case .primary:   return Color.neonGreen.opacity(0.5)
+        case .primary: return Color.neonGreen.opacity(0.5)
         case .secondary: return Color.matrixGreen.opacity(0.3)
-        case .danger:    return Color.alertRed.opacity(0.5)
+        case .danger: return Color.alertRed.opacity(0.5)
         }
     }
     var glow: Color {
         switch self {
-        case .primary:   return Color.neonGreen.opacity(0.2)
+        case .primary: return Color.neonGreen.opacity(0.2)
         case .secondary: return .clear
-        case .danger:    return Color.red.opacity(0.15)
+        case .danger: return Color.red.opacity(0.15)
         }
     }
 }

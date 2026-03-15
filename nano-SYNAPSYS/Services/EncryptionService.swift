@@ -33,9 +33,7 @@ enum EncryptionService {
     // MARK: - Encrypt / Decrypt
 
     static func encrypt(_ plaintext: String, using key: SymmetricKey) throws -> String {
-        guard let data = plaintext.data(using: .utf8) else {
-            throw EncryptionError.encodingFailed
-        }
+        let data = Data(plaintext.utf8)
         let sealed = try AES.GCM.seal(data, using: key)
         guard let combined = sealed.combined else {
             throw EncryptionError.sealFailed
@@ -101,9 +99,9 @@ enum EncryptionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .encodingFailed:    return "Failed to encode message data"
-        case .decodingFailed:    return "Failed to decode encrypted data"
-        case .sealFailed:        return "Encryption seal failed"
+        case .encodingFailed: return "Failed to encode message data"
+        case .decodingFailed: return "Failed to decode encrypted data"
+        case .sealFailed: return "Encryption seal failed"
         case .keyExchangeFailed: return "Key exchange failed"
         }
     }

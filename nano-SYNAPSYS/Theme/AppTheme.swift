@@ -27,11 +27,11 @@ extension Color {
 
 // MARK: - Typography
 extension Font {
-    static let monoTitle   = Font.system(.title2,   design: .monospaced).weight(.bold)
+    static let monoTitle = Font.system(.title2, design: .monospaced).weight(.bold)
     static let monoHeadline = Font.system(.headline, design: .monospaced).weight(.semibold)
-    static let monoBody    = Font.system(.body,      design: .monospaced)
-    static let monoCaption = Font.system(.caption,   design: .monospaced)
-    static let monoSmall   = Font.system(size: 11,   design: .monospaced)
+    static let monoBody = Font.system(.body, design: .monospaced)
+    static let monoCaption = Font.system(.caption, design: .monospaced)
+    static let monoSmall = Font.system(size: 11, design: .monospaced)
 }
 
 // MARK: - ViewModifiers
