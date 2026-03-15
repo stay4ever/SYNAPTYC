@@ -1,0 +1,8 @@
+# App identifier and Apple ID for nano-SYNAPSYS
+# Set via environment variables or update directly
+
+app_identifier(ENV["APP_IDENTIFIER"] || "com.nanosynapsys.app")
+apple_id(ENV["APPLE_ID"] || "your-apple-id@example.com")
+team_id(ENV["TEAM_ID"] || "YOUR_TEAM_ID")
+
+itc_team_id(ENV["ITC_TEAM_ID"] || "YOUR_ITC_TEAM_ID")

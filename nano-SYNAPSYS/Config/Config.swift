@@ -28,7 +28,7 @@ enum Config {
 
     enum App {
         static let name          = "nano-SYNAPSYS"
-        static let version       = "1.0.0"
+        static let version       = "1.1.0"
         static let encryptionLabel = "AES-256-GCM · ECDH-P384 · E2E Encrypted"
     }
 }
