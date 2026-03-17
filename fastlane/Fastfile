@@ -30,8 +30,10 @@ platform :ios do
       export_options: {
         provisioningProfiles: {
           "com.nanosynapsys.app" => ENV["PROVISIONING_PROFILE_NAME"] || "nano-SYNAPSYS AppStore"
-        }
+        },
+        teamID: ENV["TEAM_ID"]
       },
+      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}'",
       output_directory: "./build",
       output_name: "nano-SYNAPSYS.ipa",
       clean: true
