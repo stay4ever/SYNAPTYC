@@ -21,7 +21,7 @@ struct ChatView: View {
             VStack(spacing: 0) {
                 // Encryption status bar
                 HStack {
-                    EncryptionBadge()
+                    EncryptionBadge(isActive: vm.encryptionReady)
                     Spacer()
                     Button { showTimerPicker = true } label: {
                         HStack(spacing: 4) {
@@ -63,11 +63,11 @@ struct ChatView: View {
                             }
                         }
                         .padding(.vertical, 10)
-                        .onChange(of: vm.messages.count) { _ in
+                        .onChange(of: vm.messages.count) { _, _ in
                             withAnimation { proxy.scrollTo(vm.messages.last?.id, anchor: .bottom) }
                         }
-                        .onChange(of: vm.isTyping) { typing in
-                            if typing { withAnimation { proxy.scrollTo("typing", anchor: .bottom) } }
+                        .onChange(of: vm.isTyping) { _, newTyping in
+                            if newTyping { withAnimation { proxy.scrollTo("typing", anchor: .bottom) } }
                         }
                     }
                 }
@@ -96,7 +96,7 @@ struct ChatView: View {
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 20))
                         .focused($inputFocused)
-                        .onChange(of: inputText) { _ in
+                        .onChange(of: inputText) { _, _ in
                             vm.sendTypingIndicator()
                         }
 
@@ -112,6 +112,8 @@ struct ChatView: View {
                             .shadow(color: .neonGreen.opacity(0.3), radius: 4)
                     }
                     .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityLabel("Send message")
+                    .accessibilityAddTraits(.isButton)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)

@@ -23,9 +23,9 @@ enum EncryptionService {
         let theirPublicKey = try P384.KeyAgreement.PublicKey(rawRepresentation: theirPublicKeyData)
         let sharedSecret  = try myPrivateKey.sharedSecretFromKeyAgreement(with: theirPublicKey)
         return sharedSecret.hkdfDerivedSymmetricKey(
-            using:         SHA384.self,
-            salt:          "nano-SYNAPSYS-v1".data(using: .utf8)!,
-            sharedInfo:    Data(),
+            using: SHA384.self,
+            salt: Data("nano-SYNAPSYS-v1".utf8),
+            sharedInfo: Data(),
             outputByteCount: 32
         )
     }
@@ -33,9 +33,7 @@ enum EncryptionService {
     // MARK: - Encrypt / Decrypt
 
     static func encrypt(_ plaintext: String, using key: SymmetricKey) throws -> String {
-        guard let data = plaintext.data(using: .utf8) else {
-            throw EncryptionError.encodingFailed
-        }
+        let data = Data(plaintext.utf8)
         let sealed = try AES.GCM.seal(data, using: key)
         guard let combined = sealed.combined else {
             throw EncryptionError.sealFailed
@@ -49,9 +47,9 @@ enum EncryptionService {
         guard let data = Data(base64Encoded: base64) else {
             throw EncryptionError.decodingFailed
         }
-        let box        = try AES.GCM.SealedBox(combined: data)
-        let plaintext  = try AES.GCM.open(box, using: key)
-        guard let str  = String(data: plaintext, encoding: .utf8) else {
+        let box = try AES.GCM.SealedBox(combined: data)
+        let plaintext = try AES.GCM.open(box, using: key)
+        guard let str = String(data: plaintext, encoding: .utf8) else {
             throw EncryptionError.decodingFailed
         }
         return str
@@ -101,9 +99,9 @@ enum EncryptionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .encodingFailed:    return "Failed to encode message data"
-        case .decodingFailed:    return "Failed to decode encrypted data"
-        case .sealFailed:        return "Encryption seal failed"
+        case .encodingFailed: return "Failed to encode message data"
+        case .decodingFailed: return "Failed to decode encrypted data"
+        case .sealFailed: return "Encryption seal failed"
         case .keyExchangeFailed: return "Key exchange failed"
         }
     }

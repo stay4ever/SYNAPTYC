@@ -12,12 +12,15 @@ struct AppUser: Codable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, username, email
         case displayName = "display_name"
-        case isApproved  = "is_approved"
-        case isOnline    = "online"
-        case lastSeen    = "last_seen"
+        case isApproved = "is_approved"
+        case isOnline = "online"
+        case lastSeen = "last_seen"
     }
 
-    var name: String { displayName?.isEmpty == false ? displayName! : username }
+    var name: String {
+        if let dn = displayName, !dn.isEmpty { return dn }
+        return username
+    }
     var initials: String {
         let parts = name.split(separator: " ")
         if parts.count >= 2 {

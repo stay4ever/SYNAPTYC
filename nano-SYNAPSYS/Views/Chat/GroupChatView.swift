@@ -26,7 +26,7 @@ struct GroupChatView: View {
                         .font(.monoSmall)
                         .foregroundColor(.matrixGreen)
                     Spacer()
-                    EncryptionBadge()
+                    EncryptionBadge(isActive: vm.encryptionReady)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -43,7 +43,7 @@ struct GroupChatView: View {
                             }
                         }
                         .padding(.vertical, 10)
-                        .onChange(of: vm.messages.count) { _ in
+                        .onChange(of: vm.messages.count) { _, _ in
                             withAnimation {
                                 proxy.scrollTo(vm.messages.last?.id, anchor: .bottom)
                             }
@@ -60,7 +60,7 @@ struct GroupChatView: View {
 
                 // Input bar
                 HStack(spacing: 10) {
-                    TextField("Message group…", text: $inputText, axis: .vertical)
+                    TextField("Encrypted message…", text: $inputText, axis: .vertical)
                         .font(.monoBody)
                         .foregroundColor(.neonGreen)
                         .tint(.neonGreen)
@@ -89,6 +89,8 @@ struct GroupChatView: View {
                             .shadow(color: .neonGreen.opacity(0.3), radius: 4)
                     }
                     .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityLabel("Send message")
+                    .accessibilityAddTraits(.isButton)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
@@ -127,6 +129,7 @@ struct GroupMessageBubble: View {
                         .font(.monoSmall)
                         .foregroundColor(.matrixGreen)
                         .padding(.horizontal, 14)
+                        .accessibilityLabel("From \(message.fromDisplay)")
                 }
                 HStack(spacing: 0) {
                     if isMine { Spacer() }
@@ -157,5 +160,7 @@ struct GroupMessageBubble: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(isMine ? "You" : message.fromDisplay): \(message.content). \(message.timeString)")
     }
 }

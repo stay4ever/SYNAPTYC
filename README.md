@@ -2,7 +2,7 @@
 
 > **Encrypted iOS Messaging — Beyond Signal. Beyond WhatsApp.**
 
-A privacy-first, end-to-end encrypted messaging app built for the AI Evolution ecosystem. No phone number required. No metadata harvested. No compromise.
+A privacy-first, end-to-end encrypted messaging app. Fully standalone with dedicated infrastructure. No phone number required. No metadata harvested. No compromise.
 
 ---
 
@@ -31,7 +31,7 @@ Every message is encrypted **on-device** before transmission. The server never s
 - **Screen Security** — Auto-blur on background, screenshot alerts
 - **Contact Management** — Request / accept / block
 - **Push Notifications** — APNs integration
-- **Matrix Design** — AI Evolution aesthetic — dark green neon
+- **Matrix Design** — Cyberpunk neon aesthetic — dark green neon
 
 ---
 
@@ -43,13 +43,13 @@ Every message is encrypted **on-device** before transmission. The server never s
 
 ## Backend
 
-Connects to the AI Evolution backend at `https://www.ai-evolution.com.au`
+Connects to the dedicated nano-SYNAPSYS backend at `https://api.nanosynapsys.com`
 
 ---
 
 ## Design
 
-Follows the AI Evolution design language:
+Follows the nano-SYNAPSYS design language:
 - Background `#000e00`
 - Accent `#00ff41` (matrix green)
 - Monospaced typography

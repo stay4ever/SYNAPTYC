@@ -11,17 +11,17 @@ struct Contact: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id
         case requesterId = "requester_id"
-        case receiverId  = "receiver_id"
+        case receiverId = "receiver_id"
         case status
-        case createdAt   = "created_at"
-        case otherUser   = "other_user"
+        case createdAt = "created_at"
+        case otherUser = "other_user"
     }
 }
 
 enum ContactStatus: String, Codable {
-    case pending  = "pending"
-    case accepted = "accepted"
-    case blocked  = "blocked"
+    case pending
+    case accepted
+    case blocked
 }
 
 struct ContactsResponse: Codable {

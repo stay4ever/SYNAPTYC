@@ -22,11 +22,13 @@ struct LoginView: View {
                             .font(.system(size: 48))
                             .foregroundColor(.neonGreen)
                             .shadow(color: .neonGreen, radius: 12)
+                            .accessibilityHidden(true)
 
                         Text("nano-SYNAPSYS")
                             .font(.monoTitle)
                             .foregroundColor(.neonGreen)
                             .glowText()
+                            .accessibilityAddTraits(.isHeader)
 
                         Text("SECURE COMMUNICATIONS")
                             .font(.monoSmall)

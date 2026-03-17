@@ -1,0 +1,82 @@
+name: iOS CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'nano-SYNAPSYS/**'
+      - 'nano-SYNAPSYSTests/**'
+      - 'nano-SYNAPSYSUITests/**'
+      - 'nano-SYNAPSYS.xcodeproj/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'nano-SYNAPSYS/**'
+      - 'nano-SYNAPSYSTests/**'
+      - 'nano-SYNAPSYSUITests/**'
+      - 'nano-SYNAPSYS.xcodeproj/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 15
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app/Contents/Developer
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build
+        run: |
+          xcodebuild build \
+            -project nano-SYNAPSYS.xcodeproj \
+            -scheme nano-SYNAPSYS \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.2' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            | xcpretty --color
+
+      - name: Run Unit Tests
+        run: |
+          xcodebuild test \
+            -project nano-SYNAPSYS.xcodeproj \
+            -scheme nano-SYNAPSYS \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=17.2' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            | xcpretty --color --report junit
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: build/reports/
+
+  lint:
+    name: SwiftLint
+    runs-on: macos-14
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Run SwiftLint
+        run: swiftlint lint --reporter github-actions-logging

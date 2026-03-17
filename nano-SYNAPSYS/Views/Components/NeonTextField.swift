@@ -4,7 +4,7 @@ struct NeonTextField: View {
     let placeholder: String
     @Binding var text: String
     var isSecure: Bool       = false
-    var icon: String?        = nil
+    var icon: String?
     var keyboardType: UIKeyboardType = .default
     var autocapitalization: TextInputAutocapitalization = .never
 
@@ -48,5 +48,7 @@ struct NeonTextField: View {
                 .stroke(Color.neonGreen.opacity(0.25), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(placeholder)
     }
 }

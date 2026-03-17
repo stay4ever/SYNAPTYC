@@ -12,8 +12,8 @@ struct Group: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, name, description, members
-        case createdBy  = "created_by"
-        case createdAt  = "created_at"
+        case createdBy = "created_by"
+        case createdAt = "created_at"
     }
 
     var initials: String {
@@ -35,11 +35,14 @@ struct GroupMember: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, username, role
-        case userId      = "user_id"
+        case userId = "user_id"
         case displayName = "display_name"
     }
 
-    var name: String { displayName?.isEmpty == false ? displayName! : username }
+    var name: String {
+        if let dn = displayName, !dn.isEmpty { return dn }
+        return username
+    }
 }
 
 // MARK: - Group Message
@@ -55,11 +58,11 @@ struct GroupMessage: Codable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id, content
-        case groupId     = "group_id"
-        case fromUser    = "from_user"
+        case groupId = "group_id"
+        case fromUser = "from_user"
         case fromUsername = "from_username"
         case fromDisplay = "from_display"
-        case createdAt   = "created_at"
+        case createdAt = "created_at"
     }
 
     var timestamp: Date {
@@ -86,8 +89,8 @@ struct InviteResponse: Codable {
 
     enum CodingKeys: String, CodingKey {
         case token
-        case inviteUrl  = "invite_url"
-        case expiresAt  = "expires_at"
+        case inviteUrl = "invite_url"
+        case expiresAt = "expires_at"
     }
 }
 

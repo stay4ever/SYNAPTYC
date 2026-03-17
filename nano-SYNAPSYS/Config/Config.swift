@@ -1,8 +1,11 @@
 import Foundation
 
 enum Config {
-    static let baseURL = "https://www.ai-evolution.com.au"
-    static let wsURL   = "wss://www.ai-evolution.com.au/chat"
+    // MARK: - Server endpoints (dedicated nano-SYNAPSYS infrastructure)
+    // Standalone backend — no shared infrastructure with any other service.
+
+    static let baseURL = "https://api.nanosynapsys.com"
+    static let wsURL   = "wss://api.nanosynapsys.com/chat"
 
     enum API {
         static let register      = "\(baseURL)/auth/register"
@@ -20,12 +23,12 @@ enum Config {
     enum Keychain {
         static let tokenKey      = "nano_synapsys_jwt"
         static let userKey       = "nano_synapsys_user"
-        static let privateKeyTag = "com.aievolve.nanosynapsys.ecprivatekey"
+        static let privateKeyTag = "com.nanosynapsys.ecprivatekey"
     }
 
     enum App {
         static let name          = "nano-SYNAPSYS"
-        static let version       = "1.0.0"
+        static let version       = "1.1.0"
         static let encryptionLabel = "AES-256-GCM · ECDH-P384 · E2E Encrypted"
     }
 }

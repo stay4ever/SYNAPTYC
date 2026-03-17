@@ -25,6 +25,8 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+fastlane/asc_api_key.json
+fastlane/Gemfile.lock
 
 # OS
 .DS_Store
@@ -35,3 +37,18 @@ Thumbs.db
 # Secrets
 *.env
 Secrets.swift
+
+# Backend
+backend/node_modules/
+backend/nano-synapsys.db
+backend/*.db-journal
+backend/*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# SwiftLint
+.swiftlint/

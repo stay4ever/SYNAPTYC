@@ -72,7 +72,7 @@ struct SettingsView: View {
                         settingsSection(title: "ABOUT") {
                             settingsRow(icon: "info.circle", label: "Version", value: Config.App.version)
                             Divider().background(Color.neonGreen.opacity(0.08))
-                            settingsRow(icon: "server.rack", label: "Backend", value: "ai-evolution.com.au")
+                            settingsRow(icon: "server.rack", label: "Backend", value: "api.nanosynapsys.com")
                         }
 
                         // Logout
@@ -121,6 +121,7 @@ struct SettingsView: View {
                     .font(.system(size: 26, weight: .bold, design: .monospaced))
                     .foregroundColor(.neonGreen)
             }
+            .accessibilityLabel("\(user.name)'s avatar")
             Text(user.name).font(.monoHeadline).foregroundColor(.neonGreen).glowText()
             Text("@\(user.username)").font(.monoCaption).foregroundColor(.matrixGreen)
             Text(user.email).font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
@@ -130,6 +131,8 @@ struct SettingsView: View {
         .padding(20)
         .neonCard()
         .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Profile: \(user.name), @\(user.username), \(user.email)")
     }
 
     private func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {

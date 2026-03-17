@@ -44,6 +44,8 @@ struct MessageBubble: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(isMine ? "You" : "Them"): \(message.content). \(message.timeString). \(isMine ? (message.read ? "Read" : "Delivered") : "")")
     }
 }
 
