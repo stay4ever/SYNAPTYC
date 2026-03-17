@@ -34,7 +34,7 @@ platform :ios do
         signingStyle: "automatic",
         teamID: ENV["TEAM_ID"]
       },
-      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{File.expand_path(ENV["APP_STORE_CONNECT_API_KEY_PATH"])}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
+      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{ENV["APP_STORE_CONNECT_API_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
       output_directory: "./build",
       output_name: "nano-SYNAPSYS.ipa",
       clean: true
