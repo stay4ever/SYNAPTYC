@@ -24,6 +24,20 @@ platform :ios do
       xcodeproj: "nano-SYNAPSYS.xcodeproj"
     )
 
+    # Load API key from JSON for fastlane auth and extract .p8 for xcodebuild
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_filepath: ENV["APP_STORE_CONNECT_API_KEY_PATH"],
+      in_house: false
+    )
+
+    # Write raw .p8 key for xcodebuild -authenticationKeyPath (requires PEM, not JSON)
+    require 'json'
+    json_data = JSON.parse(File.read(ENV["APP_STORE_CONNECT_API_KEY_PATH"]))
+    p8_path = File.expand_path("AuthKey.p8", ENV["RUNNER_TEMP"] || "/tmp")
+    File.write(p8_path, json_data["key"])
+
     # Build the app (automatic signing with -allowProvisioningUpdates)
     build_app(
       project: "nano-SYNAPSYS.xcodeproj",
@@ -34,7 +48,7 @@ platform :ios do
         signingStyle: "automatic",
         teamID: ENV["TEAM_ID"]
       },
-      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{ENV["APP_STORE_CONNECT_API_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
+      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{p8_path}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
       output_directory: "./build",
       output_name: "nano-SYNAPSYS.ipa",
       clean: true
@@ -44,7 +58,7 @@ platform :ios do
     upload_to_testflight(
       skip_waiting_for_build_processing: true,
       apple_id: ENV["APP_STORE_CONNECT_APP_ID"],
-      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      api_key: api_key
     )
 
     # Tag the release
