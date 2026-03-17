@@ -95,6 +95,8 @@ jobs:
           TEAM_ID: ${{ secrets.TEAM_ID }}
           APP_IDENTIFIER: com.nanosynapsys.app
           APP_STORE_CONNECT_APP_ID: ${{ secrets.APP_STORE_CONNECT_APP_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           cd fastlane && bundle exec fastlane beta
 

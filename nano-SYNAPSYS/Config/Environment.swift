@@ -3,12 +3,12 @@ import Foundation
 /// Build environment configuration
 /// Set the active environment via build scheme or compile-time flag:
 ///   -DDEVELOPMENT, -DSTAGING, or -DPRODUCTION (default)
-enum Environment: String {
+enum AppEnvironment: String {
     case development
     case staging
     case production
 
-    static var current: Environment {
+    static var current: AppEnvironment {
         #if DEVELOPMENT
         return .development
         #elseif STAGING

@@ -22,18 +22,16 @@ platform :ios do
       xcodeproj: "nano-SYNAPSYS.xcodeproj"
     )
 
-    # Build the app
+    # Build the app (automatic signing with -allowProvisioningUpdates)
     build_app(
       project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
       export_method: "app-store",
       export_options: {
-        provisioningProfiles: {
-          "com.nanosynapsys.app" => ENV["PROVISIONING_PROFILE_NAME"] || "nano-SYNAPSYS AppStore"
-        },
+        signingStyle: "automatic",
         teamID: ENV["TEAM_ID"]
       },
-      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}'",
+      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{ENV["APP_STORE_CONNECT_API_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
       output_directory: "./build",
       output_name: "nano-SYNAPSYS.ipa",
       clean: true
