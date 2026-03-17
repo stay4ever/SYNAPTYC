@@ -27,6 +27,7 @@ platform :ios do
       project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
       export_method: "app-store",
+      skip_profile_detection: true,
       export_options: {
         signingStyle: "automatic",
         teamID: ENV["TEAM_ID"]
