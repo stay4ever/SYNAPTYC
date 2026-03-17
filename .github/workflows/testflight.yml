@@ -47,6 +47,12 @@ jobs:
           ASC_API_KEY_JSON: ${{ secrets.ASC_API_KEY_JSON }}
         run: |
           echo "$ASC_API_KEY_JSON" > fastlane/asc_api_key.json
+          echo "=== Debug: key file structure (no secrets) ==="
+          echo "File size: $(wc -c < fastlane/asc_api_key.json) bytes"
+          echo "JSON keys: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); print(list(d.keys()))' 2>&1 || echo 'INVALID JSON')"
+          echo "Key field starts with: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); k=d.get("key",""); print(k[:27] + "..." if len(k)>27 else "MISSING/EMPTY")' 2>&1)"
+          echo "Key field ends with: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); k=d.get("key",""); print("..." + k[-25:] if len(k)>25 else "MISSING/EMPTY")' 2>&1)"
+          echo "Key field length: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); print(len(d.get("key","")))' 2>&1)"
 
       - name: Install Apple Certificate
         env:
