@@ -36,6 +36,9 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Install iOS Platform
+        run: xcodebuild -downloadPlatform iOS
+
       - name: Install Ruby & Fastlane
         run: |
           cd fastlane
