@@ -42,17 +42,15 @@ jobs:
           gem install bundler
           bundle install
 
-      - name: Decode App Store Connect API Key
+      - name: Write App Store Connect API Key
         env:
-          ASC_API_KEY_JSON: ${{ secrets.ASC_API_KEY_JSON }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
         run: |
-          echo "$ASC_API_KEY_JSON" > fastlane/asc_api_key.json
-          echo "=== Debug: key file structure (no secrets) ==="
-          echo "File size: $(wc -c < fastlane/asc_api_key.json) bytes"
-          echo "JSON keys: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); print(list(d.keys()))' 2>&1 || echo 'INVALID JSON')"
-          echo "Key field starts with: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); k=d.get("key",""); print(k[:27] + "..." if len(k)>27 else "MISSING/EMPTY")' 2>&1)"
-          echo "Key field ends with: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); k=d.get("key",""); print("..." + k[-25:] if len(k)>25 else "MISSING/EMPTY")' 2>&1)"
-          echo "Key field length: $(python3 -c 'import json; f=open("fastlane/asc_api_key.json"); d=json.load(f); print(len(d.get("key","")))' 2>&1)"
+          # Write raw .p8 key to file for xcodebuild
+          echo "$ASC_KEY_CONTENT" > $RUNNER_TEMP/AuthKey.p8
+          echo "Key file size: $(wc -c < $RUNNER_TEMP/AuthKey.p8) bytes"
+          echo "Key starts with: $(head -1 $RUNNER_TEMP/AuthKey.p8)"
+          echo "Key ends with: $(tail -1 $RUNNER_TEMP/AuthKey.p8)"
 
       - name: Install Apple Certificate
         env:
@@ -90,7 +88,7 @@ jobs:
             -project nano-SYNAPSYS.xcodeproj \
             -scheme nano-SYNAPSYS \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.2' \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             | xcpretty --color
@@ -98,7 +96,7 @@ jobs:
       - name: Build & Upload to TestFlight
         env:
           CI: "true"
-          APP_STORE_CONNECT_API_KEY_PATH: ${{ github.workspace }}/fastlane/asc_api_key.json
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
           TEAM_ID: ${{ secrets.TEAM_ID }}
           APP_IDENTIFIER: com.nanosynapsys.app
           APP_STORE_CONNECT_APP_ID: ${{ secrets.APP_STORE_CONNECT_APP_ID }}
@@ -111,7 +109,7 @@ jobs:
         if: always()
         run: |
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db 2>/dev/null || true
-          rm -f fastlane/asc_api_key.json
+          rm -f $RUNNER_TEMP/AuthKey.p8
 
       - name: Upload IPA artifact
         if: success()

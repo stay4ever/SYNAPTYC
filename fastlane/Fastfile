@@ -13,7 +13,7 @@ platform :ios do
 
   desc "Build and upload to TestFlight"
   lane :beta do
-    # Skip git status check in CI (generated files like Gemfile.lock and asc_api_key.json make it dirty)
+    # Skip git status check in CI (generated files like Gemfile.lock make it dirty)
     unless ENV["CI"]
       ensure_git_status_clean
     end
@@ -24,7 +24,8 @@ platform :ios do
       xcodeproj: "nano-SYNAPSYS.xcodeproj"
     )
 
-    # Build the app (automatic signing with -allowProvisioningUpdates)
+    # Build the app with automatic signing
+    # ASC_KEY_PATH points to the raw .p8 file written by the workflow
     build_app(
       project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
@@ -34,17 +35,24 @@ platform :ios do
         signingStyle: "automatic",
         teamID: ENV["TEAM_ID"]
       },
-      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{File.expand_path(ENV["APP_STORE_CONNECT_API_KEY_PATH"])}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
+      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{ENV["ASC_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
       output_directory: "./build",
       output_name: "nano-SYNAPSYS.ipa",
       clean: true
     )
 
-    # Upload to TestFlight
+    # Upload to TestFlight using API key
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_filepath: ENV["ASC_KEY_PATH"],
+      in_house: false
+    )
+
     upload_to_testflight(
       skip_waiting_for_build_processing: true,
       apple_id: ENV["APP_STORE_CONNECT_APP_ID"],
-      api_key_path: ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+      api_key: api_key
     )
 
     # Tag the release
