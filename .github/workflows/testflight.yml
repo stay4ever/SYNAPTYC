@@ -71,7 +71,13 @@ jobs:
             -k $KEYCHAIN_PATH
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" \
             $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Add custom keychain to search list while preserving existing keychains
+          security list-keychain -d user -s $KEYCHAIN_PATH $(security list-keychain -d user | tr -d '"')
+
+          # Verify certificate was imported
+          echo "Installed signing identities:"
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
 
       - name: Install Provisioning Profile
         env:

@@ -30,12 +30,13 @@ platform :ios do
       project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
       export_method: "app-store",
+      codesigning_identity: "Apple Distribution",
       skip_profile_detection: true,
       export_options: {
         signingStyle: "automatic",
         teamID: ENV["TEAM_ID"]
       },
-      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' CODE_SIGN_IDENTITY='Apple Distribution' -allowProvisioningUpdates -authenticationKeyPath '#{ENV["ASC_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
+      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{ENV["ASC_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
       output_directory: "./build",
       output_name: "nano-SYNAPSYS.ipa",
       clean: true
