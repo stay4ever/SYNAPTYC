@@ -74,25 +74,32 @@ jobs:
               'Accept': 'application/vnd.api+json'
           }
 
-          # Get app ID first
+          # Get app ID — try known bundle IDs
           apps_url = 'https://api.appstoreconnect.apple.com/v1/apps'
-          params = {
-              'filter[bundleId]': 'com.aievolve.nanosynapsys',
-              'limit': 1
-          }
-
-          resp = requests.get(apps_url, headers=headers, params=params)
+          resp = requests.get(apps_url, headers=headers, params={'limit': 10})
           if resp.status_code != 200:
               print(f'Failed to fetch apps: {resp.text}')
               exit(1)
 
           data = resp.json()
           if not data['data']:
-              print('App not found in App Store Connect')
+              print('No apps found in App Store Connect')
               exit(1)
 
-          app_id = data['data'][0]['id']
-          print(f'Found app: {app_id}')
+          # List all apps and find ours
+          app_id = None
+          for app in data['data']:
+              bid = app['attributes']['bundleId']
+              name = app['attributes']['name']
+              print(f'  App: {name} ({bid}) — ID: {app["id"]}')
+              if 'nano' in bid.lower() or 'synap' in bid.lower():
+                  app_id = app['id']
+
+          if not app_id:
+              app_id = data['data'][0]['id']
+              print(f'Using first app: {app_id}')
+          else:
+              print(f'Found app: {app_id}')
 
           # Get builds
           builds_url = f'https://api.appstoreconnect.apple.com/v1/apps/{app_id}/builds'
