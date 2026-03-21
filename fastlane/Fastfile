@@ -5,7 +5,7 @@ platform :ios do
   desc "Run unit tests"
   lane :test do
     xcodebuild(
-      project: "nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj",
+      project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
       configuration: "Debug",
       sdk: "iphonesimulator",
@@ -15,82 +15,56 @@ platform :ios do
     )
   end
 
-  desc "Build the app"
-  lane :build do
-    build_app(
-      project: "nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj",
-      scheme: "nano-SYNAPSYS",
-      configuration: "Release",
-      sdk: "iphoneos",
-      export_method: "app-store",
-      skip_package_ipa: true,
-      destination: "generic/platform=iOS"
-    )
-  end
-
   desc "Archive and upload to TestFlight"
-  lane :beta do |options|
-    # Set up code signing with match
-    match(
-      type: "appstore",
-      app_identifier: "com.aievolve.nanosynapsys",
-      force_for_new_devices: true,
-      readonly: true
+  lane :beta do
+    # Auto-increment build number using timestamp
+    increment_build_number(
+      build_number: Time.now.strftime("%Y%m%d%H%M"),
+      xcodeproj: "nano-SYNAPSYS.xcodeproj"
     )
 
-    # Build the app
+    # Build the app with automatic signing
     build_app(
-      project: "nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj",
+      project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
       configuration: "Release",
-      sdk: "iphoneos",
       export_method: "app-store",
       export_options: {
-        method: "app-store",
         signingStyle: "automatic",
         stripSwiftSymbols: true,
         teamID: ENV["TEAM_ID"]
       },
       output_directory: "build",
       output_name: "nano-SYNAPSYS.ipa",
-      destination: "generic/platform=iOS"
+      destination: "generic/platform=iOS",
+      xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' -allowProvisioningUpdates -authenticationKeyPath '#{ENV["ASC_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'"
+    )
+
+    # Set up API key for upload
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_filepath: ENV["ASC_KEY_PATH"]
     )
 
     # Upload to TestFlight
     upload_to_testflight(
-      api_key_path: ENV["ASC_KEY_FILEPATH"] || "#{Dir.home}/.appstore/AuthKey_#{options[:asc_key_id]}.p8",
+      api_key: api_key,
       ipa: "build/nano-SYNAPSYS.ipa",
       skip_waiting_for_build_processing: true,
       skip_submission: true
     )
 
-    slack(
-      message: "Successfully uploaded build to TestFlight",
-      success: true
-    ) if ENV["SLACK_URL"]
-  end
-
-  desc "Submit for App Store review"
-  lane :release do |options|
-    # Upload to TestFlight first
-    beta(options)
-
-    # Submit latest build for review
-    submit_for_review(
-      app_identifier: "com.aievolve.nanosynapsys",
-      skip_waiting_for_initial_submission: true
-    )
-
-    slack(
-      message: "Build submitted for App Store review",
-      success: true
-    ) if ENV["SLACK_URL"]
+    # Tag the release
+    version = get_version_number(xcodeproj: "nano-SYNAPSYS.xcodeproj")
+    build = get_build_number(xcodeproj: "nano-SYNAPSYS.xcodeproj")
+    add_git_tag(tag: "v#{version}-#{build}")
   end
 
   desc "Build and run UI tests"
   lane :ui_tests do
     scan(
-      project: "nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj",
+      project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
       devices: ["iPhone 15"],
       configuration: "Debug",

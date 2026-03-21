@@ -1,9 +1,8 @@
-app_identifier("com.aievolve.nanosynapsys")
+app_identifier("com.aievolution.nanosynapsys")
 apple_id(ENV["APPLE_ID"])
 team_id(ENV["TEAM_ID"])
 itc_team_id(ENV["ITC_TEAM_ID"])
 
-# For setup docs, see https://docs.fastlane.tools/actions/setup_ci/
 for_platform :ios do
   itc_team_name(ENV["ITC_TEAM_NAME"])
 end
