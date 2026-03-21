@@ -86,9 +86,7 @@ final class EncryptionService {
 
         var combined = nonceData
         combined.append(sealedBox.ciphertext)
-        if let tag = sealedBox.tag {
-            combined.append(tag)
-        }
+        combined.append(sealedBox.tag)
 
         let encoded = combined.base64EncodedString()
         return "ENC:" + encoded
