@@ -15,7 +15,7 @@ struct NeonButton: View {
                 }
 
                 Text(title)
-                    .font(.system(.body, weight: .bold, design: .monospaced))
+                    .font(.system(size: 17, weight: .bold, design: .monospaced))
                     .frame(maxWidth: .infinity)
             }
             .foregroundColor(Color(red: 0.0, green: 0.055, blue: 0.0))

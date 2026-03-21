@@ -77,7 +77,7 @@ struct SettingsView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("PUSH NOTIFICATIONS")
-                                    .font(.system(.body, weight: .semibold, design: .monospaced))
+                                    .font(.system(size: 17, weight: .semibold, design: .monospaced))
                                     .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                                 Text("Receive real-time message alerts")
                                     .font(.system(.caption, design: .monospaced))
@@ -109,7 +109,7 @@ struct SettingsView: View {
                             Image(systemName: "arrow.left.circle.fill")
                                 .font(.system(size: 16, weight: .semibold))
                             Text("LOGOUT")
-                                .font(.system(.body, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 17, weight: .semibold, design: .monospaced))
                             Spacer()
                         }
                         .frame(maxWidth: .infinity)
