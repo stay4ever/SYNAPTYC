@@ -34,7 +34,7 @@ struct nano_SYNAPSYSApp: App {
             print("Configuration validation failed: \(error)")
         }
 
-        NotificationService.shared.requestUserAuthorization()
+        Task { _ = await NotificationService.shared.requestNotificationPermission() }
         authViewModel.restoreSession()
     }
 }

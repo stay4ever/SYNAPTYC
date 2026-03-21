@@ -28,7 +28,7 @@ struct Message: Codable, Identifiable {
 
     /// Check if sent by current user (uses stored user ID from keychain)
     var isFromCurrentUser: Bool {
-        if let storedUserId = KeychainService.shared.loadString(key: "current_user_id") {
+        if let storedUserId = KeychainService.shared.load(key: "current_user_id") {
             return senderId == storedUserId
         }
         return false

@@ -82,9 +82,7 @@ final class EncryptionService {
         let sealedBox = try AES.GCM.seal(plaintext, using: symmetricKey, nonce: nonce)
 
         // Combine nonce + ciphertext + tag
-        guard let nonceData = nonce.withUnsafeBytes({ Data($0) }) as Data? else {
-            throw EncryptionError.encryptionFailed
-        }
+        let nonceData = Data(nonce)
 
         var combined = nonceData
         combined.append(sealedBox.ciphertext)

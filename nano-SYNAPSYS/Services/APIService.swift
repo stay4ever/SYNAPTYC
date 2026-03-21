@@ -163,15 +163,15 @@ final class APIService {
     func createGroup(name: String, memberIds: [String]) async throws -> Group {
         let url = baseURL.appendingPathComponent("/groups")
 
-        let body: [String: Any] = [
-            "name": name,
-            "memberIds": memberIds
-        ]
+        struct CreateGroupBody: Encodable {
+            let name: String
+            let memberIds: [String]
+        }
 
         let data = try await performAuthenticatedRequest(
             url: url,
             method: "POST",
-            body: try JSONEncoder().encode(body)
+            body: try JSONEncoder().encode(CreateGroupBody(name: name, memberIds: memberIds))
         )
 
         return try JSONDecoder().decode(Group.self, from: data)
