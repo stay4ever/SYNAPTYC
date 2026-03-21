@@ -37,6 +37,7 @@ jobs:
       - name: Install build tools
         run: |
           gem install bundler xcpretty
+          brew install xcbeautify || true
           cd fastlane && bundle install
 
       - name: Write App Store Connect API Key
