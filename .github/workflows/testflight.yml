@@ -37,6 +37,7 @@ jobs:
         run: xcodebuild -version
 
       - name: Install iOS Platform
+        continue-on-error: true
         run: xcodebuild -downloadPlatform iOS
 
       - name: Install Ruby & Fastlane
