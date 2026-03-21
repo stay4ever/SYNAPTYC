@@ -23,12 +23,10 @@ struct Group: Codable, Identifiable {
 
     var lastMessage: String { "" }
 
-    #if DEBUG
     static var mockGroup: Group {
         Group(id: "group-1", name: "Zion Operators", creatorId: "user-1",
               members: [], createdAt: Date(), updatedAt: nil)
     }
-    #endif
 }
 
 /// GroupMember model.

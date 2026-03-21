@@ -45,11 +45,9 @@ struct Contact: Codable, Identifiable {
         return String(name.prefix(1)).uppercased()
     }
 
-    #if DEBUG
     static var mockContact: Contact {
         Contact(id: "contact-1", userId: "current-user", contactId: "user-2",
                 contactUsername: "neo", contactDisplayName: "Neo",
                 publicKey: nil, isOnline: true, addedAt: Date())
     }
-    #endif
 }

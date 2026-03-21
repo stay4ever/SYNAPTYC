@@ -45,7 +45,6 @@ struct Message: Codable, Identifiable {
         return formatter.string(from: timestamp)
     }
 
-    #if DEBUG
     static var mockSentMessage: Message {
         Message(id: "msg-1", senderId: "current-user", recipientId: "user-2",
                 content: "ENC:encrypted-content", timestamp: Date(),
@@ -57,5 +56,4 @@ struct Message: Codable, Identifiable {
                 content: "Follow the white rabbit", timestamp: Date(),
                 isRead: false, senderUsername: "neo")
     }
-    #endif
 }
