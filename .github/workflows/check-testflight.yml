@@ -49,7 +49,7 @@ jobs:
 
           token = JWT.encode(payload, private_key, 'ES256', { kid: key_id })
 
-          uri = URI("https://api.appstoreconnect.apple.com/v1/apps/#{app_id}/builds?limit=5&sort=-uploadedDate&include=preReleaseVersion")
+          uri = URI("https://api.appstoreconnect.apple.com/v1/builds?filter[app]=#{app_id}&limit=5&sort=-uploadedDate&fields[builds]=version,processingState,uploadedDate,expired,minOsVersion")
           req = Net::HTTP::Get.new(uri)
           req['Authorization'] = "Bearer #{token}"
           req['Content-Type']  = 'application/json'
@@ -59,8 +59,9 @@ jobs:
 
           builds = data['data'] || []
 
-          if builds.empty?
-            puts "No builds found."
+          if builds.nil? || builds.empty?
+            puts "No builds found. Raw response:"
+            puts resp.body[0..500]
           else
             puts "\n#{'='*60}"
             puts "  TestFlight Builds — com.aievolution.nanosynapsys"
