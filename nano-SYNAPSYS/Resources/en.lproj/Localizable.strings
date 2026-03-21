@@ -1,0 +1,34 @@
+/* nano-SYNAPSYS Localizable Strings */
+
+/* Auth */
+"login.title" = "SECURE LOGIN";
+"login.username" = "USERNAME";
+"login.password" = "PASSWORD";
+"login.button" = "LOGIN";
+"register.title" = "CREATE ACCOUNT";
+"register.button" = "CREATE ACCOUNT";
+
+/* Messages */
+"messages.title" = "MESSAGES";
+"messages.empty" = "NO CONVERSATIONS";
+"messages.search" = "SEARCH";
+
+/* Contacts */
+"contacts.title" = "CONTACTS";
+"contacts.empty" = "NO CONTACTS";
+"contacts.add" = "ADD CONTACT";
+
+/* Groups */
+"groups.title" = "GROUPS";
+"groups.empty" = "NO GROUPS";
+"groups.create" = "CREATE GROUP";
+
+/* Settings */
+"settings.title" = "SETTINGS";
+"settings.logout" = "LOGOUT";
+"settings.encryption" = "E2E ENCRYPTED (AES-256-GCM)";
+
+/* Bot */
+"bot.title" = "BANNER";
+"bot.subtitle" = "CLAUDE AI ASSISTANT";
+"bot.thinking" = "BANNER IS THINKING...";
