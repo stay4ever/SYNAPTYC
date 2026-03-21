@@ -25,15 +25,21 @@ jobs:
 
       - name: Decode App Store Connect API Key
         env:
-          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY }}
+          ASC_API_KEY: ${{ secrets.ASC_API_KEY }}
         run: |
           mkdir -p $HOME/.appstore
           KEY_FILE="$HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
-          # Try base64 decode first; if the result isn't valid PEM, use the raw value
-          printf '%s' "$ASC_API_KEY_BASE64" | base64 -d > "$KEY_FILE" 2>/dev/null || true
+          # Write the secret value directly — try raw PEM first
+          printf '%s\n' "$ASC_API_KEY" > "$KEY_FILE"
+          # If it looks base64-encoded (no PEM headers), decode it
           if ! head -1 "$KEY_FILE" | grep -q "BEGIN"; then
-            printf '%s\n' "$ASC_API_KEY_BASE64" > "$KEY_FILE"
+            printf '%s' "$ASC_API_KEY" | base64 -d > "$KEY_FILE" 2>/dev/null || true
           fi
+          # Debug: show key format (first/last line only, no secret data)
+          echo "Key file format check:"
+          head -1 "$KEY_FILE"
+          tail -1 "$KEY_FILE"
+          wc -c "$KEY_FILE"
 
       - name: Install App Store Connect CLI dependencies
         run: |
@@ -61,16 +67,13 @@ jobs:
           with open(key_path, 'rb') as f:
               key_data = f.read().strip()
 
-          # Normalize PEM framing if needed
-          if b'-----BEGIN' not in key_data:
-              import base64
-              # Re-encode as proper PEM
-              raw = base64.b64decode(key_data)
-              import base64 as b64
-              encoded = b64.encodebytes(raw).decode()
-              key_data = f'-----BEGIN PRIVATE KEY-----\n{encoded}-----END PRIVATE KEY-----'.encode()
-
-          private_key = load_pem_private_key(key_data, password=None)
+          try:
+              private_key = load_pem_private_key(key_data, password=None)
+          except Exception as e:
+              print(f'Key load failed: {e}')
+              print(f'Key starts with: {key_data[:30]}')
+              print(f'Key length: {len(key_data)} bytes')
+              exit(1)
 
           # Create JWT token
           now = datetime.utcnow()
