@@ -4,8 +4,8 @@ platform :ios do
   desc "Run unit tests"
   lane :test do
     run_tests(
-      project: "SYNAPTYC.xcodeproj",
-      scheme: "SYNAPTYC",
+      project: "nano-SYNAPSYS.xcodeproj",
+      scheme: "nano-SYNAPSYS",
       device: "iPhone 15",
       clean: true
     )
@@ -21,14 +21,14 @@ platform :ios do
     # Increment build number using current timestamp for uniqueness
     increment_build_number(
       build_number: Time.now.strftime("%Y%m%d%H%M"),
-      xcodeproj: "SYNAPTYC.xcodeproj"
+      xcodeproj: "nano-SYNAPSYS.xcodeproj"
     )
 
     # Build the app with automatic signing
     # ASC_KEY_PATH points to the raw .p8 file written by the workflow
     build_app(
-      project: "SYNAPTYC.xcodeproj",
-      scheme: "SYNAPTYC",
+      project: "nano-SYNAPSYS.xcodeproj",
+      scheme: "nano-SYNAPSYS",
       export_method: "app-store",
       codesigning_identity: "Apple Distribution",
       skip_profile_detection: true,
@@ -38,7 +38,7 @@ platform :ios do
       },
       xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' CODE_SIGN_IDENTITY='Apple Distribution' CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates -authenticationKeyPath '#{ENV["ASC_KEY_PATH"]}' -authenticationKeyID '#{ENV["ASC_KEY_ID"]}' -authenticationKeyIssuerID '#{ENV["ASC_ISSUER_ID"]}'",
       output_directory: "./build",
-      output_name: "SYNAPTYC.ipa",
+      output_name: "nano-SYNAPSYS.ipa",
       clean: true
     )
 
@@ -56,20 +56,24 @@ platform :ios do
       api_key: api_key
     )
 
-    # Tag the release
-    version = get_version_number(xcodeproj: "SYNAPTYC.xcodeproj")
-    build = get_build_number(xcodeproj: "SYNAPTYC.xcodeproj")
-    add_git_tag(tag: "v#{version}-#{build}")
+    # Tag the release (best-effort — skip if git state prevents it)
+    begin
+      version = get_version_number(xcodeproj: "nano-SYNAPSYS.xcodeproj")
+      build = get_build_number(xcodeproj: "nano-SYNAPSYS.xcodeproj")
+      add_git_tag(tag: "v#{version}-#{build}")
+    rescue => e
+      UI.important("Could not create git tag: #{e.message}")
+    end
   end
 
   desc "Build only (no upload) — for CI validation"
   lane :build do
     build_app(
-      project: "SYNAPTYC.xcodeproj",
-      scheme: "SYNAPTYC",
+      project: "nano-SYNAPSYS.xcodeproj",
+      scheme: "nano-SYNAPSYS",
       export_method: "app-store",
       output_directory: "./build",
-      output_name: "SYNAPTYC.ipa",
+      output_name: "nano-SYNAPSYS.ipa",
       clean: true
     )
   end
@@ -79,7 +83,7 @@ platform :ios do
     bump_type = options[:type] || "patch"
     increment_version_number(
       bump_type: bump_type,
-      xcodeproj: "SYNAPTYC.xcodeproj"
+      xcodeproj: "nano-SYNAPSYS.xcodeproj"
     )
   end
 end
