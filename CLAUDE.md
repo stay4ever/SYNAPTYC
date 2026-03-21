@@ -6,7 +6,7 @@ SYNAPTYC is a privacy-first, end-to-end encrypted iOS messaging app. Fully stand
 
 - **Platform:** iOS 17.0+ (iPhone only, portrait)
 - **Language:** Swift 5.0 / SwiftUI
-- **Bundle ID:** `com.nanosynapsys`
+- **Bundle ID:** `com.aievolution.nanosynapsys`
 - **Backend:** `https://api.nanosynapsys.com` (REST API + WSS)
 - **No external dependencies** — purely Apple-native frameworks (CryptoKit, Combine, Security, UserNotifications)
 

@@ -1,6 +1,6 @@
 # App identifier and Apple ID for SYNAPTYC
 # Set via environment variables or update directly
 
-app_identifier(ENV["APP_IDENTIFIER"] || "com.nanosynapsys.app")
+app_identifier(ENV["APP_IDENTIFIER"] || "com.aievolution.nanosynapsys")
 apple_id(ENV["APPLE_ID"] || "your-apple-id@example.com")
 team_id(ENV["TEAM_ID"] || "YOUR_TEAM_ID")

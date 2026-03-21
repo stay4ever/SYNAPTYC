@@ -39,7 +39,7 @@ Every message is encrypted **on-device** before transmission. The server never s
 
 - **iOS 17.0+** — iPhone only, portrait orientation
 - **Language:** Swift 5.0 / SwiftUI
-- **Bundle ID:** `com.nanosynapsys`
+- **Bundle ID:** `com.aievolution.nanosynapsys`
 - **Backend:** `https://api.nanosynapsys.com` (REST API + WSS)
 - **No external dependencies** — purely Apple-native frameworks (CryptoKit, Combine, Security, UserNotifications)
 
