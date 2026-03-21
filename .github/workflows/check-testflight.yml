@@ -74,38 +74,32 @@ jobs:
               'Accept': 'application/vnd.api+json'
           }
 
-          # Get app ID — try known bundle IDs
+          # Get app ID
           apps_url = 'https://api.appstoreconnect.apple.com/v1/apps'
-          resp = requests.get(apps_url, headers=headers, params={'limit': 10})
+          params = {
+              'filter[bundleId]': 'com.aievolution.nanosynapsys',
+              'limit': 1
+          }
+
+          resp = requests.get(apps_url, headers=headers, params=params)
           if resp.status_code != 200:
               print(f'Failed to fetch apps: {resp.text}')
               exit(1)
 
           data = resp.json()
           if not data['data']:
-              print('No apps found in App Store Connect')
+              print('App not found in App Store Connect')
               exit(1)
 
-          # List all apps and find ours
-          app_id = None
-          for app in data['data']:
-              bid = app['attributes']['bundleId']
-              name = app['attributes']['name']
-              print(f'  App: {name} ({bid}) — ID: {app["id"]}')
-              if 'nano' in bid.lower() or 'synap' in bid.lower():
-                  app_id = app['id']
-
-          if not app_id:
-              app_id = data['data'][0]['id']
-              print(f'Using first app: {app_id}')
-          else:
-              print(f'Found app: {app_id}')
+          app_id = data['data'][0]['id']
+          print(f'Found app: {app_id}')
 
           # Get builds
-          builds_url = f'https://api.appstoreconnect.apple.com/v1/apps/{app_id}/builds'
+          builds_url = f'https://api.appstoreconnect.apple.com/v1/builds'
           params = {
-              'sort': '-uploadedDate',
-              'limit': 5
+              'filter[app]': app_id,
+              'limit': 5,
+              'sort': '-uploadedDate'
           }
 
           resp = requests.get(builds_url, headers=headers, params=params)
