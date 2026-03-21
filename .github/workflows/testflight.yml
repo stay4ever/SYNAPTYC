@@ -40,7 +40,10 @@ jobs:
         run: |
           sudo xcodebuild -license accept
           xcodebuild -runFirstLaunch || true
-          xcodebuild -downloadPlatform iOS || true
+          # Boot CoreSimulatorService so xcodebuild -downloadPlatform can connect
+          xcrun simctl list > /dev/null 2>&1 || true
+          sleep 5
+          xcodebuild -downloadPlatform iOS
 
       - name: Install Ruby & Fastlane
         run: |
