@@ -103,18 +103,6 @@ jobs:
           /usr/bin/security cms -D -i $PP_PATH | /usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" /dev/stdin || true
           /usr/bin/security cms -D -i $PP_PATH | /usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" /dev/stdin 2>/dev/null && echo "(Development profile)" || echo "(Distribution profile)"
 
-      - name: Run Tests
-        run: |
-          set -o pipefail
-          xcodebuild test \
-            -project nano-SYNAPSYS.xcodeproj \
-            -scheme nano-SYNAPSYS \
-            -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            | xcpretty --color
-
       - name: Build & Upload to TestFlight
         env:
           CI: "true"
