@@ -28,7 +28,12 @@ jobs:
           ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY }}
         run: |
           mkdir -p $HOME/.appstore
-          printf '%s' "$ASC_API_KEY_BASE64" | base64 --decode > $HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+          KEY_FILE="$HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
+          # Try base64 decode first; if the result isn't valid PEM, use the raw value
+          printf '%s' "$ASC_API_KEY_BASE64" | base64 -d > "$KEY_FILE" 2>/dev/null || true
+          if ! head -1 "$KEY_FILE" | grep -q "BEGIN"; then
+            printf '%s\n' "$ASC_API_KEY_BASE64" > "$KEY_FILE"
+          fi
 
       - name: Install App Store Connect CLI dependencies
         run: |
@@ -44,20 +49,28 @@ jobs:
           import json
           import requests
           import jwt
+          from cryptography.hazmat.primitives.serialization import load_pem_private_key
           from datetime import datetime, timedelta
-          from pathlib import Path
 
           # App Store Connect API credentials
           key_id = os.environ.get('ASC_KEY_ID')
           issuer_id = os.environ.get('ASC_ISSUER_ID')
           key_path = os.path.expanduser('~/.appstore/AuthKey_' + key_id + '.p8')
 
-          # Read private key and normalize PEM framing
-          with open(key_path, 'r') as f:
-              private_key = f.read().strip()
-          if '-----BEGIN' not in private_key:
-              # Raw key data without PEM headers — wrap it
-              private_key = '-----BEGIN PRIVATE KEY-----\n' + private_key + '\n-----END PRIVATE KEY-----'
+          # Read and load private key
+          with open(key_path, 'rb') as f:
+              key_data = f.read().strip()
+
+          # Normalize PEM framing if needed
+          if b'-----BEGIN' not in key_data:
+              import base64
+              # Re-encode as proper PEM
+              raw = base64.b64decode(key_data)
+              import base64 as b64
+              encoded = b64.encodebytes(raw).decode()
+              key_data = f'-----BEGIN PRIVATE KEY-----\n{encoded}-----END PRIVATE KEY-----'.encode()
+
+          private_key = load_pem_private_key(key_data, password=None)
 
           # Create JWT token
           now = datetime.utcnow()
