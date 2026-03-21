@@ -1,8 +1,8 @@
-# CLAUDE.md — nano-SYNAPSYS
+# CLAUDE.md — SYNAPTYC
 
 ## Project Overview
 
-nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app. Fully standalone — no shared infrastructure with any other service. No phone number required. No metadata harvested. It uses ECDH P-384 key exchange with AES-256-GCM encryption, real-time WebSocket communication, and a cyberpunk neon-green Matrix aesthetic.
+SYNAPTYC is a privacy-first, end-to-end encrypted iOS messaging app. Fully standalone — no shared infrastructure with any other service. No phone number required. No metadata harvested. It uses ECDH P-384 key exchange with AES-256-GCM encryption, real-time WebSocket communication, and a cyberpunk neon-green Matrix aesthetic.
 
 - **Platform:** iOS 17.0+ (iPhone only, portrait)
 - **Language:** Swift 5.0 / SwiftUI
@@ -15,7 +15,7 @@ nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app. Fully 
 **MVVM + Services layer** with singleton services and Combine-based reactivity.
 
 ```
-nano-SYNAPSYS/
+SYNAPTYC/
 ├── Config/           # API endpoints, environment config, app constants
 ├── Models/           # Data structures: User, Message, Contact, Group, BotMessage
 ├── Services/         # Singletons: API, WebSocket, Encryption, Keychain, Notifications
@@ -42,18 +42,18 @@ This is a native Xcode project — no package managers (CocoaPods, SPM, Carthage
 
 ```bash
 # Open in Xcode
-open nano-SYNAPSYS.xcodeproj
+open SYNAPTYC.xcodeproj
 
 # Build from command line (requires Xcode 15+)
-xcodebuild -project nano-SYNAPSYS.xcodeproj -scheme nano-SYNAPSYS -sdk iphonesimulator build
+xcodebuild -project SYNAPTYC.xcodeproj -scheme SYNAPTYC -sdk iphonesimulator build
 
 # Run tests
-xcodebuild -project nano-SYNAPSYS.xcodeproj -scheme nano-SYNAPSYS -sdk iphonesimulator test
+xcodebuild -project SYNAPTYC.xcodeproj -scheme SYNAPTYC -sdk iphonesimulator test
 ```
 
 ## Testing
 
-Tests are split across separate files in `nano-SYNAPSYSTests/` (unit) and `nano-SYNAPSYSUITests/` (UI).
+Tests are split across separate files in `SYNAPTYCTests/` (unit) and `SYNAPTYCUITests/` (UI).
 
 **Unit test files:**
 - **EncryptionServiceTests.swift** (12) — Round-trip encryption, ECDH key exchange, public key serialization, nonce uniqueness
@@ -65,8 +65,8 @@ Tests are split across separate files in `nano-SYNAPSYSTests/` (unit) and `nano-
 - **APIServiceTests.swift** (3) — Error descriptions, error types
 
 **UI test files:**
-- **nano_SYNAPSYSUITests.swift** — Splash screen, login screen, registration flow, accessibility
-- **nano_SYNAPSYSUITestsLaunchTests.swift** — Launch screenshot capture
+- **SYNAPTYCUITests.swift** — Splash screen, login screen, registration flow, accessibility
+- **SYNAPTYCUITestsLaunchTests.swift** — Launch screenshot capture
 
 **Test naming convention:** `test_<function>_<scenario>()` (e.g., `test_encryptDecrypt_roundTrip()`)
 

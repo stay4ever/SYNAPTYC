@@ -70,11 +70,25 @@ jobs:
           # Import certificate
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+          echo "P12 file size: $(wc -c < $CERTIFICATE_PATH) bytes"
           security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 \
             -k $KEYCHAIN_PATH
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" \
             $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          # Set custom keychain as default and add to search list
+          security list-keychain -d user -s $KEYCHAIN_PATH $(security list-keychain -d user | tr -d '"')
+          security default-keychain -s $KEYCHAIN_PATH
+
+          # Verify certificate was imported — show ALL identities so we can confirm the type
+          echo "=== Signing identities in app-signing keychain ==="
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
+          echo ""
+          echo "=== Signing identities across ALL keychains ==="
+          security find-identity -v -p codesigning
+          echo ""
+          echo "=== Keychain search list ==="
+          security list-keychains -d user
 
       - name: Install Provisioning Profile
         env:
@@ -82,8 +96,19 @@ jobs:
         run: |
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+          # Extract the UUID and install with the correct filename
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin <<< $(/usr/bin/security cms -D -i $PP_PATH))
+          echo "Provisioning profile UUID: $PP_UUID"
+
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/${PP_UUID}.mobileprovision
+
+          # Show profile details for debugging
+          echo "=== Provisioning Profile Info ==="
+          /usr/bin/security cms -D -i $PP_PATH | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin || true
+          /usr/bin/security cms -D -i $PP_PATH | /usr/libexec/PlistBuddy -c "Print TeamIdentifier:0" /dev/stdin || true
+          /usr/bin/security cms -D -i $PP_PATH | /usr/libexec/PlistBuddy -c "Print Entitlements:get-task-allow" /dev/stdin 2>/dev/null && echo "(Development profile)" || echo "(Distribution profile)"
 
       - name: Run Tests
         run: |
