@@ -1,5 +1,6 @@
 import SwiftUI
 
+// swiftlint:disable:next type_name
 @main
 struct nano_SYNAPSYSApp: App {
     @StateObject private var authViewModel = AuthViewModel()
@@ -413,6 +414,7 @@ struct SettingsView: View {
 
 // MARK: - Preview
 #if DEBUG
+// swiftlint:disable:next type_name
 struct nano_SYNAPSYSApp_Previews: PreviewProvider {
     static var previews: some View {
         SplashView()
