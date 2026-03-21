@@ -3,7 +3,7 @@ import Combine
 
 @MainActor
 class ConversationsViewModel: ObservableObject {
-    @Published var conversations: [Contact] = []
+    @Published var conversations: [Conversation] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
@@ -15,19 +15,33 @@ class ConversationsViewModel: ObservableObject {
 
     // MARK: - Load Conversations
 
-    func loadConversations() async {
+    func loadConversations() {
+        Task {
+            await refreshConversations()
+        }
+    }
+
+    func refreshConversations() async {
         isLoading = true
         errorMessage = nil
 
         do {
             let contacts = try await APIService.shared.getContacts()
-
-            // Filter to only contacts with message history
-            self.conversations = contacts.filter { $0.lastMessageAt != nil }
-
-            // Sort by last message timestamp, most recent first
-            self.conversations.sort { ($0.lastMessageAt ?? Date.distantPast) > ($1.lastMessageAt ?? Date.distantPast) }
-
+            self.conversations = contacts.map { contact in
+                Conversation(
+                    id: contact.id,
+                    contact: ConversationContact(
+                        id: contact.contactId,
+                        username: contact.contactUsername,
+                        displayName: contact.displayNameOrUsername,
+                        initials: contact.initials
+                    ),
+                    lastMessage: "",
+                    lastMessageAt: contact.addedAt,
+                    unreadCount: 0,
+                    isOnline: contact.isOnline
+                )
+            }
             isLoading = false
         } catch {
             errorMessage = "Failed to load conversations: \(error.localizedDescription)"
@@ -47,51 +61,27 @@ class ConversationsViewModel: ObservableObject {
 
         WebSocketService.shared.typingIndicator
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleTypingIndicator(event)
+            .sink { [weak self] _ in
+                // Handle typing indicator updates
             }
             .store(in: &cancellables)
     }
 
     private func handleNewMessage(_ message: Message) {
-        // Find or create conversation for this contact
-        if let index = conversations.firstIndex(where: { $0.id == message.senderId }) {
-            // Update existing conversation
+        if let index = conversations.firstIndex(where: { $0.contact.id == message.senderId }) {
             conversations[index].lastMessage = message.content
-            conversations[index].lastMessageAt = message.sentAt
+            conversations[index].lastMessageAt = message.timestamp
             conversations[index].unreadCount += 1
 
-            // Move to top
             let conversation = conversations.remove(at: index)
             conversations.insert(conversation, at: 0)
-        } else {
-            // Load contact and add conversation
-            Task {
-                do {
-                    let contact = try await APIService.shared.getContact(id: message.senderId)
-                    var updatedContact = contact
-                    updatedContact.lastMessage = message.content
-                    updatedContact.lastMessageAt = message.sentAt
-                    updatedContact.unreadCount = 1
-
-                    self.conversations.insert(updatedContact, at: 0)
-                } catch {
-                    print("Failed to load contact for new message: \(error)")
-                }
-            }
-        }
-    }
-
-    private func handleTypingIndicator(_ event: TypingEvent) {
-        if let index = conversations.firstIndex(where: { $0.id == event.userId }) {
-            conversations[index].isTyping = event.isTyping
         }
     }
 
     // MARK: - Mark as Read
 
     func markAsRead(contactId: String) async {
-        if let index = conversations.firstIndex(where: { $0.id == contactId }) {
+        if let index = conversations.firstIndex(where: { $0.contact.id == contactId }) {
             conversations[index].unreadCount = 0
 
             do {

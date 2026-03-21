@@ -18,6 +18,15 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
     let presencePublisher = PassthroughSubject<PresenceEvent, Never>()
     let keyExchangePublisher = PassthroughSubject<KeyExchangeEvent, Never>()
     let groupMessagePublisher = PassthroughSubject<GroupMessageEvent, Never>()
+    let groupUpdatePublisher = PassthroughSubject<GroupUpdateEvent, Never>()
+    let groupMemberUpdatePublisher = PassthroughSubject<GroupMemberUpdateEvent, Never>()
+
+    // Compatibility aliases used by ViewModels
+    var messageReceived: PassthroughSubject<Message, Never> { _messageReceived }
+    var typingIndicator: PassthroughSubject<TypingEvent, Never> { typingPublisher }
+    var groupUpdate: PassthroughSubject<GroupUpdateEvent, Never> { groupUpdatePublisher }
+    var groupMemberUpdate: PassthroughSubject<GroupMemberUpdateEvent, Never> { groupMemberUpdatePublisher }
+    private let _messageReceived = PassthroughSubject<Message, Never>()
 
     private var pingTimer: Timer?
     private var reconnectTimer: Timer?
@@ -287,6 +296,21 @@ struct GroupMessageEvent: Codable {
     let senderId: String
     let content: String
     let timestamp: Double
+}
+
+struct GroupUpdateEvent: Codable {
+    let groupId: String
+    let groupName: String
+    let timestamp: Date
+}
+
+struct GroupMemberUpdateEvent: Codable {
+    let groupId: String
+    let memberId: String
+    let username: String
+    let displayName: String
+    let isJoining: Bool
+    let timestamp: Date
 }
 
 // MARK: - Helper: AnyCodable

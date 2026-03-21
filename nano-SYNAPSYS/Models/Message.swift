@@ -32,4 +32,21 @@ struct Message: Codable, Identifiable {
     func isFromCurrentUser(_ userId: String) -> Bool {
         senderId == userId
     }
+
+    /// Convenience for accessing timestamp as sentAt
+    var sentAt: Date { timestamp }
+
+    #if DEBUG
+    static var mockSentMessage: Message {
+        Message(id: "msg-1", senderId: "current-user", recipientId: "user-2",
+                content: "ENC:encrypted-content", timestamp: Date(),
+                isRead: true, senderUsername: "morpheus")
+    }
+
+    static var mockReceivedMessage: Message {
+        Message(id: "msg-2", senderId: "user-2", recipientId: "current-user",
+                content: "Follow the white rabbit", timestamp: Date(),
+                isRead: false, senderUsername: "neo")
+    }
+    #endif
 }

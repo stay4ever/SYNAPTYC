@@ -119,10 +119,23 @@ final class APIService {
         return try JSONDecoder().decode(Contact.self, from: data)
     }
 
+    /// Fetch a single contact by ID.
+    func getContact(id: String) async throws -> Contact {
+        let url = baseURL.appendingPathComponent("/contacts/\(id)")
+        let data = try await performAuthenticatedRequest(url: url, method: "GET")
+        return try JSONDecoder().decode(Contact.self, from: data)
+    }
+
     /// Remove a contact.
     func removeContact(contactId: String) async throws {
         let url = baseURL.appendingPathComponent("/contacts/\(contactId)")
         _ = try await performAuthenticatedRequest(url: url, method: "DELETE")
+    }
+
+    /// Mark a conversation as read.
+    func markConversationAsRead(contactId: String) async throws {
+        let url = baseURL.appendingPathComponent("/contacts/\(contactId)/read")
+        _ = try await performAuthenticatedRequest(url: url, method: "POST")
     }
 
     // MARK: - Groups
@@ -150,6 +163,18 @@ final class APIService {
         )
 
         return try JSONDecoder().decode(Group.self, from: data)
+    }
+
+    /// Leave a group.
+    func leaveGroup(id: String) async throws {
+        let url = baseURL.appendingPathComponent("/groups/\(id)/leave")
+        _ = try await performAuthenticatedRequest(url: url, method: "POST")
+    }
+
+    /// Delete a group (owner only).
+    func deleteGroup(id: String) async throws {
+        let url = baseURL.appendingPathComponent("/groups/\(id)")
+        _ = try await performAuthenticatedRequest(url: url, method: "DELETE")
     }
 
     /// Fetch all messages in a group.

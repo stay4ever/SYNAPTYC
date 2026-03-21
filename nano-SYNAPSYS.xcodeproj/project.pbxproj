@@ -42,6 +42,7 @@
 		65C0CC61AA0D48E187404C6E = {isa = PBXBuildFile; fileRef = F6E15081408C4DBF87A64CA7; };
 		B674CA3C04B54EB6A9C5A89E = {isa = PBXBuildFile; fileRef = C29EC9456B0B47A7A826B0A9; };
 		91762E2F6FF146D7A3A4B1BC = {isa = PBXBuildFile; fileRef = 675F9BD7833D409284ED3B85; };
+		CONV01BUILDFILE0000000001 = {isa = PBXBuildFile; fileRef = CONV01FILEREF00000000001; };
 		26D6E481816344369547B5AF = {isa = PBXBuildFile; fileRef = E9876FE55FB24BE4A808E498; };
 		BC40967AEBC747208E752EF0 = {isa = PBXBuildFile; fileRef = 0557D8DCF1AE4733872761B7; };
 		EE550D7DBF964742A5A6E265 = {isa = PBXBuildFile; fileRef = 1BFBAEED953541E886BE2EB3; };
@@ -86,6 +87,7 @@
 		C29EC9456B0B47A7A826B0A9 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		72A141E5E5AF4DA4B99AF567 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "nano-SYNAPSYS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		675F9BD7833D409284ED3B85 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Group.swift"; sourceTree = "<group>"; };
+		CONV01FILEREF00000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Conversation.swift"; sourceTree = "<group>"; };
 		E9876FE55FB24BE4A808E498 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GroupChatViewModel.swift"; sourceTree = "<group>"; };
 		0557D8DCF1AE4733872761B7 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GroupsViewModel.swift"; sourceTree = "<group>"; };
 		1BFBAEED953541E886BE2EB3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GroupChatView.swift"; sourceTree = "<group>"; };
@@ -133,6 +135,7 @@
 				120C4EC38E534B2695F5CDBF,
 				5E7D1FA59BCC4256849650F8,
 				675F9BD7833D409284ED3B85,
+				CONV01FILEREF00000000001,
 			);
 			path = "Models";
 			sourceTree = "<group>";
@@ -362,6 +365,7 @@
 				450EE32A63CB4BED873DA79A,
 				65C0CC61AA0D48E187404C6E,
 				91762E2F6FF146D7A3A4B1BC,
+				CONV01BUILDFILE0000000001,
 				26D6E481816344369547B5AF,
 				BC40967AEBC747208E752EF0,
 				EE550D7DBF964742A5A6E265,
