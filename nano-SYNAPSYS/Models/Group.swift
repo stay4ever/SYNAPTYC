@@ -1,101 +1,63 @@
 import Foundation
 
-// MARK: - Group
-
+/// Group model for group chat conversations.
 struct Group: Codable, Identifiable {
-    let id: Int
+    let id: String
     let name: String
-    let description: String
-    let createdBy: Int
-    let createdAt: String
+    let creatorId: String
     let members: [GroupMember]
+    let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, members
-        case createdBy = "created_by"
+        case id
+        case name
+        case creatorId = "creator_id"
+        case members
         case createdAt = "created_at"
-    }
-
-    var initials: String {
-        name.split(separator: " ")
-            .prefix(2)
-            .compactMap { $0.first.map { String($0) } }
-            .joined()
-            .uppercased()
-            .ifEmpty(use: String(name.prefix(2)).uppercased())
     }
 }
 
+/// GroupMember model representing a member within a group.
 struct GroupMember: Codable, Identifiable {
-    let id: Int
-    let userId: Int
+    let id: String
+    let userId: String
     let username: String
-    let displayName: String?
-    let role: String
+    let role: String // "admin" or "member"
+    let publicKey: String? // ECDH P-384 public key for group encryption
 
     enum CodingKeys: String, CodingKey {
-        case id, username, role
+        case id
         case userId = "user_id"
-        case displayName = "display_name"
-    }
-
-    var name: String {
-        if let dn = displayName, !dn.isEmpty { return dn }
-        return username
+        case username
+        case role
+        case publicKey = "public_key"
     }
 }
 
-// MARK: - Group Message
-
+/// GroupMessage model representing a message within a group chat.
 struct GroupMessage: Codable, Identifiable {
-    let id: Int
-    let groupId: Int
-    let fromUser: Int
-    let fromUsername: String
-    let fromDisplay: String
-    var content: String
-    let createdAt: String
+    let id: String
+    let groupId: String
+    let senderId: String
+    let senderUsername: String?
+    let content: String // May be "ENC:..." ciphertext
+    let timestamp: Date
+    let isRead: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id, content
+        case id
         case groupId = "group_id"
-        case fromUser = "from_user"
-        case fromUsername = "from_username"
-        case fromDisplay = "from_display"
-        case createdAt = "created_at"
+        case senderId = "sender_id"
+        case senderUsername = "sender_username"
+        case content
+        case timestamp
+        case isRead = "is_read"
     }
 
-    var timestamp: Date {
-        let fmt = ISO8601DateFormatter()
-        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = fmt.date(from: createdAt) { return d }
-        let alt = ISO8601DateFormatter()
-        return alt.date(from: createdAt) ?? Date()
+    // MARK: - Computed Properties
+
+    /// Returns true if message content is encrypted (starts with "ENC:")
+    var isEncrypted: Bool {
+        content.hasPrefix("ENC:")
     }
-
-    var timeString: String {
-        let fmt = DateFormatter()
-        fmt.dateFormat = Calendar.current.isDateInToday(timestamp) ? "HH:mm" : "dd/MM HH:mm"
-        return fmt.string(from: timestamp)
-    }
-}
-
-// MARK: - Invite
-
-struct InviteResponse: Codable {
-    let inviteUrl: String
-    let token: String
-    let expiresAt: String
-
-    enum CodingKeys: String, CodingKey {
-        case token
-        case inviteUrl = "invite_url"
-        case expiresAt = "expires_at"
-    }
-}
-
-// MARK: - Helpers
-
-private extension String {
-    func ifEmpty(use fallback: String) -> String { isEmpty ? fallback : self }
 }

@@ -1,285 +1,236 @@
 import SwiftUI
 
 struct GroupsListView: View {
-    @StateObject private var vm = GroupsViewModel()
-    @State private var showCreateSheet = false
-    @State private var showInviteSheet = false
+    @EnvironmentObject var viewModel: GroupsViewModel
+    @State private var searchText = ""
+    @State private var showCreateGroupSheet = false
+
+    var filteredGroups: [Group] {
+        if searchText.isEmpty {
+            return viewModel.groups
+        }
+        return viewModel.groups.filter { group in
+            group.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.deepBlack.ignoresSafeArea()
-                ScanlineOverlay()
+        ZStack {
+            Color(red: 0.0, green: 0.055, blue: 0.0)
+                .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    if vm.isLoading && vm.groups.isEmpty {
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("GROUPS")
+                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
                         Spacer()
-                        ProgressView().tint(.neonGreen)
-                        Spacer()
-                    } else if vm.groups.isEmpty {
-                        Spacer()
-                        VStack(spacing: 16) {
-                            Image(systemName: "person.3.fill")
-                                .font(.system(size: 48))
-                                .foregroundColor(.matrixGreen.opacity(0.3))
-                            Text("No groups yet")
-                                .font(.monoHeadline)
-                                .foregroundColor(.matrixGreen)
-                            Text("Create a group to start chatting\nwith multiple people at once.")
-                                .font(.monoCaption)
-                                .foregroundColor(.matrixGreen.opacity(0.5))
-                                .multilineTextAlignment(.center)
-                            NeonButton("+ CREATE GROUP") {
-                                showCreateSheet = true
-                            }
-                            .frame(maxWidth: 220)
+
+                        Button(action: { showCreateGroupSheet = true }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                         }
-                        .padding(32)
-                        Spacer()
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 0) {
-                                ForEach(vm.groups) { group in
-                                    NavigationLink(destination: GroupChatView(group: group)) {
-                                        GroupRow(group: group)
-                                    }
-                                    .buttonStyle(.plain)
-                                    Divider().background(Color.neonGreen.opacity(0.08))
-                                }
+                    }
+
+                    // Search bar
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+
+                        TextField("SEARCH GROUPS", text: $searchText)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
                             }
                         }
-                        .refreshable { await vm.load() }
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                    .cornerRadius(4)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
+
+                // Groups list
+                if filteredGroups.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "person.2.dashed")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))
+
+                        Text("NO GROUPS")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+
+                        Text("Create a group to collaborate with multiple contacts")
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    List {
+                        ForEach(filteredGroups) { group in
+                            NavigationLink(destination: GroupChatView(group: group)) {
+                                GroupRow(group: group)
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(Color.clear)
+                    .scrollContentBackground(.hidden)
+                }
+
+                Spacer()
             }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("GROUPS")
-                        .font(.monoHeadline)
-                        .foregroundColor(.neonGreen)
-                        .glowText()
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showInviteSheet = true
-                    } label: {
-                        Label("Invite", systemImage: "envelope.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.neonGreen)
-                    }
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showCreateSheet = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.neonGreen)
-                    }
-                }
-            }
         }
-        .sheet(isPresented: $showCreateSheet) {
-            CreateGroupSheet { name, desc in
-                Task {
-                    do {
-                        _ = try await vm.createGroup(name: name, description: desc)
-                        showCreateSheet = false
-                    } catch {
-                        vm.errorMessage = error.localizedDescription
-                    }
-                }
-            }
+        .sheet(isPresented: $showCreateGroupSheet) {
+            CreateGroupSheet(isPresented: $showCreateGroupSheet)
+                .environmentObject(viewModel)
         }
-        .sheet(isPresented: $showInviteSheet) {
-            InviteSheet(vm: vm)
+        .onAppear {
+            viewModel.loadGroups()
         }
-        .alert("Error", isPresented: Binding(
-            get: { vm.errorMessage != nil },
-            set: { if !$0 { vm.errorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { vm.errorMessage = nil }
-        } message: {
-            Text(vm.errorMessage ?? "")
-        }
-        .task { await vm.load() }
     }
 }
-
-// MARK: - Group Row
 
 struct GroupRow: View {
     let group: Group
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
+            // Avatar
             ZStack {
                 Circle()
-                    .fill(Color.darkGreen)
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.3), lineWidth: 1.5))
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.neonGreen)
+                    .fill(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1))
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(group.name)
-                    .font(.monoBody).fontWeight(.semibold)
-                    .foregroundColor(.neonGreen)
-                Text("\(group.members.count) member\(group.members.count != 1 ? "s" : "")")
-                    .font(.monoCaption)
-                    .foregroundColor(.matrixGreen)
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(group.name)
+                        .font(.system(.body, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                    Spacer()
+
+                    Text(group.lastMessageTime)
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+                }
+
+                HStack(spacing: 8) {
+                    Text("\(group.memberCount) MEMBERS")
+                        .font(.system(size: 12, weight: .regular, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
+
+                    Divider()
+                        .frame(height: 4)
+                        .background(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))
+
+                    Text(group.lastMessage)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+                        .lineLimit(1)
+                }
             }
+
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12))
-                .foregroundColor(.matrixGreen.opacity(0.4))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
     }
 }
 
-// MARK: - Create Group Sheet
-
 struct CreateGroupSheet: View {
-    var onConfirm: (String, String) -> Void
-    @Environment(\.dismiss) var dismiss
-    @State private var name = ""
-    @State private var desc = ""
+    @Binding var isPresented: Bool
+    @EnvironmentObject var viewModel: GroupsViewModel
+    @State private var groupName = ""
+    @State private var selectedMembers: Set<String> = []
 
     var body: some View {
-        ZStack {
-            Color.deepBlack.ignoresSafeArea()
-            VStack(spacing: 20) {
-                Text("CREATE GROUP")
-                    .font(.monoHeadline)
-                    .foregroundColor(.neonGreen)
-                    .glowText()
-                    .padding(.top, 8)
+        NavigationStack {
+            ZStack {
+                Color(red: 0.0, green: 0.055, blue: 0.0)
+                    .ignoresSafeArea()
 
-                NeonTextField(placeholder: "Group name", text: $name, icon: "person.3")
+                VStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("GROUP NAME")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        Image(systemName: "text.alignleft")
-                            .foregroundColor(.matrixGreen)
-                        Text("DESCRIPTION (optional)")
-                            .font(.monoSmall)
-                            .foregroundColor(.matrixGreen)
-                    }
-                    TextEditor(text: $desc)
-                        .font(.monoBody)
-                        .foregroundColor(.neonGreen)
-                        .tint(.neonGreen)
-                        .frame(height: 80)
-                        .padding(10)
-                        .background(Color.darkGreen.opacity(0.4))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.neonGreen.opacity(0.2), lineWidth: 1)
+                        NeonTextField(
+                            placeholder: "ENTER GROUP NAME",
+                            text: $groupName,
+                            isSecure: false
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .scrollContentBackground(.hidden)
-                }
-                .padding(.horizontal, 16)
-
-                NeonButton("CREATE", icon: "person.3.fill") {
-                    guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                    onConfirm(name.trimmingCharacters(in: .whitespaces), desc.trimmingCharacters(in: .whitespaces))
-                }
-                .padding(.horizontal, 16)
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
-
-                NeonButton("CANCEL", style: .secondary) { dismiss() }
+                    }
                     .padding(.horizontal, 16)
-            }
-        }
-        .presentationDetents([.medium])
-    }
-}
+                    .padding(.top, 16)
 
-// MARK: - Invite Sheet
+                    Spacer()
 
-struct InviteSheet: View {
-    @ObservedObject var vm: GroupsViewModel
-    @Environment(\.dismiss) var dismiss
-    @State private var copied = false
-    @State private var showShareSheet = false
-
-    var body: some View {
-        ZStack {
-            Color.deepBlack.ignoresSafeArea()
-            VStack(spacing: 20) {
-                Text("INVITE SOMEONE")
-                    .font(.monoHeadline)
-                    .foregroundColor(.neonGreen)
-                    .glowText()
-                    .padding(.top, 8)
-
-                Text("Generate a one-time invite link.\nExpires in 7 days.")
-                    .font(.monoCaption)
-                    .foregroundColor(.matrixGreen)
-                    .multilineTextAlignment(.center)
-
-                if let url = vm.inviteURL {
-                    VStack(spacing: 12) {
-                        Text(url)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.neonGreen.opacity(0.8))
-                            .padding(12)
-                            .frame(maxWidth: .infinity)
-                            .background(Color.darkGreen.opacity(0.4))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.neonGreen.opacity(0.2), lineWidth: 1)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                            .padding(.horizontal, 16)
-
-                        HStack(spacing: 12) {
-                            NeonButton(copied ? "✓ COPIED" : "COPY LINK", icon: "doc.on.doc") {
-                                UIPasteboard.general.string = url
-                                copied = true
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
-                            }
-                            NeonButton("SHARE", icon: "square.and.arrow.up") {
-                                showShareSheet = true
-                            }
+                    HStack(spacing: 12) {
+                        Button(action: { isPresented = false }) {
+                            Text("CANCEL")
+                                .font(.system(.body, weight: .semibold, design: .monospaced))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+                                .cornerRadius(4)
                         }
-                        .padding(.horizontal, 16)
-                    }
-                } else {
-                    NeonButton("GENERATE LINK", icon: "link", isLoading: vm.isGeneratingInvite) {
-                        Task { await vm.generateInvite() }
+
+                        Button(action: {
+                            viewModel.createGroup(name: groupName)
+                            isPresented = false
+                        }) {
+                            Text("CREATE")
+                                .font(.system(.body, weight: .semibold, design: .monospaced))
+                                .foregroundColor(Color(red: 0.0, green: 0.055, blue: 0.0))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color(red: 0.0, green: 1.0, blue: 0.255))
+                                .cornerRadius(4)
+                        }
+                        .disabled(groupName.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                     .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
                 }
-
-                NeonButton("CLOSE", style: .secondary) { dismiss() }
-                    .padding(.horizontal, 16)
-
-                Spacer()
             }
-        }
-        .presentationDetents([.medium])
-        .sheet(isPresented: $showShareSheet) {
-            if let url = vm.inviteURL {
-                ShareSheet(items: [url])
-            }
+            .navigationTitle("CREATE GROUP")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
 
-// MARK: - ShareSheet wrapper
-
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+#Preview {
+    NavigationStack {
+        GroupsListView()
+            .environmentObject(GroupsViewModel())
     }
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

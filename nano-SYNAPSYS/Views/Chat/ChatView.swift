@@ -1,149 +1,128 @@
 import SwiftUI
 
 struct ChatView: View {
-    let peer: AppUser
-    @StateObject private var vm: ChatViewModel
-    @State private var inputText       = ""
-    @State private var showTimerPicker = false
-    @FocusState private var inputFocused: Bool
-    @State private var scrollToBottom  = false
+    let conversation: Conversation
+    @StateObject private var viewModel: ChatViewModel
+    @State private var messageText = ""
+    @Environment(\.dismiss) var dismiss
 
-    init(peer: AppUser) {
-        self.peer = peer
-        _vm = StateObject(wrappedValue: ChatViewModel(peer: peer))
+    init(conversation: Conversation) {
+        self.conversation = conversation
+        _viewModel = StateObject(wrappedValue: ChatViewModel(contactID: conversation.contact.id))
     }
 
     var body: some View {
         ZStack {
-            Color.deepBlack.ignoresSafeArea()
-            ScanlineOverlay()
+            Color(red: 0.0, green: 0.055, blue: 0.0)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Encryption status bar
+                // Header
                 HStack {
-                    EncryptionBadge(isActive: vm.encryptionReady)
-                    Spacer()
-                    Button { showTimerPicker = true } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "timer")
-                                .font(.system(size: 11))
-                            Text(vm.disappearTimer == .off ? "No timer" : vm.disappearTimer.rawValue)
-                                .font(.monoSmall)
-                        }
-                        .foregroundColor(vm.disappearTimer == .off ? .matrixGreen.opacity(0.5) : .amber)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.darkGreen.opacity(0.4))
-                        .overlay(Capsule().stroke(Color.matrixGreen.opacity(0.2), lineWidth: 1))
-                        .clipShape(Capsule())
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                     }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(conversation.contact.displayName)
+                            .font(.system(.headline, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                        Text(conversation.isOnline ? "ONLINE" : "OFFLINE")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundColor(conversation.isOnline ? Color(red: 0.0, green: 1.0, blue: 0.255) : Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+                    }
+
+                    Spacer()
+
+                    EncryptionBadge()
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.darkGreen.opacity(0.3))
+                .padding(.vertical, 12)
+                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
 
-                // Messages
+                // Messages list
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(vm.messages) { msg in
-                                let isMine = msg.fromUser == AuthViewModel.shared.currentUser?.id
-                                MessageBubble(message: msg, isMine: isMine)
-                                    .id(msg.id)
-                                    .transition(.opacity.combined(with: .move(edge: isMine ? .trailing : .leading)))
+                    List {
+                        ForEach(viewModel.messages) { message in
+                            MessageBubble(message: message)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                                .id(message.id)
+                        }
+
+                        if viewModel.isRemoteTyping {
+                            TypingIndicator()
+                                .listRowBackground(Color.clear)
+                                .id("typingIndicator")
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(Color.clear)
+                    .scrollContentBackground(.hidden)
+                    .onChange(of: viewModel.messages.count) { _ in
+                        if let lastMessage = viewModel.messages.last {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
-                            if vm.isTyping {
-                                HStack {
-                                    TypingIndicator()
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 4)
-                                .id("typing")
+                        }
+                    }
+                    .onChange(of: viewModel.isRemoteTyping) { _ in
+                        withAnimation {
+                            proxy.scrollTo("typingIndicator", anchor: .bottom)
+                        }
+                    }
+                }
+
+                // Message input
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        TextField("MESSAGE...", text: $messageText)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                            .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                            .cornerRadius(4)
+
+                        Button(action: {
+                            if !messageText.trimmingCharacters(in: .whitespaces).isEmpty {
+                                viewModel.sendMessage(messageText)
+                                messageText = ""
                             }
+                        }) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                         }
-                        .padding(.vertical, 10)
-                        .onChange(of: vm.messages.count) { _, _ in
-                            withAnimation { proxy.scrollTo(vm.messages.last?.id, anchor: .bottom) }
-                        }
-                        .onChange(of: vm.isTyping) { _, newTyping in
-                            if newTyping { withAnimation { proxy.scrollTo("typing", anchor: .bottom) } }
-                        }
+                        .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
                 }
-
-                // Error
-                if let err = vm.errorMessage {
-                    Text("⚠ \(err)")
-                        .font(.monoCaption)
-                        .foregroundColor(.alertRed)
-                        .padding(.horizontal, 16)
-                }
-
-                // Input bar
-                HStack(spacing: 10) {
-                    TextField("Encrypted message…", text: $inputText, axis: .vertical)
-                        .font(.monoBody)
-                        .foregroundColor(.neonGreen)
-                        .tint(.neonGreen)
-                        .lineLimit(1...5)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Color.darkGreen.opacity(0.35))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.neonGreen.opacity(0.2), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .focused($inputFocused)
-                        .onChange(of: inputText) { _, _ in
-                            vm.sendTypingIndicator()
-                        }
-
-                    Button {
-                        let msg = inputText
-                        inputText = ""
-                        Task { await vm.send(msg) }
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(inputText.trimmingCharacters(in: .whitespaces).isEmpty
-                                             ? .matrixGreen.opacity(0.3) : .neonGreen)
-                            .shadow(color: .neonGreen.opacity(0.3), radius: 4)
-                    }
-                    .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityLabel("Send message")
-                    .accessibilityAddTraits(.isButton)
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color.darkGreen.opacity(0.5))
+                .padding(.top, 8)
+                .background(Color(red: 0.04, green: 0.1, blue: 0.04).opacity(0.5))
+                .borderTop(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 8) {
-                    OnlineDot(isOnline: peer.isOnline ?? false)
-                    VStack(spacing: 1) {
-                        Text(peer.name)
-                            .font(.monoHeadline)
-                            .foregroundColor(.neonGreen)
-                        if peer.isOnline == true {
-                            Text("online").font(.monoSmall).foregroundColor(.matrixGreen)
-                        }
-                    }
-                }
-            }
+        .navigationBarBackButtonHidden(true)
+        .onAppear {
+            viewModel.loadMessages()
         }
-        .task { await vm.load() }
-        .confirmationDialog("Disappearing Messages", isPresented: $showTimerPicker) {
-            ForEach(DisappearTimer.allCases) { timer in
-                Button(timer.label) { vm.disappearTimer = timer }
-            }
-            Button("Cancel", role: .cancel) {}
-        }
-        .onDisappear { vm.purgeExpired() }
+    }
+}
+
+extension View {
+    func borderTop(_ color: Color, width: CGFloat) -> some View {
+        self.border(color, width: width)
+    }
+}
+
+#Preview {
+    NavigationStack {
+        ChatView(conversation: Conversation.mockConversation)
     }
 }

@@ -1,135 +1,173 @@
 import SwiftUI
 
 struct BotChatView: View {
-    @StateObject private var vm    = BotViewModel()
-    @State private var inputText   = ""
-    @FocusState private var focused: Bool
+    @EnvironmentObject var viewModel: BotViewModel
+    @State private var messageText = ""
 
     var body: some View {
         ZStack {
-            Color.deepBlack.ignoresSafeArea()
-            ScanlineOverlay()
+            Color(red: 0.0, green: 0.055, blue: 0.0)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Status bar
+                // Header
                 HStack {
-                    Image(systemName: "cpu.fill").foregroundColor(.neonGreen).font(.system(size: 12))
-                    Text("Banner AI · Powered by Claude").font(.monoCaption).foregroundColor(.matrixGreen)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BANNER")
+                            .font(.system(.headline, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                        Text("CLAUDE AI ASSISTANT")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
+                    }
+
                     Spacer()
-                    PulsatingDot(color: .neonGreen, size: 6)
+
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.darkGreen.opacity(0.3))
+                .padding(.vertical, 12)
+                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
 
-                // Messages
+                // Messages list
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(vm.messages) { msg in
-                                BotBubble(msg: msg)
-                                    .id(msg.id)
-                                    .transition(.opacity)
+                    List {
+                        ForEach(viewModel.botMessages) { message in
+                            BotMessageBubble(message: message)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                                .id(message.id)
+                        }
+
+                        if viewModel.isLoading {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                    .tint(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                                Text("BANNER IS THINKING...")
+                                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
+
+                                Spacer()
                             }
-                            if vm.isLoading {
-                                HStack {
-                                    TypingIndicator()
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 16)
-                                .id("loading")
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .listRowBackground(Color.clear)
+                            .id("loading")
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(Color.clear)
+                    .scrollContentBackground(.hidden)
+                    .onChange(of: viewModel.botMessages.count) { _ in
+                        if let lastMessage = viewModel.botMessages.last {
+                            withAnimation {
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
                         }
-                        .padding(.vertical, 14)
-                        .onChange(of: vm.messages.count) { _, _ in
-                            withAnimation { proxy.scrollTo(vm.messages.last?.id, anchor: .bottom) }
-                        }
-                        .onChange(of: vm.isLoading) { _, newLoading in
-                            if newLoading { withAnimation { proxy.scrollTo("loading", anchor: .bottom) } }
+                    }
+                    .onChange(of: viewModel.isLoading) { _ in
+                        withAnimation {
+                            proxy.scrollTo("loading", anchor: .bottom)
                         }
                     }
                 }
 
-                if let err = vm.errorMessage {
-                    Text("⚠ \(err)").font(.monoCaption).foregroundColor(.alertRed).padding(.horizontal, 16)
-                }
+                // Message input
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        TextField("ASK BANNER...", text: $messageText)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                            .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                            .cornerRadius(4)
 
-                // Input
-                HStack(spacing: 10) {
-                    TextField("Ask Banner…", text: $inputText, axis: .vertical)
-                        .font(.monoBody).foregroundColor(.neonGreen).tint(.neonGreen)
-                        .lineLimit(1...4)
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(Color.darkGreen.opacity(0.35))
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.neonGreen.opacity(0.2), lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .focused($focused)
-                        .submitLabel(.send)
-                        .onSubmit { sendMessage() }
-
-                    Button { sendMessage() } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(inputText.trimmingCharacters(in: .whitespaces).isEmpty
-                                             ? .matrixGreen.opacity(0.3) : .neonGreen)
-                            .shadow(color: .neonGreen.opacity(0.3), radius: 4)
+                        Button(action: {
+                            if !messageText.trimmingCharacters(in: .whitespaces).isEmpty {
+                                viewModel.sendMessage(messageText)
+                                messageText = ""
+                            }
+                        }) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        }
+                        .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isLoading)
                     }
-                    .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty || vm.isLoading)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 12).padding(.vertical, 10)
-                .background(Color.darkGreen.opacity(0.5))
+                .padding(.top, 8)
+                .background(Color(red: 0.04, green: 0.1, blue: 0.04).opacity(0.5))
+                .borderTop(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                HStack(spacing: 6) {
-                    Image(systemName: "cpu.fill").foregroundColor(.neonGreen).font(.system(size: 13))
-                    Text("Banner AI").font(.monoHeadline).foregroundColor(.neonGreen).glowText()
-                }
-            }
+        .onAppear {
+            viewModel.loadMessages()
         }
-    }
-
-    private func sendMessage() {
-        let msg = inputText.trimmingCharacters(in: .whitespaces)
-        guard !msg.isEmpty else { return }
-        inputText = ""
-        Task { await vm.send(msg) }
     }
 }
 
-struct BotBubble: View {
-    let msg: BotMessage
+struct BotMessageBubble: View {
+    let message: BotMessage
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if msg.role == .assistant {
-                ZStack {
-                    Circle().fill(Color.darkGreen).frame(width: 28, height: 28)
-                        .overlay(Circle().stroke(Color.neonGreen.opacity(0.3), lineWidth: 1))
-                    Image(systemName: "cpu").font(.system(size: 12)).foregroundColor(.neonGreen)
+        HStack(alignment: .top, spacing: 8) {
+            if !message.isFromUser {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("BANNER")
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.2, green: 1.0, blue: 1.0).opacity(0.8))
+
+                    Text(message.content)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(Color(red: 0.2, green: 1.0, blue: 1.0))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0.0, green: 0.15, blue: 0.15))
+                        .border(Color(red: 0.2, green: 1.0, blue: 1.0).opacity(0.3), width: 1)
+                        .cornerRadius(8)
+
+                    Text(message.timestamp)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundColor(Color(red: 0.2, green: 1.0, blue: 1.0).opacity(0.5))
+                        .padding(.horizontal, 6)
                 }
-                .alignmentGuide(.bottom) { d in d[.bottom] }
-            } else {
-                Spacer(minLength: 50)
-            }
 
-            Text(msg.content)
-                .font(.monoBody)
-                .foregroundColor(msg.role == .user ? .deepBlack : .neonGreen)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(msg.role == .user ? Color.neonGreen : Color.darkGreen)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: msg.role == .assistant ? Color.neonGreen.opacity(0.08) : .clear, radius: 4)
-
-            if msg.role == .user {
-                Spacer(minLength: 50)
+                Spacer()
             } else {
-                Spacer(minLength: 50)
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(message.content)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 0.055, blue: 0.0))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        .cornerRadius(8)
+
+                    Text(message.timestamp)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+                        .padding(.horizontal, 6)
+                }
             }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
+}
+
+#Preview {
+    BotChatView()
+        .environmentObject(BotViewModel())
 }

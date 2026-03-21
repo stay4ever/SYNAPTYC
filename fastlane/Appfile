@@ -1,6 +1,9 @@
-# App identifier and Apple ID for SYNAPTYC
-# Set via environment variables or update directly
+app_identifier("com.aievolve.nanosynapsys")
+apple_id(ENV["APPLE_ID"])
+team_id(ENV["TEAM_ID"])
+itc_team_id(ENV["ITC_TEAM_ID"])
 
-app_identifier(ENV["APP_IDENTIFIER"] || "com.aievolution.nanosynapsys")
-apple_id(ENV["APPLE_ID"] || "your-apple-id@example.com")
-team_id(ENV["TEAM_ID"] || "YOUR_TEAM_ID")
+# For setup docs, see https://docs.fastlane.tools/actions/setup_ci/
+for_platform :ios do
+  itc_team_name(ENV["ITC_TEAM_NAME"])
+end

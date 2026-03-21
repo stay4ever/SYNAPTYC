@@ -1,149 +1,167 @@
 import SwiftUI
 
 struct ConversationsListView: View {
-    @StateObject private var vm  = ConversationsViewModel()
+    @EnvironmentObject var viewModel: ConversationsViewModel
     @State private var searchText = ""
+    @State private var isRefreshing = false
 
-    var filtered: [AppUser] {
-        if searchText.isEmpty { return vm.users }
-        return vm.users.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.username.localizedCaseInsensitiveContains(searchText)
+    var filteredConversations: [Conversation] {
+        if searchText.isEmpty {
+            return viewModel.conversations
+        }
+        return viewModel.conversations.filter { conversation in
+            conversation.contact.displayName.localizedCaseInsensitiveContains(searchText) ||
+            conversation.contact.username.localizedCaseInsensitiveContains(searchText)
         }
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.deepBlack.ignoresSafeArea()
-                ScanlineOverlay()
+        ZStack {
+            Color(red: 0.0, green: 0.055, blue: 0.0)
+                .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    // Search bar
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.matrixGreen)
-                            .font(.system(size: 14))
-                        TextField("Search users…", text: $searchText)
-                            .font(.monoBody)
-                            .foregroundColor(.neonGreen)
-                            .tint(.neonGreen)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("MESSAGES")
+                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                        Spacer()
+
+                        Image(systemName: "bubble.left.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
                     }
-                    .padding(12)
-                    .background(Color.darkGreen.opacity(0.3))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.neonGreen.opacity(0.15), lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
 
-                    if vm.isLoading && vm.users.isEmpty {
-                        Spacer()
-                        ProgressView().tint(.neonGreen)
-                        Spacer()
-                    } else {
-                        ScrollView {
-                            LazyVStack(spacing: 0) {
-                                // Banner bot entry
-                                NavigationLink(destination: BotChatView()) {
-                                    BotRowView()
-                                }
-                                .buttonStyle(.plain)
+                    // Search bar
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
 
-                                Divider().background(Color.neonGreen.opacity(0.08))
+                        TextField("SEARCH CONVERSATIONS", text: $searchText)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
 
-                                ForEach(filtered) { user in
-                                    NavigationLink(destination: ChatView(peer: user)) {
-                                        ConversationRow(user: user)
-                                    }
-                                    .buttonStyle(.plain)
-                                    Divider().background(Color.neonGreen.opacity(0.08))
-                                }
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
                             }
                         }
-                        .refreshable { await vm.loadUsers() }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                    .cornerRadius(4)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
+
+                // Conversations list
+                if filteredConversations.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "bubble.left.dashed")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))
+
+                        Text("NO CONVERSATIONS")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+
+                        Text("Start a new conversation to begin")
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    List {
+                        ForEach(filteredConversations) { conversation in
+                            NavigationLink(destination: ChatView(conversation: conversation)) {
+                                ConversationRow(conversation: conversation)
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                        }
+                        .onDelete { indexSet in
+                            // Handle deletion if needed
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(Color.clear)
+                    .scrollContentBackground(.hidden)
+                    .refreshable {
+                        isRefreshing = true
+                        await viewModel.refreshConversations()
+                        isRefreshing = false
                     }
                 }
-            }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("nano-SYNAPSYS")
-                        .font(.monoHeadline)
-                        .foregroundColor(.neonGreen)
-                        .glowText()
-                }
+
+                Spacer()
             }
         }
-        .task { await vm.loadUsers() }
+        .onAppear {
+            viewModel.loadConversations()
+        }
     }
 }
 
 struct ConversationRow: View {
-    let user: AppUser
+    let conversation: Conversation
+
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack(alignment: .bottomTrailing) {
+        HStack(spacing: 12) {
+            // Avatar with initials
+            ZStack {
                 Circle()
-                    .fill(Color.darkGreen)
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.25), lineWidth: 1))
-                Text(user.initials)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(.neonGreen)
-                OnlineDot(isOnline: user.isOnline ?? false)
-                    .offset(x: 2, y: 2)
+                    .fill(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1))
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+
+                Text(conversation.contact.initials)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
             }
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(user.name)
-                    .font(.monoBody).fontWeight(.semibold)
-                    .foregroundColor(.neonGreen)
-                Text("@\(user.username)")
-                    .font(.monoCaption)
-                    .foregroundColor(.matrixGreen)
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(conversation.contact.displayName)
+                        .font(.system(.body, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                    Spacer()
+
+                    Text(conversation.lastMessageTime)
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+                }
+
+                Text(conversation.lastMessage)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
+                    .lineLimit(1)
             }
+
             Spacer()
-            EncryptionBadge(compact: true)
+
+            if conversation.isOnline {
+                OnlineDot()
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(user.name), @\(user.username), \(user.isOnline == true ? "Online" : "Offline"), Encrypted")
     }
 }
 
-struct BotRowView: View {
-    var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color.darkGreen)
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1))
-                Image(systemName: "cpu.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(.neonGreen)
-            }
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Banner AI").font(.monoBody).fontWeight(.semibold).foregroundColor(.neonGreen)
-                Text("AI assistant — always online").font(.monoCaption).foregroundColor(.matrixGreen)
-            }
-            Spacer()
-            PulsatingDot(color: .neonGreen, size: 7)
-                .accessibilityHidden(true)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Banner AI, AI assistant, always online")
+#Preview {
+    NavigationStack {
+        ConversationsListView()
+            .environmentObject(ConversationsViewModel())
     }
 }

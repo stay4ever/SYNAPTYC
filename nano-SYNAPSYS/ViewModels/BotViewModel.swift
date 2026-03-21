@@ -1,28 +1,79 @@
 import Foundation
+import Combine
 
 @MainActor
-final class BotViewModel: ObservableObject {
+class BotViewModel: ObservableObject {
     @Published var messages: [BotMessage] = []
-    @Published var isLoading              = false
+    @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var messageText = ""
+
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
-        messages.append(BotMessage(role: .assistant,
-            content: "SYSTEM ONLINE — nano-SYNAPSYS AI assistant initialised.\n\nI'm Banner, your encrypted AI companion. Ask me anything."))
+        // Bot messages are stored in memory only for this session
+        // No persistence or WebSocket needed
     }
 
-    func send(_ text: String) async {
-        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        messages.append(BotMessage(role: .user, content: text))
+    // MARK: - Send Message to Bot
+
+    func sendMessage() async {
+        guard !messageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        let userMessage = messageText
+        messageText = ""
+
+        // Add user message to conversation
+        let userBotMessage = BotMessage(
+            id: UUID().uuidString,
+            role: "user",
+            content: userMessage,
+            timestamp: Date()
+        )
+        messages.append(userBotMessage)
+
         isLoading = true
-        defer { isLoading = false }
+        errorMessage = nil
+
         do {
-            let reply = try await APIService.shared.botChat(message: text)
-            messages.append(BotMessage(role: .assistant, content: reply))
+            // Send to bot API (Claude AI - "Banner")
+            let response = try await APIService.shared.sendBotMessage(content: userMessage)
+
+            // Add bot response to conversation
+            let botBotMessage = BotMessage(
+                id: UUID().uuidString,
+                role: "assistant",
+                content: response.content,
+                timestamp: Date()
+            )
+            messages.append(botBotMessage)
+
+            isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
-            messages.append(BotMessage(role: .assistant,
-                content: "⚠ Connection error. Check your network and try again."))
+            errorMessage = "Bot response failed: \(error.localizedDescription)"
+            isLoading = false
+
+            // Add error message from bot
+            let errorBotMessage = BotMessage(
+                id: UUID().uuidString,
+                role: "assistant",
+                content: "Sorry, I encountered an error. Please try again.",
+                timestamp: Date()
+            )
+            messages.append(errorBotMessage)
         }
+    }
+
+    // MARK: - Clear Chat History
+
+    func clearHistory() {
+        messages.removeAll()
+        errorMessage = nil
+    }
+
+    // MARK: - Get Conversation Summary
+
+    func getConversationSummary() -> String {
+        messages.map { "\($0.role.uppercased()): \($0.content)" }.joined(separator: "\n\n")
     }
 }

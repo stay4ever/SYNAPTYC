@@ -1,79 +1,79 @@
 import XCTest
 
 final class nano_SYNAPSYSUITests: XCTestCase {
-
     var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    override func setUp() {
+        super.setUp()
         continueAfterFailure = false
         app = XCUIApplication()
         app.launch()
     }
 
-    // MARK: - Splash Screen
-
-    func test_splashScreen_displaysAppName() {
-        let appName = app.staticTexts["nano-SYNAPSYS"]
-        XCTAssertTrue(appName.waitForExistence(timeout: 5), "App name should appear on splash screen")
+    override func tearDown() {
+        app = nil
+        super.tearDown()
     }
 
-    func test_splashScreen_showsEncryptionBadge() {
-        let badge = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'AES-256-GCM'")).firstMatch
-        XCTAssertTrue(badge.waitForExistence(timeout: 5), "Encryption badge should appear on splash")
+    // MARK: - Splash Screen
+
+    func testSplashScreenAppears() {
+        let splashElement = app.images["splash_logo"]
+        XCTAssertTrue(splashElement.exists, "Splash screen logo should appear on launch")
+
+        let appName = app.staticTexts["nano-SYNAPSYS"]
+        XCTAssertTrue(appName.exists, "App name should be visible on splash screen")
     }
 
     // MARK: - Login Screen
 
-    func test_loginScreen_appearsAfterSplash() {
-        let authenticateButton = app.buttons["AUTHENTICATE"]
-        XCTAssertTrue(authenticateButton.waitForExistence(timeout: 10),
-                      "Login screen should appear after splash")
+    func testLoginScreenElements() {
+        let usernameField = app.textFields.matching(identifier: "login_username_field").firstMatch
+        let passwordField = app.secureTextFields.matching(identifier: "login_password_field").firstMatch
+        let loginButton = app.buttons["login_button"]
+
+        XCTAssertTrue(usernameField.exists, "Username field should be present")
+        XCTAssertTrue(passwordField.exists, "Password field should be present")
+        XCTAssertTrue(loginButton.exists, "Login button should be present")
+
+        let registerLink = app.buttons["register_link"]
+        XCTAssertTrue(registerLink.exists, "Register link should be present")
     }
 
-    func test_loginScreen_hasEmailField() {
-        let emailField = app.textFields["Email address"]
-        XCTAssertTrue(emailField.waitForExistence(timeout: 10))
-    }
+    // MARK: - Registration Flow
 
-    func test_loginScreen_hasPasswordField() {
-        let passwordField = app.secureTextFields["Password"]
-        XCTAssertTrue(passwordField.waitForExistence(timeout: 10))
-    }
+    func testRegistrationFlow() {
+        let registerLink = app.buttons["register_link"]
+        XCTAssertTrue(registerLink.exists)
 
-    func test_loginScreen_hasCreateAccountButton() {
-        let createAccount = app.buttons["CREATE ACCOUNT"]
-        XCTAssertTrue(createAccount.waitForExistence(timeout: 10))
-    }
+        registerLink.tap()
 
-    func test_loginScreen_hasForgotPasswordButton() {
-        let forgot = app.buttons["Forgot password?"]
-        XCTAssertTrue(forgot.waitForExistence(timeout: 10))
-    }
+        let usernameField = app.textFields.matching(identifier: "register_username_field").firstMatch
+        let displayNameField = app.textFields.matching(identifier: "register_displayname_field").firstMatch
+        let emailField = app.textFields.matching(identifier: "register_email_field").firstMatch
+        let passwordField = app.secureTextFields.matching(identifier: "register_password_field").firstMatch
+        let confirmPasswordField = app.secureTextFields.matching(identifier: "register_confirm_password_field").firstMatch
 
-    // MARK: - Registration
+        XCTAssertTrue(usernameField.exists, "Username field should exist on registration screen")
+        XCTAssertTrue(displayNameField.exists, "Display name field should exist on registration screen")
+        XCTAssertTrue(emailField.exists, "Email field should exist on registration screen")
+        XCTAssertTrue(passwordField.exists, "Password field should exist on registration screen")
+        XCTAssertTrue(confirmPasswordField.exists, "Confirm password field should exist on registration screen")
 
-    func test_createAccount_opensRegistrationSheet() {
-        let createAccount = app.buttons["CREATE ACCOUNT"]
-        guard createAccount.waitForExistence(timeout: 10) else {
-            XCTFail("CREATE ACCOUNT button not found")
-            return
-        }
-        createAccount.tap()
-
-        let joinHeader = app.staticTexts["JOIN THE EVOLUTION"]
-        XCTAssertTrue(joinHeader.waitForExistence(timeout: 5),
-                      "Registration sheet should appear")
+        let registerButton = app.buttons["register_button"]
+        XCTAssertTrue(registerButton.exists, "Register button should be present")
     }
 
     // MARK: - Accessibility
 
-    func test_loginScreen_elementsAreAccessible() {
-        let authenticateButton = app.buttons["AUTHENTICATE"]
-        guard authenticateButton.waitForExistence(timeout: 10) else {
-            XCTFail("Login screen did not appear")
-            return
-        }
-        XCTAssertTrue(authenticateButton.isEnabled || !authenticateButton.isEnabled,
-                      "Authenticate button should be accessible")
+    func testAccessibilityLabels() {
+        let loginButton = app.buttons["login_button"]
+        XCTAssertTrue(loginButton.isAccessibilityElement)
+
+        let usernameField = app.textFields.matching(identifier: "login_username_field").firstMatch
+        XCTAssertTrue(usernameField.isAccessibilityElement)
+
+        let registerLink = app.buttons["register_link"]
+        XCTAssertTrue(registerLink.isAccessibilityElement)
     }
 }

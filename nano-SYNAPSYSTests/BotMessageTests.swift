@@ -1,44 +1,104 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
-// swiftlint:disable force_cast force_unwrapping
 final class BotMessageTests: XCTestCase {
 
-    func test_botMessage_initAssignsFields() {
-        let msg = BotMessage(role: .assistant, content: "Hello from Banner")
-        XCTAssertEqual(msg.role,    .assistant)
-        XCTAssertEqual(msg.content, "Hello from Banner")
-        XCTAssertNotNil(msg.id)
+    func test_botMessage_init() {
+        let conversationId = "conv_123"
+        let content = "Hello, this is Banner speaking."
+        let timestamp = Date()
+
+        let botMessage = BotMessage(
+            id: "botmsg_1",
+            conversationId: conversationId,
+            content: content,
+            timestamp: timestamp
+        )
+
+        XCTAssertEqual(botMessage.conversationId, conversationId)
+        XCTAssertEqual(botMessage.content, content)
+        XCTAssertEqual(botMessage.timestamp, timestamp)
     }
 
-    func test_botMessage_uniqueIDs() {
-        let a = BotMessage(role: .user,      content: "A")
-        let b = BotMessage(role: .assistant, content: "B")
-        XCTAssertNotEqual(a.id, b.id)
+    func test_botMessage_uniqueIds() {
+        let botMsg1 = BotMessage(
+            id: "botmsg_uuid_1",
+            conversationId: "conv_1",
+            content: "First message",
+            timestamp: Date()
+        )
+
+        let botMsg2 = BotMessage(
+            id: "botmsg_uuid_2",
+            conversationId: "conv_1",
+            content: "Second message",
+            timestamp: Date()
+        )
+
+        XCTAssertNotEqual(botMsg1.id, botMsg2.id, "Each BotMessage should have a unique ID")
     }
 
-    func test_botChatRequest_encode() throws {
-        let req = BotChatRequest(message: "What is nano-SYNAPSYS?")
-        let data = try JSONEncoder().encode(req)
-        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        XCTAssertEqual(dict["message"] as? String, "What is nano-SYNAPSYS?")
+    func test_botMessage_encodeDecode() {
+        let original = BotMessage(
+            id: "botmsg_encode_1",
+            conversationId: "conv_1",
+            content: "Test encode/decode",
+            timestamp: Date()
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        let data = try! encoder.encode(original)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try! decoder.decode(BotMessage.self, from: data)
+
+        XCTAssertEqual(decoded.id, original.id)
+        XCTAssertEqual(decoded.conversationId, original.conversationId)
+        XCTAssertEqual(decoded.content, original.content)
     }
 
-    func test_botChatResponse_decode() throws {
-        let json = Data("""
-        {"reply": "Hello! I'm Banner AI."}
-        """.utf8)
-        let resp = try JSONDecoder().decode(BotChatResponse.self, from: json)
-        XCTAssertEqual(resp.reply, "Hello! I'm Banner AI.")
+    func test_botMessage_timestamp() {
+        let now = Date()
+        let botMessage = BotMessage(
+            id: "botmsg_ts_1",
+            conversationId: "conv_1",
+            content: "Timestamped message",
+            timestamp: now
+        )
+
+        XCTAssertEqual(botMessage.timestamp, now)
     }
 
-    func test_botRole_rawValues() {
-        XCTAssertEqual(BotRole.user.rawValue, "user")
-        XCTAssertEqual(BotRole.assistant.rawValue, "assistant")
+    func test_botMessage_isFromUser() {
+        let botMessage = BotMessage(
+            id: "botmsg_user_1",
+            conversationId: "conv_1",
+            content: "This is from Banner, not a user",
+            timestamp: Date()
+        )
+
+        XCTAssertFalse(botMessage.isFromUser, "BotMessage should never be from a user")
     }
 
-    func test_botMessage_timestampIsRecent() {
-        let msg = BotMessage(role: .user, content: "test")
-        XCTAssertTrue(msg.timestamp.timeIntervalSinceNow > -1, "Timestamp should be within the last second")
+    func test_botMessage_equatable() {
+        let botMsg1 = BotMessage(
+            id: "botmsg_eq_1",
+            conversationId: "conv_1",
+            content: "Same content",
+            timestamp: Date(timeIntervalSince1970: 1000)
+        )
+
+        let botMsg2 = BotMessage(
+            id: "botmsg_eq_1",
+            conversationId: "conv_1",
+            content: "Same content",
+            timestamp: Date(timeIntervalSince1970: 1000)
+        )
+
+        XCTAssertEqual(botMsg1, botMsg2, "BotMessages with same ID should be equal")
     }
 }

@@ -1,71 +1,53 @@
 import SwiftUI
 
 struct ContactRow: View {
-    let user: AppUser
-    let status: ContactRowStatus
-    let onAction: (ContactRowAction) -> Void
+    let contact: Contact
 
     var body: some View {
         HStack(spacing: 12) {
             // Avatar
-            ZStack(alignment: .bottomTrailing) {
+            ZStack {
                 Circle()
-                    .fill(Color.darkGreen)
-                    .frame(width: 42, height: 42)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.2), lineWidth: 1))
-                Text(user.initials)
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(.neonGreen)
-                OnlineDot(isOnline: user.isOnline ?? false, size: 8)
-                    .offset(x: 2, y: 2)
-            }
+                    .fill(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1))
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(user.name).font(.monoBody).foregroundColor(.neonGreen)
-                Text("@\(user.username)").font(.monoCaption).foregroundColor(.matrixGreen)
+                Text(contact.initials)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(contact.displayName)
+                        .font(.system(.body, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                    Spacer()
+
+                    if contact.isOnline {
+                        OnlineDot()
+                    }
+                }
+
+                Text("@\(contact.username)")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
             }
 
             Spacer()
-
-            // Action buttons
-            switch status {
-            case .none:
-                Button { onAction(.sendRequest) } label: {
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 16))
-                        .foregroundColor(.neonGreen)
-                }
-            case .pendingIncoming:
-                HStack(spacing: 8) {
-                    Button { onAction(.accept) } label: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.neonGreen)
-                    }
-                    Button { onAction(.reject) } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.alertRed)
-                    }
-                }
-            case .pendingOutgoing:
-                Text("Pending")
-                    .font(.monoCaption)
-                    .foregroundColor(.matrixGreen)
-            case .accepted:
-                Image(systemName: "checkmark.shield.fill")
-                    .foregroundColor(.neonGreen.opacity(0.6))
-            case .blocked:
-                Text("Blocked")
-                    .font(.monoCaption)
-                    .foregroundColor(.alertRed)
-            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 8)
+        .neonCard()
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(user.name), @\(user.username), \(user.isOnline == true ? "Online" : "Offline")")
     }
 }
 
-enum ContactRowStatus { case none, pendingIncoming, pendingOutgoing, accepted, blocked }
-enum ContactRowAction  { case sendRequest, accept, reject, block }
+#Preview {
+    VStack(spacing: 8) {
+        ContactRow(contact: Contact.mockContact)
+        ContactRow(contact: Contact.mockContact)
+    }
+    .padding()
+    .background(Color(red: 0.0, green: 0.055, blue: 0.0))
+}

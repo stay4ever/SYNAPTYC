@@ -2,70 +2,69 @@ import SwiftUI
 
 struct MessageBubble: View {
     let message: Message
-    let isMine: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 6) {
-            if isMine { Spacer(minLength: 60) }
+        HStack(alignment: .bottom, spacing: 8) {
+            if message.isFromCurrentUser {
+                Spacer()
 
-            VStack(alignment: isMine ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
-                    .font(.monoBody)
-                    .foregroundColor(isMine ? .deepBlack : .neonGreen)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(isMine ? Color.neonGreen : Color.darkGreen)
-                    .clipShape(BubbleShape(isMine: isMine))
-                    .shadow(color: isMine ? Color.neonGreen.opacity(0.2) : .clear, radius: 4)
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(message.content)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 0.055, blue: 0.0))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        .cornerRadius(8)
 
-                HStack(spacing: 4) {
-                    if let exp = message.disappearsAt {
-                        Image(systemName: "timer")
-                            .font(.system(size: 9))
-                            .foregroundColor(.matrixGreen.opacity(0.7))
-                        Text(exp, style: .relative)
-                            .font(.monoSmall)
-                            .foregroundColor(.matrixGreen.opacity(0.7))
-                    } else {
-                        Text(message.timeString)
-                            .font(.monoSmall)
-                            .foregroundColor(.matrixGreen.opacity(0.7))
+                    HStack(spacing: 6) {
+                        if message.isRead {
+                            Image(systemName: "checkmark.double")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        } else {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
+                        }
+
+                        Text(message.timestamp)
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
                     }
-                    if isMine {
-                        Image(systemName: message.read ? "checkmark.circle.fill" : "checkmark.circle")
-                            .font(.system(size: 10))
-                            .foregroundColor(message.read ? .neonGreen : .matrixGreen.opacity(0.5))
-                    }
+                    .padding(.horizontal, 6)
                 }
-                .padding(.horizontal, 4)
-            }
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(message.content)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0.0, green: 0.1, blue: 0.0))
+                        .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.4), width: 1)
+                        .cornerRadius(8)
 
-            if !isMine { Spacer(minLength: 60) }
+                    Text(message.timestamp)
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+                        .padding(.horizontal, 6)
+                }
+
+                Spacer()
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(isMine ? "You" : "Them"): \(message.content). \(message.timeString). \(isMine ? (message.read ? "Read" : "Delivered") : "")")
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
 }
 
-struct BubbleShape: Shape {
-    let isMine: Bool
-    func path(in rect: CGRect) -> Path {
-        let r: CGFloat = 16
-        let tail: CGFloat = 6
-        var path = Path()
-        if isMine {
-            path.addRoundedRect(in: CGRect(x: 0, y: 0,
-                                           width: rect.width - tail,
-                                           height: rect.height),
-                                cornerSize: CGSize(width: r, height: r))
-        } else {
-            path.addRoundedRect(in: CGRect(x: tail, y: 0,
-                                           width: rect.width - tail,
-                                           height: rect.height),
-                                cornerSize: CGSize(width: r, height: r))
-        }
-        return path
+#Preview {
+    VStack(spacing: 12) {
+        MessageBubble(message: Message.mockSentMessage)
+        MessageBubble(message: Message.mockReceivedMessage)
     }
+    .padding()
+    .background(Color(red: 0.0, green: 0.055, blue: 0.0))
 }

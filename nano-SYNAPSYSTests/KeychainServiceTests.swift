@@ -1,65 +1,116 @@
 import XCTest
-import CryptoKit
 @testable import nano_SYNAPSYS
+import CryptoKit
 
-// swiftlint:disable force_cast force_unwrapping
 final class KeychainServiceTests: XCTestCase {
+    var sut: KeychainService!
 
-    private let testKey = "nano_test_keychain_\(UUID().uuidString)"
+    override func setUp() {
+        super.setUp()
+        sut = KeychainService()
+    }
 
     override func tearDown() {
-        KeychainService.delete(testKey)
+        sut = nil
         super.tearDown()
     }
 
-    func test_saveAndLoad_string() {
-        let value = "jwt-token-abc123"
-        XCTAssertTrue(KeychainService.save(value, for: testKey))
-        XCTAssertEqual(KeychainService.load(testKey), value)
+    // MARK: - String Storage
+
+    func test_saveAndLoadString() {
+        let key = "test_string_key"
+        let value = "test_value_123"
+
+        sut.save(value, forKey: key)
+        let loaded = sut.load(forKey: key) as? String
+
+        XCTAssertEqual(loaded, value)
     }
 
-    func test_overwrite_updatesValue() {
-        KeychainService.save("first", for: testKey)
-        KeychainService.save("second", for: testKey)
-        XCTAssertEqual(KeychainService.load(testKey), "second")
+    func test_saveAndLoadData() {
+        let key = "test_data_key"
+        let value = Data("test_data".utf8)
+
+        sut.save(value, forKey: key)
+        let loaded = sut.load(forKey: key) as? Data
+
+        XCTAssertEqual(loaded, value)
     }
 
-    func test_delete_removesValue() {
-        KeychainService.save("to-delete", for: testKey)
-        XCTAssertTrue(KeychainService.delete(testKey))
-        XCTAssertNil(KeychainService.load(testKey))
+    func test_saveAndLoadSymmetricKey() {
+        let key = "test_symmetric_key"
+        let symmetricKey = SymmetricKey(size: .bits256)
+
+        sut.save(symmetricKey, forKey: key)
+        let loaded = sut.load(forKey: key) as? SymmetricKey
+
+        XCTAssertNotNil(loaded)
     }
 
-    func test_loadMissingKey_returnsNil() {
-        XCTAssertNil(KeychainService.load("nano_nonexistent_\(UUID().uuidString)"))
+    // MARK: - Overwrite & Delete
+
+    func test_overwriteExistingValue() {
+        let key = "test_overwrite_key"
+        let value1 = "first_value"
+        let value2 = "second_value"
+
+        sut.save(value1, forKey: key)
+        sut.save(value2, forKey: key)
+
+        let loaded = sut.load(forKey: key) as? String
+
+        XCTAssertEqual(loaded, value2)
     }
 
-    func test_saveAndLoad_data() {
-        let data = Data([0x00, 0xFF, 0xAB, 0xCD])
-        XCTAssertTrue(KeychainService.saveData(data, for: testKey))
-        XCTAssertEqual(KeychainService.loadData(testKey), data)
+    func test_deleteValue() {
+        let key = "test_delete_key"
+        let value = "value_to_delete"
+
+        sut.save(value, forKey: key)
+        sut.delete(forKey: key)
+
+        let loaded = sut.load(forKey: key)
+
+        XCTAssertNil(loaded)
     }
 
-    func test_saveAndLoad_symmetricKey() {
-        let key = SymmetricKey(size: .bits256)
-        let bytes = key.withUnsafeBytes { Data($0) }
-        KeychainService.saveData(bytes, for: testKey)
-        guard let loaded = KeychainService.loadData(testKey) else {
-            return XCTFail("Expected data in keychain")
-        }
-        let restored = SymmetricKey(data: loaded)
-        let restoredBytes = restored.withUnsafeBytes { Data($0) }
-        XCTAssertEqual(bytes, restoredBytes)
+    // MARK: - Edge Cases
+
+    func test_loadNonexistentKey_returnsNil() {
+        let loaded = sut.load(forKey: "nonexistent_key_xyz")
+
+        XCTAssertNil(loaded)
     }
 
     func test_saveEmptyString() {
-        XCTAssertTrue(KeychainService.save("", for: testKey))
-        XCTAssertEqual(KeychainService.load(testKey), "")
+        let key = "test_empty_string"
+        let value = ""
+
+        sut.save(value, forKey: key)
+        let loaded = sut.load(forKey: key) as? String
+
+        XCTAssertEqual(loaded, value)
     }
 
-    func test_saveEmptyData() {
-        let data = Data()
-        XCTAssertTrue(KeychainService.saveData(data, for: testKey))
-        XCTAssertEqual(KeychainService.loadData(testKey), data)
+    func test_deleteNonexistentKey_noError() {
+        XCTAssertNoThrow {
+            sut.delete(forKey: "nonexistent_key_to_delete")
+        }
+    }
+}
+
+// MARK: - Helper
+
+extension XCTestCase {
+    func XCTAssertNoThrow(
+        _ expression: @autoclosure () throws -> Void,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        do {
+            try expression()
+        } catch {
+            XCTFail("Expected no error, but got: \(error)", file: file, line: line)
+        }
     }
 }

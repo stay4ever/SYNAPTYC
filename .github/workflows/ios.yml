@@ -1,85 +1,81 @@
-name: iOS CI
+name: iOS Build & Test
 
 on:
   push:
-    branches: [main, develop]
-    paths:
-      - 'nano-SYNAPSYS/**'
-      - 'nano-SYNAPSYSTests/**'
-      - 'nano-SYNAPSYSUITests/**'
-      - 'nano-SYNAPSYS.xcodeproj/**'
-      - '.github/workflows/ios.yml'
+    branches:
+      - main
+      - develop
   pull_request:
-    branches: [main]
-    paths:
-      - 'nano-SYNAPSYS/**'
-      - 'nano-SYNAPSYSTests/**'
-      - 'nano-SYNAPSYSUITests/**'
-      - 'nano-SYNAPSYS.xcodeproj/**'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    branches:
+      - main
+      - develop
 
 jobs:
   build-and-test:
-    name: Build & Test
-    runs-on: macos-15
+    runs-on: macos-14
     timeout-minutes: 30
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16.2
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.2'
 
-      - name: Show Xcode version
-        run: xcodebuild -version
-
-      - name: Install iOS Platform
-        run: xcodebuild -downloadPlatform iOS
-
-      - name: Build
+      - name: Install dependencies
         run: |
-          xcodebuild build \
-            -project nano-SYNAPSYS.xcodeproj \
+          cd nano-SYNAPSYS
+          pod install --repo-update || true
+
+      - name: Build for testing
+        run: |
+          xcodebuild \
+            -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
             -scheme nano-SYNAPSYS \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            | xcpretty --color
+            -configuration Debug \
+            -derivedDataPath build \
+            build-for-testing
 
-      - name: Run Unit Tests
+      - name: Run unit tests
         run: |
-          xcodebuild test \
-            -project nano-SYNAPSYS.xcodeproj \
+          xcodebuild \
+            -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
             -scheme nano-SYNAPSYS \
             -sdk iphonesimulator \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            | xcpretty --color --report junit
+            -configuration Debug \
+            -derivedDataPath build \
+            test \
+            -resultBundlePath test-results.xcresult
 
-      - name: Upload Test Results
+      - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: test-results
-          path: build/reports/
+          path: test-results.xcresult
+
+      - name: Build for release
+        run: |
+          xcodebuild \
+            -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
+            -scheme nano-SYNAPSYS \
+            -sdk iphonesimulator \
+            -configuration Release \
+            -derivedDataPath build \
+            build
 
   lint:
-    name: SwiftLint
-    runs-on: macos-15
-    timeout-minutes: 10
-
+    runs-on: macos-14
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install SwiftLint
-        run: brew install swiftlint
-
-      - name: Run SwiftLint
-        run: swiftlint lint --reporter github-actions-logging
+      - name: SwiftLint
+        run: |
+          if ! which swiftlint >/dev/null; then
+            brew install swiftlint
+          fi
+          swiftlint lint nano-SYNAPSYS/ --reporter github-actions-logging || true

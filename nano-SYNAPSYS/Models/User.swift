@@ -1,40 +1,38 @@
 import Foundation
 
-struct AppUser: Codable, Identifiable, Equatable {
-    let id: Int
+/// AppUser model representing a user in the nano-SYNAPSYS system.
+/// Named AppUser to avoid conflict with framework User types.
+struct AppUser: Codable, Identifiable {
+    let id: String
     let username: String
-    let email: String
-    var displayName: String?
-    var isApproved: Bool
-    var isOnline: Bool?
-    var lastSeen: String?
+    let displayName: String?
+    let publicKey: String? // Base64-encoded ECDH P-384 public key
+    let createdAt: Date?
+    let isOnline: Bool
 
     enum CodingKeys: String, CodingKey {
-        case id, username, email
+        case id
+        case username
         case displayName = "display_name"
-        case isApproved = "is_approved"
-        case isOnline = "online"
-        case lastSeen = "last_seen"
+        case publicKey = "public_key"
+        case createdAt = "created_at"
+        case isOnline = "is_online"
     }
 
-    var name: String {
-        if let dn = displayName, !dn.isEmpty { return dn }
-        return username
-    }
+    // MARK: - Computed Properties
+
+    /// Initials derived from displayName or username
     var initials: String {
-        let parts = name.split(separator: " ")
-        if parts.count >= 2 {
-            return "\(parts[0].prefix(1))\(parts[1].prefix(1))".uppercased()
+        let name = displayName ?? username
+        let components = name.split(separator: " ")
+        if components.count > 1 {
+            return String(components[0].prefix(1)) + String(components[1].prefix(1))
         }
-        return String(name.prefix(2)).uppercased()
+        return String(name.prefix(1))
     }
-}
 
-struct AuthResponse: Codable {
-    let token: String
-    let user: AppUser
-}
-
-struct MeResponse: Codable {
-    let user: AppUser
+    /// Display name if available, otherwise username
+    var displayNameOrUsername: String {
+        displayName ?? username
+    }
 }

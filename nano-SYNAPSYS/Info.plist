@@ -3,11 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>SYNAPTYC</string>
-	<key>CFBundleIconName</key>
-	<string>AppIcon</string>
+	<string>nano-SYNAPSYS</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -17,28 +15,34 @@
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
-	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>13</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSFaceIDUsageDescription</key>
-	<string>nano-SYNAPSYS uses Face ID to protect your encrypted messages.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Allow camera access to send photos in encrypted messages.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Allow microphone access to send voice messages.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Allow photo library access to share images in encrypted messages.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
+		<true/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
-	<key>UILaunchScreen</key>
-	<dict/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>SplashScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>armv7</string>
@@ -47,12 +51,89 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleLightContent</string>
+	<key>NSCameraUsageDescription</key>
+	<string>nano-SYNAPSYS needs access to your camera to capture photos and send them securely to your contacts.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>nano-SYNAPSYS needs access to your photo library to share images with your contacts in encrypted conversations.</string>
+	<key>NSPhotoLibraryAddOnlyUsageDescription</key>
+	<string>nano-SYNAPSYS needs permission to save photos you receive from your contacts.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>nano-SYNAPSYS requires local network access for peer-to-peer encrypted messaging features.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_nanosynapsys._tcp</string>
+	</array>
+	<key>NSUserNotificationUsageDescription</key>
+	<string>nano-SYNAPSYS sends notifications when you receive encrypted messages from your contacts.</string>
+	<key>UINotificationPermissionOptions</key>
+	<array>
+		<string>badge</string>
+		<string>sound</string>
+		<string>alert</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
-	</dict>
+		<key>NSAllowsArbitraryLoadsForMedia</key>
+		<false/>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>api.nanosynapsys.com</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.3</string>
+			</dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</key>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSPrincipalClass</key>
+	<string>UIApplication</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.aievolve.nanosynapsys</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>nanosynapsys</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSFallbackLanguages</key>
+	<array>
+		<string>en</string>
+	</array>
+	<key>NSLocalizationNativeLanguage</key>
+	<string>en</string>
 </dict>
 </plist>

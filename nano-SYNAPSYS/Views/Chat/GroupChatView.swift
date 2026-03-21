@@ -2,165 +2,136 @@ import SwiftUI
 
 struct GroupChatView: View {
     let group: Group
-    @StateObject private var vm: GroupChatViewModel
-    @State private var inputText = ""
-    @FocusState private var inputFocused: Bool
+    @StateObject private var viewModel: GroupChatViewModel
+    @State private var messageText = ""
+    @Environment(\.dismiss) var dismiss
 
     init(group: Group) {
         self.group = group
-        _vm = StateObject(wrappedValue: GroupChatViewModel(group: group))
+        _viewModel = StateObject(wrappedValue: GroupChatViewModel(groupID: group.id))
     }
 
     var body: some View {
         ZStack {
-            Color.deepBlack.ignoresSafeArea()
-            ScanlineOverlay()
+            Color(red: 0.0, green: 0.055, blue: 0.0)
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Member count bar
+                // Header
                 HStack {
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(.matrixGreen)
-                    Text("\(group.members.count) member\(group.members.count != 1 ? "s" : "")")
-                        .font(.monoSmall)
-                        .foregroundColor(.matrixGreen)
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(group.name)
+                            .font(.system(.headline, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                        Text("\(group.memberCount) MEMBERS")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
+                    }
+
                     Spacer()
-                    EncryptionBadge(isActive: vm.encryptionReady)
+
+                    EncryptionBadge()
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.darkGreen.opacity(0.3))
+                .padding(.vertical, 12)
+                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
 
-                // Messages
+                // Messages list
                 ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(vm.messages) { msg in
-                                GroupMessageBubble(message: msg)
-                                    .id(msg.id)
-                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    List {
+                        ForEach(viewModel.messages) { message in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Text(message.senderName)
+                                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
+
+                                    Spacer()
+
+                                    Text(message.timestamp)
+                                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.4))
+                                }
+
+                                MessageBubble(message: message)
                             }
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                            .id(message.id)
                         }
-                        .padding(.vertical, 10)
-                        .onChange(of: vm.messages.count) { _, _ in
+
+                        if viewModel.isRemoteTyping {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Someone is typing...")
+                                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
+
+                                TypingIndicator()
+                            }
+                            .listRowBackground(Color.clear)
+                            .id("typingIndicator")
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(Color.clear)
+                    .scrollContentBackground(.hidden)
+                    .onChange(of: viewModel.messages.count) { _ in
+                        if let lastMessage = viewModel.messages.last {
                             withAnimation {
-                                proxy.scrollTo(vm.messages.last?.id, anchor: .bottom)
+                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
                             }
                         }
                     }
                 }
 
-                if let err = vm.errorMessage {
-                    Text("⚠ \(err)")
-                        .font(.monoCaption)
-                        .foregroundColor(.alertRed)
-                        .padding(.horizontal, 16)
-                }
+                // Message input
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        TextField("MESSAGE...", text: $messageText)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                            .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                            .cornerRadius(4)
 
-                // Input bar
-                HStack(spacing: 10) {
-                    TextField("Encrypted message…", text: $inputText, axis: .vertical)
-                        .font(.monoBody)
-                        .foregroundColor(.neonGreen)
-                        .tint(.neonGreen)
-                        .lineLimit(1...5)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Color.darkGreen.opacity(0.35))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.neonGreen.opacity(0.2), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .focused($inputFocused)
-
-                    Button {
-                        let msg = inputText
-                        inputText = ""
-                        vm.send(msg)
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(
-                                inputText.trimmingCharacters(in: .whitespaces).isEmpty
-                                ? .matrixGreen.opacity(0.3) : .neonGreen
-                            )
-                            .shadow(color: .neonGreen.opacity(0.3), radius: 4)
+                        Button(action: {
+                            if !messageText.trimmingCharacters(in: .whitespaces).isEmpty {
+                                viewModel.sendMessage(messageText)
+                                messageText = ""
+                            }
+                        }) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        }
+                        .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
-                    .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityLabel("Send message")
-                    .accessibilityAddTraits(.isButton)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color.darkGreen.opacity(0.5))
+                .padding(.top, 8)
+                .background(Color(red: 0.04, green: 0.1, blue: 0.04).opacity(0.5))
+                .borderTop(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                VStack(spacing: 1) {
-                    Text("# \(group.name.uppercased())")
-                        .font(.monoHeadline)
-                        .foregroundColor(.neonGreen)
-                        .glowText()
-                }
-            }
+        .navigationBarBackButtonHidden(true)
+        .onAppear {
+            viewModel.loadMessages()
         }
-        .task { await vm.load() }
     }
 }
 
-struct GroupMessageBubble: View {
-    let message: GroupMessage
-    private var isMine: Bool {
-        message.fromUser == AuthViewModel.shared.currentUser?.id
-    }
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            if isMine { Spacer(minLength: 48) }
-
-            VStack(alignment: isMine ? .trailing : .leading, spacing: 2) {
-                if !isMine {
-                    Text(message.fromDisplay)
-                        .font(.monoSmall)
-                        .foregroundColor(.matrixGreen)
-                        .padding(.horizontal, 14)
-                        .accessibilityLabel("From \(message.fromDisplay)")
-                }
-                HStack(spacing: 0) {
-                    if isMine { Spacer() }
-                    VStack(alignment: isMine ? .trailing : .leading, spacing: 4) {
-                        Text(message.content)
-                            .font(.monoBody)
-                            .foregroundColor(isMine ? Color.deepBlack : Color.neonGreen)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(message.timeString)
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(isMine ? Color.deepBlack.opacity(0.6) : Color.matrixGreen.opacity(0.6))
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(isMine ? Color.neonGreen : Color.darkGreen)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(isMine ? Color.clear : Color.neonGreen.opacity(0.2), lineWidth: 1)
-                            )
-                    )
-                    if !isMine { Spacer() }
-                }
-            }
-
-            if !isMine { Spacer(minLength: 48) }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(isMine ? "You" : message.fromDisplay): \(message.content). \(message.timeString)")
+#Preview {
+    NavigationStack {
+        GroupChatView(group: Group.mockGroup)
     }
 }

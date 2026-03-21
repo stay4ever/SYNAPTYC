@@ -1,138 +1,116 @@
 import SwiftUI
 
 struct ContactsView: View {
-    @StateObject private var vm = ContactsViewModel()
+    @EnvironmentObject var viewModel: ContactsViewModel
     @State private var searchText = ""
-    @State private var selectedTab = 0
+    @State private var showAddContactSheet = false
 
-    var filteredUsers: [AppUser] {
-        let me = AuthViewModel.shared.currentUser?.id ?? 0
-        let list = vm.allUsers.filter { $0.id != me }
-        if searchText.isEmpty { return list }
-        return list.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.username.localizedCaseInsensitiveContains(searchText)
+    var filteredContacts: [Contact] {
+        if searchText.isEmpty {
+            return viewModel.contacts
+        }
+        return viewModel.contacts.filter { contact in
+            contact.displayName.localizedCaseInsensitiveContains(searchText) ||
+            contact.username.localizedCaseInsensitiveContains(searchText)
         }
     }
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.deepBlack.ignoresSafeArea()
-                ScanlineOverlay()
+        ZStack {
+            Color(red: 0.0, green: 0.055, blue: 0.0)
+                .ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    // Tab picker
-                    Picker("", selection: $selectedTab) {
-                        Text("Contacts").tag(0)
-                        Text("Requests \(vm.pendingIncoming.isEmpty ? "" : "(\(vm.pendingIncoming.count))")").tag(1)
-                        Text("All Users").tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .tint(.neonGreen)
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 12) {
+                    HStack {
+                        Text("CONTACTS")
+                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
 
-                    if selectedTab == 2 {
-                        HStack(spacing: 10) {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(.matrixGreen).font(.system(size: 13))
-                            TextField("Search users…", text: $searchText)
-                                .font(.monoBody).foregroundColor(.neonGreen).tint(.neonGreen)
-                                .autocorrectionDisabled().textInputAutocapitalization(.never)
+                        Spacer()
+
+                        Button(action: { showAddContactSheet = true }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                         }
-                        .padding(10)
-                        .background(Color.darkGreen.opacity(0.3))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
                     }
 
-                    if let success = vm.successMessage {
-                        Text("✓ \(success)")
-                            .font(.monoCaption).foregroundColor(.neonGreen)
-                            .padding(.horizontal, 16).padding(.vertical, 4)
-                    }
-                    if let err = vm.errorMessage {
-                        Text("⚠ \(err)")
-                            .font(.monoCaption).foregroundColor(.alertRed)
-                            .padding(.horizontal, 16).padding(.vertical, 4)
-                    }
+                    // Search bar
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
 
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            switch selectedTab {
-                            case 0:
-                                if vm.acceptedContacts.isEmpty {
-                                    emptyState(icon: "person.2", text: "No contacts yet.\nSearch All Users to add someone.")
-                                } else {
-                                    ForEach(vm.acceptedContacts) { contact in
-                                        if let user = contact.otherUser {
-                                            ContactRow(user: user, status: .accepted) { _ in }
-                                            Divider().background(Color.neonGreen.opacity(0.07))
-                                        }
-                                    }
-                                }
-                            case 1:
-                                if vm.pendingIncoming.isEmpty && vm.pendingOutgoing.isEmpty {
-                                    emptyState(icon: "tray", text: "No pending requests.")
-                                } else {
-                                    ForEach(vm.pendingIncoming) { contact in
-                                        if let user = contact.otherUser {
-                                            ContactRow(user: user, status: .pendingIncoming) { action in
-                                                Task {
-                                                    if action == .accept {
-                                                        await vm.accept(contact: contact)
-                                                    } else {
-                                                        await vm.reject(contact: contact)
-                                                    }
-                                                }
-                                            }
-                                            Divider().background(Color.neonGreen.opacity(0.07))
-                                        }
-                                    }
-                                    ForEach(vm.pendingOutgoing) { contact in
-                                        if let user = contact.otherUser {
-                                            ContactRow(user: user, status: .pendingOutgoing) { _ in }
-                                            Divider().background(Color.neonGreen.opacity(0.07))
-                                        }
-                                    }
-                                }
-                            default:
-                                ForEach(filteredUsers) { user in
-                                    let status: ContactRowStatus = vm.isContact(user.id) ? .accepted
-                                        : vm.hasPendingRequest(to: user.id) ? .pendingOutgoing : .none
-                                    ContactRow(user: user, status: status) { action in
-                                        if action == .sendRequest {
-                                            Task { await vm.sendRequest(to: user) }
-                                        }
-                                    }
-                                    Divider().background(Color.neonGreen.opacity(0.07))
-                                }
+                        TextField("SEARCH CONTACTS", text: $searchText)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                        if !searchText.isEmpty {
+                            Button(action: { searchText = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
                             }
                         }
                     }
-                    .refreshable { await vm.load() }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                    .cornerRadius(4)
                 }
-            }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("CONTACTS").font(.monoHeadline).foregroundColor(.neonGreen).glowText()
-                }
-            }
-        }
-        .task { await vm.load() }
-    }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
 
-    private func emptyState(icon: String, text: String) -> some View {
-        VStack(spacing: 14) {
-            Image(systemName: icon).font(.system(size: 36)).foregroundColor(.matrixGreen.opacity(0.4))
-            Text(text).font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
-                .multilineTextAlignment(.center)
+                // Contacts list
+                if filteredContacts.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "person.crop.circle.dashed")
+                            .font(.system(size: 48, weight: .light))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))
+
+                        Text("NO CONTACTS")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+
+                        Text("Add contacts to start messaging")
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    List {
+                        ForEach(filteredContacts) { contact in
+                            ContactRow(contact: contact)
+                                .listRowBackground(Color.clear)
+                                .listRowInsets(EdgeInsets(top: 4, leading: 12, bottom: 4, trailing: 12))
+                        }
+                    }
+                    .listStyle(.plain)
+                    .background(Color.clear)
+                    .scrollContentBackground(.hidden)
+                }
+
+                Spacer()
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
+        .sheet(isPresented: $showAddContactSheet) {
+            AddContactSheet(isPresented: $showAddContactSheet)
+                .environmentObject(viewModel)
+        }
+        .onAppear {
+            viewModel.loadContacts()
+        }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        ContactsView()
+            .environmentObject(ContactsViewModel())
     }
 }

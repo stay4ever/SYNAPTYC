@@ -2,81 +2,124 @@ name: Check TestFlight Build Status
 
 on:
   workflow_dispatch:
+    inputs:
+      build_id:
+        description: 'TestFlight Build ID (optional)'
+        required: false
+        type: string
 
 jobs:
-  check:
-    name: Check Build Status
-    runs-on: macos-15
+  check-build-status:
+    runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: production
 
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Write App Store Connect API Key
-        env:
-          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
-        run: echo "$ASC_KEY_CONTENT" > $RUNNER_TEMP/AuthKey.p8
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-      - name: Check TestFlight Builds via ASC API
+      - name: Decode App Store Connect API Key
+        env:
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY }}
+        run: |
+          mkdir -p $HOME/.appstore
+          echo "$ASC_API_KEY_BASE64" | base64 --decode > $HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+
+      - name: Install App Store Connect CLI dependencies
+        run: |
+          pip install requests cryptography
+
+      - name: Check latest TestFlight build status
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          APP_STORE_CONNECT_APP_ID: ${{ secrets.APP_STORE_CONNECT_APP_ID }}
-          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
         run: |
-          gem install jwt --quiet
+          python3 << 'SCRIPT'
+          import os
+          import json
+          import requests
+          import jwt
+          from datetime import datetime, timedelta
+          from pathlib import Path
 
-          ruby - <<'RUBY'
-          require 'jwt'
-          require 'net/http'
-          require 'json'
-          require 'openssl'
+          # App Store Connect API credentials
+          key_id = os.environ.get('ASC_KEY_ID')
+          issuer_id = os.environ.get('ASC_ISSUER_ID')
+          key_path = os.path.expanduser('~/.appstore/AuthKey_' + key_id + '.p8')
 
-          key_id    = ENV['ASC_KEY_ID']
-          issuer_id = ENV['ASC_ISSUER_ID']
-          app_id    = ENV['APP_STORE_CONNECT_APP_ID']
-          key_path  = ENV['ASC_KEY_PATH']
+          # Read private key
+          with open(key_path, 'r') as f:
+              private_key = f.read()
 
-          private_key = OpenSSL::PKey::EC.new(File.read(key_path))
+          # Create JWT token
+          now = datetime.utcnow()
+          exp = now + timedelta(minutes=20)
 
           payload = {
-            iss: issuer_id,
-            iat: Time.now.to_i,
-            exp: Time.now.to_i + 1200,
-            aud: 'appstoreconnect-v1'
+              'iss': issuer_id,
+              'iat': int(now.timestamp()),
+              'exp': int(exp.timestamp()),
+              'aud': 'appstoreconnect-v1'
           }
 
-          token = JWT.encode(payload, private_key, 'ES256', { kid: key_id })
+          token = jwt.encode(payload, private_key, algorithm='ES256', headers={'kid': key_id})
 
-          uri = URI("https://api.appstoreconnect.apple.com/v1/builds?filter[app]=#{app_id}&limit=5&sort=-uploadedDate&fields[builds]=version,processingState,uploadedDate,expired,minOsVersion")
-          req = Net::HTTP::Get.new(uri)
-          req['Authorization'] = "Bearer #{token}"
-          req['Content-Type']  = 'application/json'
+          # Fetch builds for nano-SYNAPSYS (bundle ID: com.aievolve.nanosynapsys)
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'Accept': 'application/vnd.api+json'
+          }
 
-          resp = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true) { |h| h.request(req) }
-          data = JSON.parse(resp.body)
+          # Get app ID first
+          apps_url = 'https://api.appstoreconnect.apple.com/v1/apps'
+          params = {
+              'filter[bundleId]': 'com.aievolve.nanosynapsys',
+              'limit': 1
+          }
 
-          builds = data['data'] || []
+          resp = requests.get(apps_url, headers=headers, params=params)
+          if resp.status_code != 200:
+              print(f'Failed to fetch apps: {resp.text}')
+              exit(1)
 
-          if builds.nil? || builds.empty?
-            puts "No builds found. Raw response:"
-            puts resp.body[0..500]
-          else
-            puts "\n#{'='*60}"
-            puts "  TestFlight Builds — com.aievolution.nanosynapsys"
-            puts "#{'='*60}"
-            builds.each do |b|
-              attrs = b['attributes']
-              puts "  Build   : #{attrs['version']}"
-              puts "  State   : #{attrs['processingState']}"
-              puts "  Uploaded: #{attrs['uploadedDate']}"
-              puts "  Expired : #{attrs['expired']}"
-              puts "-"*60
-            end
-          end
-          RUBY
+          data = resp.json()
+          if not data['data']:
+              print('App not found in App Store Connect')
+              exit(1)
 
-      - name: Cleanup
+          app_id = data['data'][0]['id']
+          print(f'Found app: {app_id}')
+
+          # Get builds
+          builds_url = f'https://api.appstoreconnect.apple.com/v1/apps/{app_id}/builds'
+          params = {
+              'sort': '-uploadedDate',
+              'limit': 5
+          }
+
+          resp = requests.get(builds_url, headers=headers, params=params)
+          if resp.status_code != 200:
+              print(f'Failed to fetch builds: {resp.text}')
+              exit(1)
+
+          builds = resp.json()['data']
+          if not builds:
+              print('No builds found')
+              exit(0)
+
+          print('Latest builds:')
+          for build in builds[:3]:
+              attrs = build['attributes']
+              print(f"  Build #{attrs['version']}.{attrs['buildNumber']}")
+              print(f"    Status: {attrs['processingState']}")
+              print(f"    Uploaded: {attrs['uploadedDate']}")
+          SCRIPT
+
+      - name: Clean up
         if: always()
-        run: rm -f $RUNNER_TEMP/AuthKey.p8
+        run: rm -f ~/.appstore/AuthKey_*.p8

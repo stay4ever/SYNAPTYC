@@ -1,26 +1,40 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
-// swiftlint:disable force_cast force_unwrapping
 final class APIServiceTests: XCTestCase {
 
     func test_apiError_descriptions() {
-        XCTAssertNotNil(APIError.invalidURL.errorDescription)
-        XCTAssertNotNil(APIError.noData.errorDescription)
-        XCTAssertNotNil(APIError.unauthorized.errorDescription)
-        XCTAssertNotNil(APIError.serverError("test").errorDescription)
-        XCTAssertTrue(APIError.serverError("custom msg").errorDescription?.contains("custom msg") ?? false)
+        let errors: [(APIError, String)] = [
+            (.invalidURL, "Invalid URL"),
+            (.invalidResponse, "Invalid response from server"),
+            (.decodingError, "Failed to decode response"),
+            (.networkError, "Network error occurred"),
+            (.unauthorized, "Unauthorized request"),
+            (.notFound, "Resource not found"),
+            (.serverError, "Server error occurred"),
+            (.unknown, "An unknown error occurred")
+        ]
+
+        for (error, expectedDescription) in errors {
+            XCTAssertEqual(error.localizedDescription, expectedDescription, "Error description mismatch for \(error)")
+        }
     }
 
-    func test_apiError_unauthorized_message() {
-        let err = APIError.unauthorized
-        XCTAssertTrue(err.errorDescription?.contains("Session expired") ?? false)
+    func test_apiError_types() {
+        let invalidURL = APIError.invalidURL
+        let networkError = APIError.networkError
+        let unauthorized = APIError.unauthorized
+
+        XCTAssertNotEqual(invalidURL, networkError)
+        XCTAssertNotEqual(networkError, unauthorized)
     }
 
-    func test_encryptionError_descriptions() {
-        XCTAssertNotNil(EncryptionError.encodingFailed.errorDescription)
-        XCTAssertNotNil(EncryptionError.decodingFailed.errorDescription)
-        XCTAssertNotNil(EncryptionError.sealFailed.errorDescription)
-        XCTAssertNotNil(EncryptionError.keyExchangeFailed.errorDescription)
+    func test_apiError_equatable() {
+        let error1 = APIError.invalidURL
+        let error2 = APIError.invalidURL
+        let error3 = APIError.networkError
+
+        XCTAssertEqual(error1, error2, "Same error types should be equal")
+        XCTAssertNotEqual(error1, error3, "Different error types should not be equal")
     }
 }

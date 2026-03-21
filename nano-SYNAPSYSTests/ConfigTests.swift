@@ -1,73 +1,74 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
-// swiftlint:disable force_cast force_unwrapping
 final class ConfigTests: XCTestCase {
 
+    // MARK: - URL Validation
+
     func test_baseURL_isHTTPS() {
-        XCTAssertTrue(Config.baseURL.hasPrefix("https://"), "Base URL must use HTTPS")
+        let baseURL = Config.baseURL
+        XCTAssertTrue(baseURL.absoluteString.hasPrefix("https://"), "Base URL must use HTTPS")
     }
 
     func test_wsURL_isWSS() {
-        XCTAssertTrue(Config.wsURL.hasPrefix("wss://"), "WebSocket URL must use WSS")
+        let wsURL = Config.wsURL
+        XCTAssertTrue(wsURL.absoluteString.hasPrefix("wss://"), "WebSocket URL must use WSS")
     }
 
-    func test_apiEndpoints_containBaseURL() {
+    func test_allEndpoints_constructValidURLs() {
         let endpoints = [
-            Config.API.register,
-            Config.API.login,
-            Config.API.me,
-            Config.API.users,
-            Config.API.contacts,
-            Config.API.messages,
-            Config.API.botChat
+            Config.loginURL,
+            Config.registerURL,
+            Config.messagesURL,
+            Config.contactsURL,
+            Config.groupsURL,
+            Config.botURL
         ]
-        for ep in endpoints {
-            XCTAssertTrue(ep.hasPrefix(Config.baseURL), "Endpoint \(ep) must start with baseURL")
+
+        for endpoint in endpoints {
+            XCTAssertTrue(endpoint.absoluteString.hasPrefix("https://"), "All endpoints must use HTTPS")
+            XCTAssertFalse(endpoint.absoluteString.isEmpty, "Endpoint URL should not be empty")
         }
     }
 
-    func test_apiEndpoints_areValidURLs() {
-        let endpoints = [
-            Config.API.register, Config.API.login, Config.API.me,
-            Config.API.users, Config.API.contacts, Config.API.messages, Config.API.botChat
-        ]
-        for ep in endpoints {
-            XCTAssertNotNil(URL(string: ep), "\(ep) must be a valid URL")
-        }
+    func test_loginEndpoint() {
+        let loginURL = Config.loginURL
+        XCTAssertTrue(loginURL.absoluteString.contains("/login"), "Login endpoint should contain '/login'")
     }
 
-    func test_keychainKeys_areNonEmpty() {
-        XCTAssertFalse(Config.Keychain.tokenKey.isEmpty)
-        XCTAssertFalse(Config.Keychain.userKey.isEmpty)
-        XCTAssertFalse(Config.Keychain.privateKeyTag.isEmpty)
+    func test_messagesEndpoint() {
+        let messagesURL = Config.messagesURL
+        XCTAssertTrue(messagesURL.absoluteString.contains("/messages"), "Messages endpoint should contain '/messages'")
     }
 
-    func test_encryptionLabel_containsAlgorithms() {
-        let label = Config.App.encryptionLabel
-        XCTAssertTrue(label.contains("AES-256-GCM"), "Label must mention AES-256-GCM")
-        XCTAssertTrue(label.contains("ECDH-P384"),   "Label must mention ECDH-P384")
-        XCTAssertTrue(label.contains("E2E"),          "Label must mention E2E")
+    func test_contactsEndpoint() {
+        let contactsURL = Config.contactsURL
+        XCTAssertTrue(contactsURL.absoluteString.contains("/contacts"), "Contacts endpoint should contain '/contacts'")
     }
 
-    func test_groupsEndpoint_containsBaseURL() {
-        XCTAssertTrue(Config.API.groups.hasPrefix(Config.baseURL))
+    func test_groupsEndpoint() {
+        let groupsURL = Config.groupsURL
+        XCTAssertTrue(groupsURL.absoluteString.contains("/groups"), "Groups endpoint should contain '/groups'")
     }
 
-    func test_invitesEndpoint_containsBaseURL() {
-        XCTAssertTrue(Config.API.invites.hasPrefix(Config.baseURL))
+    func test_botEndpoint() {
+        let botURL = Config.botURL
+        XCTAssertTrue(botURL.absoluteString.contains("/bot"), "Bot endpoint should contain '/bot'")
     }
 
-    func test_passwordResetEndpoint_containsBaseURL() {
-        XCTAssertTrue(Config.API.passwordReset.hasPrefix(Config.baseURL))
+    // MARK: - Version & Bundle
+
+    func test_appVersion_isSemver() {
+        let version = Config.appVersion
+        let semverPattern = "^\\d+\\.\\d+\\.\\d+$"
+        let regex = try! NSRegularExpression(pattern: semverPattern, options: [])
+        let range = NSRange(version.startIndex..<version.endIndex, in: version)
+
+        XCTAssertTrue(regex.firstMatch(in: version, options: [], range: range) != nil, "App version should be semantic versioning (e.g., 1.1.0)")
     }
 
-    func test_appName_isSet() {
-        XCTAssertEqual(Config.App.name, "nano-SYNAPSYS")
-    }
-
-    func test_appVersion_isValid() {
-        let parts = Config.App.version.split(separator: ".")
-        XCTAssertEqual(parts.count, 3, "Version must be semver format (x.y.z)")
+    func test_bundleId() {
+        let bundleId = Config.bundleIdentifier
+        XCTAssertEqual(bundleId, "com.aievolve.nanosynapsys", "Bundle ID must match the app identifier")
     }
 }

@@ -1,192 +1,231 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject var auth: AuthViewModel
-    @State private var showLogoutConfirm     = false
-    @State private var showChangePassword    = false
-    @State private var screenshotDetected    = false
-    @State private var notificationsEnabled  = true
-    @State private var showInviteSheet       = false
-    @StateObject private var groupsVM        = GroupsViewModel()
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.deepBlack.ignoresSafeArea()
-                ScanlineOverlay()
-
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Profile card
-                        if let user = auth.currentUser {
-                            profileCard(user)
-                        }
-
-                        // Security section
-                        settingsSection(title: "SECURITY") {
-                            settingsRow(icon: "lock.shield.fill", label: "Encryption", value: "AES-256-GCM + ECDH-P384")
-                            Divider().background(Color.neonGreen.opacity(0.08))
-                            settingsRow(icon: "key.fill", label: "Keys", value: "Stored in Keychain")
-                            Divider().background(Color.neonGreen.opacity(0.08))
-                            settingsRow(icon: "eye.slash.fill", label: "Screen Security", value: "Auto-blur enabled")
-                        }
-
-                        // Notifications
-                        settingsSection(title: "NOTIFICATIONS") {
-                            HStack {
-                                Image(systemName: "bell.fill").foregroundColor(.matrixGreen)
-                                    .frame(width: 22)
-                                Text("Push Notifications").font(.monoBody).foregroundColor(.neonGreen)
-                                Spacer()
-                                Toggle("", isOn: $notificationsEnabled)
-                                    .tint(.neonGreen)
-                                    .labelsHidden()
-                            }
-                            .padding(.vertical, 4)
-                        }
-
-                        // Account
-                        settingsSection(title: "ACCOUNT") {
-                            Button { showChangePassword = true } label: {
-                                HStack {
-                                    Image(systemName: "key.horizontal.fill").foregroundColor(.matrixGreen).frame(width: 22)
-                                    Text("Change Password").font(.monoBody).foregroundColor(.neonGreen)
-                                    Spacer()
-                                    Image(systemName: "chevron.right").foregroundColor(.matrixGreen.opacity(0.5)).font(.system(size: 12))
-                                }
-                                .padding(.vertical, 4)
-                            }
-                            Divider().background(Color.neonGreen.opacity(0.08))
-                            Button { showInviteSheet = true } label: {
-                                HStack {
-                                    Image(systemName: "envelope.fill").foregroundColor(.matrixGreen).frame(width: 22)
-                                    Text("Invite Someone").font(.monoBody).foregroundColor(.neonGreen)
-                                    Spacer()
-                                    Image(systemName: "chevron.right").foregroundColor(.matrixGreen.opacity(0.5)).font(.system(size: 12))
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-
-                        // About
-                        settingsSection(title: "ABOUT") {
-                            settingsRow(icon: "info.circle", label: "Version", value: Config.App.version)
-                            Divider().background(Color.neonGreen.opacity(0.08))
-                            settingsRow(icon: "server.rack", label: "Backend", value: "api.nanosynapsys.com")
-                        }
-
-                        // Logout
-                        NeonButton("SIGN OUT", icon: "rectangle.portrait.and.arrow.right",
-                                   style: .danger) {
-                            showLogoutConfirm = true
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-
-                        Text("nano-SYNAPSYS · Encrypted by default, private by design.")
-                            .font(.monoSmall)
-                            .foregroundColor(.matrixGreen.opacity(0.4))
-                            .multilineTextAlignment(.center)
-                            .padding(.bottom, 30)
-                    }
-                    .padding(.top, 16)
-                }
-            }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("SETTINGS").font(.monoHeadline).foregroundColor(.neonGreen).glowText()
-                }
-            }
-        }
-        .sheet(isPresented: $showInviteSheet) {
-            InviteSheet(vm: groupsVM)
-        }
-        .alert("Sign Out?", isPresented: $showLogoutConfirm) {
-            Button("Sign Out", role: .destructive) { auth.logout() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your encryption keys remain stored on this device.")
-        }
-        .sheet(isPresented: $showChangePassword) { ChangePasswordSheet() }
-    }
-
-    private func profileCard(_ user: AppUser) -> some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle().fill(Color.darkGreen).frame(width: 72, height: 72)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1.5))
-                Text(user.initials)
-                    .font(.system(size: 26, weight: .bold, design: .monospaced))
-                    .foregroundColor(.neonGreen)
-            }
-            .accessibilityLabel("\(user.name)'s avatar")
-            Text(user.name).font(.monoHeadline).foregroundColor(.neonGreen).glowText()
-            Text("@\(user.username)").font(.monoCaption).foregroundColor(.matrixGreen)
-            Text(user.email).font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
-            EncryptionBadge()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(20)
-        .neonCard()
-        .padding(.horizontal, 16)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Profile: \(user.name), @\(user.username), \(user.email)")
-    }
-
-    private func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(.monoSmall).foregroundColor(.matrixGreen).tracking(2)
-                .padding(.horizontal, 16).padding(.bottom, 8)
-            VStack(spacing: 0) { content() }
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .neonCard()
-                .padding(.horizontal, 16)
-        }
-    }
-
-    private func settingsRow(icon: String, label: String, value: String) -> some View {
-        HStack {
-            Image(systemName: icon).foregroundColor(.matrixGreen).frame(width: 22)
-            Text(label).font(.monoBody).foregroundColor(.neonGreen)
-            Spacer()
-            Text(value).font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.7)).lineLimit(1)
-        }
-        .padding(.vertical, 4)
-    }
-}
-
-struct ChangePasswordSheet: View {
+    @EnvironmentObject var viewModel: AuthViewModel
+    @State private var notificationsEnabled = true
+    @State private var showLogoutAlert = false
     @Environment(\.dismiss) var dismiss
-    @State private var current   = ""
-    @State private var newPass   = ""
-    @State private var confirm   = ""
-    @State private var message   = ""
-    @State private var isLoading = false
+
+    let appVersion = "1.1.0"
+    let buildNumber = "13"
 
     var body: some View {
         ZStack {
-            Color.deepBlack.ignoresSafeArea()
-            VStack(spacing: 16) {
-                Text("CHANGE PASSWORD").font(.monoHeadline).foregroundColor(.neonGreen)
-                NeonTextField(placeholder: "Current password", text: $current, isSecure: true, icon: "key")
-                NeonTextField(placeholder: "New password", text: $newPass, isSecure: true, icon: "key.fill")
-                NeonTextField(placeholder: "Confirm new password", text: $confirm, isSecure: true, icon: "key.fill")
-                if !message.isEmpty {
-                    Text(message).font(.monoCaption).foregroundColor(.neonGreen).multilineTextAlignment(.center)
-                }
-                NeonButton("UPDATE PASSWORD", isLoading: isLoading) {
-                    guard newPass == confirm, newPass.count >= 8 else {
-                        message = "⚠ Passwords must match and be at least 8 characters."
-                        return
+            Color(red: 0.0, green: 0.055, blue: 0.0)
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("SETTINGS")
+                            .font(.system(size: 28, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                        Text("SECURITY & PREFERENCES")
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
                     }
-                    message = "Password change requires re-authentication via the web portal."
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+
+                    // Account Section
+                    VStack(spacing: 12) {
+                        SectionHeader(title: "ACCOUNT")
+
+                        VStack(spacing: 12) {
+                            SettingRow(
+                                label: "USERNAME",
+                                value: viewModel.currentUser?.username ?? "—"
+                            )
+
+                            SettingRow(
+                                label: "DISPLAY NAME",
+                                value: viewModel.currentUser?.displayName ?? "—"
+                            )
+
+                            SettingRow(
+                                label: "USER ID",
+                                value: String(viewModel.currentUser?.id ?? 0)
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    // Security Section
+                    VStack(spacing: 12) {
+                        SectionHeader(title: "SECURITY")
+
+                        VStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("ENCRYPTION STATUS")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
+
+                                HStack(spacing: 8) {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                                    Text("E2E ENCRYPTED (AES-256-GCM)")
+                                        .font(.system(size: 13, weight: .regular, design: .monospaced))
+                                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.8))
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(Color(red: 0.0, green: 0.1, blue: 0.0))
+                                .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                                .cornerRadius(4)
+                            }
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("KEY EXCHANGE")
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
+
+                                Text("ECDH P-384")
+                                    .font(.system(size: 13, weight: .regular, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.8))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 10)
+                                    .background(Color(red: 0.0, green: 0.1, blue: 0.0))
+                                    .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                                    .cornerRadius(4)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    // Notifications Section
+                    VStack(spacing: 12) {
+                        SectionHeader(title: "NOTIFICATIONS")
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("PUSH NOTIFICATIONS")
+                                    .font(.system(.body, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+
+                                Text("Receive real-time message alerts")
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $notificationsEnabled)
+                                .tint(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .neonCard()
+                    }
+
+                    // App Info Section
+                    VStack(spacing: 12) {
+                        SectionHeader(title: "APP INFO")
+
+                        VStack(spacing: 12) {
+                            SettingRow(
+                                label: "VERSION",
+                                value: appVersion
+                            )
+
+                            SettingRow(
+                                label: "BUILD",
+                                value: buildNumber
+                            )
+
+                            SettingRow(
+                                label: "PLATFORM",
+                                value: "iOS 17.0+"
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    // Logout Button
+                    Button(action: { showLogoutAlert = true }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.left.circle.fill")
+                                .font(.system(size: 16, weight: .semibold))
+
+                            Text("LOGOUT")
+                                .font(.system(.body, weight: .semibold, design: .monospaced))
+
+                            Spacer()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundColor(Color(red: 0.0, green: 0.055, blue: 0.0))
+                        .background(Color(red: 1.0, green: 0.2, blue: 0.2))
+                        .cornerRadius(4)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
                 }
-                NeonButton("CANCEL", style: .secondary) { dismiss() }
             }
-            .padding(24)
         }
-        .presentationDetents([.medium])
+        .alert("LOGOUT", isPresented: $showLogoutAlert) {
+            Button("CANCEL", role: .cancel) { }
+            Button("LOGOUT", role: .destructive) {
+                viewModel.logout()
+            }
+        } message: {
+            Text("Are you sure you want to logout? Your encryption keys will be removed from this device.")
+        }
     }
+}
+
+struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .bold, design: .monospaced))
+            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
+            .letterSpacing(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+    }
+}
+
+struct SettingRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
+
+            Text(value)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+        .paddingHorizontal(12)
+        .background(Color(red: 0.0, green: 0.1, blue: 0.0))
+        .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.2), width: 1)
+        .cornerRadius(4)
+    }
+}
+
+extension View {
+    func paddingHorizontal(_ value: CGFloat) -> some View {
+        self.padding(.horizontal, value)
+    }
+}
+
+#Preview {
+    SettingsView()
+        .environmentObject(AuthViewModel())
 }

@@ -46,42 +46,7 @@
 		BC40967AEBC747208E752EF0 = {isa = PBXBuildFile; fileRef = 0557D8DCF1AE4733872761B7; };
 		EE550D7DBF964742A5A6E265 = {isa = PBXBuildFile; fileRef = 1BFBAEED953541E886BE2EB3; };
 		8F4CD8A59C4848038A571EA9 = {isa = PBXBuildFile; fileRef = 44FCAF490E8948B3B3951B44; };
-/* New source build files */
-		AA01ENV1BF0000000000E001 = {isa = PBXBuildFile; fileRef = AA01ENV1FR0000000000E001; };
-		AA01SVC1BF0000000000E002 = {isa = PBXBuildFile; fileRef = AA01SVC1FR0000000000E002; };
-		AA01VAC1BF0000000000E003 = {isa = PBXBuildFile; fileRef = AA01VAC1FR0000000000E003; };
-		AA01SLC1BF0000000000E004 = {isa = PBXBuildFile; fileRef = AA01SLC1FR0000000000E004; };
-/* Localizable.strings resource */
-		AA01LOC1BF0000000000E005 = {isa = PBXBuildFile; fileRef = AA01LOC1FR0000000000E005; };
-/* Test build files */
-		AA01TST1BF0000000000F001 = {isa = PBXBuildFile; fileRef = AA01TST1FR0000000000F001; };
-		AA01TST2BF0000000000F002 = {isa = PBXBuildFile; fileRef = AA01TST2FR0000000000F002; };
-		AA01TST3BF0000000000F003 = {isa = PBXBuildFile; fileRef = AA01TST3FR0000000000F003; };
-		AA01TST4BF0000000000F004 = {isa = PBXBuildFile; fileRef = AA01TST4FR0000000000F004; };
-		AA01TST5BF0000000000F005 = {isa = PBXBuildFile; fileRef = AA01TST5FR0000000000F005; };
-		AA01TST6BF0000000000F006 = {isa = PBXBuildFile; fileRef = AA01TST6FR0000000000F006; };
-		AA01TST7BF0000000000F007 = {isa = PBXBuildFile; fileRef = AA01TST7FR0000000000F007; };
-/* UI Test build files */
-		AA01UIT1BF0000000000F008 = {isa = PBXBuildFile; fileRef = AA01UIT1FR0000000000F008; };
-		AA01UIT2BF0000000000F009 = {isa = PBXBuildFile; fileRef = AA01UIT2FR0000000000F009; };
 /* End PBXBuildFile section */
-
-/* Begin PBXContainerItemProxy section */
-		AA01TSTPRX000000000000A1 = {
-			isa = PBXContainerItemProxy;
-			containerPortal = A02A3D8597DA45FC93774B28;
-			proxyType = 1;
-			remoteGlobalIDString = 72799EF3AA0C453495E92319;
-			remoteInfo = "nano-SYNAPSYS";
-		};
-		AA01UITPRX000000000000A2 = {
-			isa = PBXContainerItemProxy;
-			containerPortal = A02A3D8597DA45FC93774B28;
-			proxyType = 1;
-			remoteGlobalIDString = 72799EF3AA0C453495E92319;
-			remoteInfo = "nano-SYNAPSYS";
-		};
-/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		E1612116813C4AEABB5FA765 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "nano_SYNAPSYSApp.swift"; sourceTree = "<group>"; };
@@ -125,71 +90,21 @@
 		0557D8DCF1AE4733872761B7 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GroupsViewModel.swift"; sourceTree = "<group>"; };
 		1BFBAEED953541E886BE2EB3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GroupChatView.swift"; sourceTree = "<group>"; };
 		44FCAF490E8948B3B3951B44 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GroupsListView.swift"; sourceTree = "<group>"; };
-/* New file references */
-		AA01ENV1FR0000000000E001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Environment.swift"; sourceTree = "<group>"; };
-		AA01SVC1FR0000000000E002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ServiceProtocols.swift"; sourceTree = "<group>"; };
-		AA01VAC1FR0000000000E003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Accessibility.swift"; sourceTree = "<group>"; };
-		AA01SLC1FR0000000000E004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Localized.swift"; sourceTree = "<group>"; };
-		AA01LOC1FR0000000000E005 = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "Localizable.strings"; path = "Resources/en.lproj/Localizable.strings"; sourceTree = "<group>"; };
-/* Test file references */
-		AA01TST1FR0000000000F001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EncryptionServiceTests.swift"; sourceTree = "<group>"; };
-		AA01TST2FR0000000000F002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KeychainServiceTests.swift"; sourceTree = "<group>"; };
-		AA01TST3FR0000000000F003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ModelCodingTests.swift"; sourceTree = "<group>"; };
-		AA01TST4FR0000000000F004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConfigTests.swift"; sourceTree = "<group>"; };
-		AA01TST5FR0000000000F005 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BotMessageTests.swift"; sourceTree = "<group>"; };
-		AA01TST6FR0000000000F006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WebSocketServiceTests.swift"; sourceTree = "<group>"; };
-		AA01TST7FR0000000000F007 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIServiceTests.swift"; sourceTree = "<group>"; };
-/* UI Test file references */
-		AA01UIT1FR0000000000F008 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "nano_SYNAPSYSUITests.swift"; sourceTree = "<group>"; };
-		AA01UIT2FR0000000000F009 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "nano_SYNAPSYSUITestsLaunchTests.swift"; sourceTree = "<group>"; };
-/* Test product references */
-		AA01TSTPRD00000000000001 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "nano-SYNAPSYSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		AA01UITPRD00000000000002 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "nano-SYNAPSYSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFrameworksBuildPhase section */
-		AA01TSTFRM00000000000001 = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		AA01UITFRM00000000000002 = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
 /* Begin PBXGroup section */
-		A9166DC2271C4927869562AE = {
-			isa = PBXGroup;
-			children = (
-				7D8E9A2B6202492786462182,
-				AA01TSTGRP00000000000001,
-				AA01UITGRP00000000000002,
-				2A510124A41B4BEC918A70CE,
-			);
-			sourceTree = "<group>";
-		};
 		7D8E9A2B6202492786462182 = {
 			isa = PBXGroup;
 			children = (
 				E1612116813C4AEABB5FA765,
 				F18C7510F9BD47D3BD0FC1C0,
 				C29EC9456B0B47A7A826B0A9,
-				AA01LOC1FR0000000000E005,
 				CC05CEFF8E624BD0B501D7EF,
 				0CFADE8BA5DA496CAA008DFB,
 				3A89FB88613B41FBB2AB8116,
 				109110E11F494352BEAEB3D9,
-				AA01PRTGRP0000000000E010,
-				AA01EXTGRP0000000000E011,
 				B237FD9C8C764690A25B2E86,
-				AA01VWSGRP0000000000E012,
+				D4A7E2F1B9C34D8EA1F06B52,
 			);
 			path = "nano-SYNAPSYS";
 			sourceTree = "<group>";
@@ -198,7 +113,6 @@
 			isa = PBXGroup;
 			children = (
 				2C6662E259B6438A929C0820,
-				AA01ENV1FR0000000000E001,
 			);
 			path = "Config";
 			sourceTree = "<group>";
@@ -235,23 +149,6 @@
 			path = "Services";
 			sourceTree = "<group>";
 		};
-		AA01PRTGRP0000000000E010 = {
-			isa = PBXGroup;
-			children = (
-				AA01SVC1FR0000000000E002,
-			);
-			path = "Protocols";
-			sourceTree = "<group>";
-		};
-		AA01EXTGRP0000000000E011 = {
-			isa = PBXGroup;
-			children = (
-				AA01VAC1FR0000000000E003,
-				AA01SLC1FR0000000000E004,
-			);
-			path = "Extensions";
-			sourceTree = "<group>";
-		};
 		B237FD9C8C764690A25B2E86 = {
 			isa = PBXGroup;
 			children = (
@@ -264,20 +161,6 @@
 				0557D8DCF1AE4733872761B7,
 			);
 			path = "ViewModels";
-			sourceTree = "<group>";
-		};
-		AA01VWSGRP0000000000E012 = {
-			isa = PBXGroup;
-			children = (
-				727A40FC5B86405BA9E9CC1C,
-				26D9C7A7D369492C9B588D53,
-				C6DF8D558A7B4C63B4C8CA92,
-				801BBE39C6A04A6FA3206A31,
-				E0ED77A6E4664D9C9DEDD77C,
-				E3E8FE27DF9A499EAD236681,
-				87D2C1ABFEB64FF7A2ADEA31,
-			);
-			path = "Views";
 			sourceTree = "<group>";
 		};
 		727A40FC5B86405BA9E9CC1C = {
@@ -347,38 +230,34 @@
 			path = "Components";
 			sourceTree = "<group>";
 		};
+		D4A7E2F1B9C34D8EA1F06B52 = {
+			isa = PBXGroup;
+			children = (
+				727A40FC5B86405BA9E9CC1C,
+				26D9C7A7D369492C9B588D53,
+				C6DF8D558A7B4C63B4C8CA92,
+				801BBE39C6A04A6FA3206A31,
+				E0ED77A6E4664D9C9DEDD77C,
+				E3E8FE27DF9A499EAD236681,
+				87D2C1ABFEB64FF7A2ADEA31,
+			);
+			path = "Views";
+			sourceTree = "<group>";
+		};
+		A9166DC2271C4927869562AE = {
+			isa = PBXGroup;
+			children = (
+				7D8E9A2B6202492786462182,
+				2A510124A41B4BEC918A70CE,
+			);
+			sourceTree = "<group>";
+		};
 		2A510124A41B4BEC918A70CE = {
 			isa = PBXGroup;
 			children = (
 				72A141E5E5AF4DA4B99AF567,
-				AA01TSTPRD00000000000001,
-				AA01UITPRD00000000000002,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-/* Test groups */
-		AA01TSTGRP00000000000001 = {
-			isa = PBXGroup;
-			children = (
-				AA01TST1FR0000000000F001,
-				AA01TST2FR0000000000F002,
-				AA01TST3FR0000000000F003,
-				AA01TST4FR0000000000F004,
-				AA01TST5FR0000000000F005,
-				AA01TST6FR0000000000F006,
-				AA01TST7FR0000000000F007,
-			);
-			path = "nano-SYNAPSYSTests";
-			sourceTree = "<group>";
-		};
-		AA01UITGRP00000000000002 = {
-			isa = PBXGroup;
-			children = (
-				AA01UIT1FR0000000000F008,
-				AA01UIT2FR0000000000F009,
-			);
-			path = "nano-SYNAPSYSUITests";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -400,40 +279,6 @@
 			productReference = 72A141E5E5AF4DA4B99AF567;
 			productType = "com.apple.product-type.application";
 		};
-		AA01TSTTGT00000000000001 = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = AA01TSTCFL00000000000001;
-			buildPhases = (
-				AA01TSTSRC00000000000001,
-				AA01TSTFRM00000000000001,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				AA01TSTDEP00000000000001,
-			);
-			name = "nano-SYNAPSYSTests";
-			productName = "nano-SYNAPSYSTests";
-			productReference = AA01TSTPRD00000000000001;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		AA01UITTGT00000000000001 = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = AA01UITCFL00000000000001;
-			buildPhases = (
-				AA01UITSRC00000000000001,
-				AA01UITFRM00000000000002,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				AA01UITDEP00000000000001,
-			);
-			name = "nano-SYNAPSYSUITests";
-			productName = "nano-SYNAPSYSUITests";
-			productReference = AA01UITPRD00000000000002;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -446,14 +291,6 @@
 				TargetAttributes = {
 					72799EF3AA0C453495E92319 = {
 						CreatedOnToolsVersion = 15.0;
-					};
-					AA01TSTTGT00000000000001 = {
-						CreatedOnToolsVersion = 15.0;
-						TestTargetID = 72799EF3AA0C453495E92319;
-					};
-					AA01UITTGT00000000000001 = {
-						CreatedOnToolsVersion = 15.0;
-						TestTargetID = 72799EF3AA0C453495E92319;
 					};
 				};
 			};
@@ -471,8 +308,6 @@
 			projectRoot = "";
 			targets = (
 				72799EF3AA0C453495E92319,
-				AA01TSTTGT00000000000001,
-				AA01UITTGT00000000000001,
 			);
 		};
 /* End PBXProject section */
@@ -483,7 +318,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				B674CA3C04B54EB6A9C5A89E,
-				AA01LOC1BF0000000000E005,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -532,53 +366,12 @@
 				BC40967AEBC747208E752EF0,
 				EE550D7DBF964742A5A6E265,
 				8F4CD8A59C4848038A571EA9,
-				AA01ENV1BF0000000000E001,
-				AA01SVC1BF0000000000E002,
-				AA01VAC1BF0000000000E003,
-				AA01SLC1BF0000000000E004,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		AA01TSTSRC00000000000001 = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				AA01TST1BF0000000000F001,
-				AA01TST2BF0000000000F002,
-				AA01TST3BF0000000000F003,
-				AA01TST4BF0000000000F004,
-				AA01TST5BF0000000000F005,
-				AA01TST6BF0000000000F006,
-				AA01TST7BF0000000000F007,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		AA01UITSRC00000000000001 = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				AA01UIT1BF0000000000F008,
-				AA01UIT2BF0000000000F009,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		AA01TSTDEP00000000000001 = {
-			isa = PBXTargetDependency;
-			target = 72799EF3AA0C453495E92319;
-			targetProxy = AA01TSTPRX000000000000A1;
-		};
-		AA01UITDEP00000000000001 = {
-			isa = PBXTargetDependency;
-			target = 72799EF3AA0C453495E92319;
-			targetProxy = AA01UITPRX000000000000A2;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
-/* Project-level */
 		8F25F8B6D4574DA5884846E4 = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -631,19 +424,17 @@
 			};
 			name = Release;
 		};
-/* App target */
 		87D9BC98D3DD42DD91914135 = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 13;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "nano-SYNAPSYS/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.aievolution.nanosynapsys";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.aievolve.nanosynapsys";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -656,92 +447,18 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_IDENTITY = "";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "arm64 x86_64";
+				CURRENT_PROJECT_VERSION = 13;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "nano-SYNAPSYS/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.aievolution.nanosynapsys";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.aievolve.nanosynapsys";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Release;
-		};
-/* Test target */
-		AA01TSTDBG00000000000001 = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.nanosynapsys.app.tests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/nano-SYNAPSYS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/nano-SYNAPSYS";
-			};
-			name = Debug;
-		};
-		AA01TSTREL00000000000001 = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.nanosynapsys.app.tests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/nano-SYNAPSYS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/nano-SYNAPSYS";
-			};
-			name = Release;
-		};
-/* UI Test target */
-		AA01UITDBG00000000000001 = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.nanosynapsys.app.uitests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "nano-SYNAPSYS";
-			};
-			name = Debug;
-		};
-		AA01UITREL00000000000001 = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.nanosynapsys.app.uitests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "nano-SYNAPSYS";
 			};
 			name = Release;
 		};
@@ -762,24 +479,6 @@
 			buildConfigurations = (
 				87D9BC98D3DD42DD91914135,
 				647F3DB84E8C4A959BD3D135,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		AA01TSTCFL00000000000001 = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AA01TSTDBG00000000000001,
-				AA01TSTREL00000000000001,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		AA01UITCFL00000000000001 = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AA01UITDBG00000000000001,
-				AA01UITREL00000000000001,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

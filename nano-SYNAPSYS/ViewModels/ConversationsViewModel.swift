@@ -2,46 +2,103 @@ import Foundation
 import Combine
 
 @MainActor
-final class ConversationsViewModel: ObservableObject {
-    @Published var users: [AppUser]          = []
-    @Published var recentConversations: [AppUser] = []
-    @Published var isLoading                 = false
+class ConversationsViewModel: ObservableObject {
+    @Published var conversations: [Contact] = []
+    @Published var isLoading = false
     @Published var errorMessage: String?
 
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        // React to incoming WebSocket messages
-        WebSocketService.shared.$incomingMessage
-            .compactMap { $0 }
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in Task { await self?.loadUsers() } }
+        subscribeToWebSocket()
+    }
+
+    // MARK: - Load Conversations
+
+    func loadConversations() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let contacts = try await APIService.shared.getContacts()
+
+            // Filter to only contacts with message history
+            self.conversations = contacts.filter { $0.lastMessageAt != nil }
+
+            // Sort by last message timestamp, most recent first
+            self.conversations.sort { ($0.lastMessageAt ?? Date.distantPast) > ($1.lastMessageAt ?? Date.distantPast) }
+
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to load conversations: \(error.localizedDescription)"
+            isLoading = false
+        }
+    }
+
+    // MARK: - WebSocket Subscription
+
+    private func subscribeToWebSocket() {
+        WebSocketService.shared.messageReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.handleNewMessage(message)
+            }
             .store(in: &cancellables)
 
-        WebSocketService.shared.$onlineUserIds
-            .receive(on: RunLoop.main)
-            .sink { [weak self] onlineIds in
-                self?.users = self?.users.map { user in
-                    var u = user; u.isOnline = onlineIds.contains(user.id); return u
-                } ?? []
+        WebSocketService.shared.typingIndicator
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleTypingIndicator(event)
             }
             .store(in: &cancellables)
     }
 
-    func loadUsers() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let fetched = try await APIService.shared.users()
-            let currentId = AuthViewModel.shared.currentUser?.id
-            users = fetched.filter { $0.id != currentId }
-        } catch {
-            errorMessage = error.localizedDescription
+    private func handleNewMessage(_ message: Message) {
+        // Find or create conversation for this contact
+        if let index = conversations.firstIndex(where: { $0.id == message.senderId }) {
+            // Update existing conversation
+            conversations[index].lastMessage = message.content
+            conversations[index].lastMessageAt = message.sentAt
+            conversations[index].unreadCount += 1
+
+            // Move to top
+            let conversation = conversations.remove(at: index)
+            conversations.insert(conversation, at: 0)
+        } else {
+            // Load contact and add conversation
+            Task {
+                do {
+                    let contact = try await APIService.shared.getContact(id: message.senderId)
+                    var updatedContact = contact
+                    updatedContact.lastMessage = message.content
+                    updatedContact.lastMessageAt = message.sentAt
+                    updatedContact.unreadCount = 1
+
+                    self.conversations.insert(updatedContact, at: 0)
+                } catch {
+                    print("Failed to load contact for new message: \(error)")
+                }
+            }
         }
     }
 
-    func unreadCount(for userId: Int, messages: [Message]) -> Int {
-        guard let me = AuthViewModel.shared.currentUser else { return 0 }
-        return messages.filter { $0.fromUser == userId && $0.toUser == me.id && !$0.read }.count
+    private func handleTypingIndicator(_ event: TypingEvent) {
+        if let index = conversations.firstIndex(where: { $0.id == event.userId }) {
+            conversations[index].isTyping = event.isTyping
+        }
+    }
+
+    // MARK: - Mark as Read
+
+    func markAsRead(contactId: String) async {
+        if let index = conversations.firstIndex(where: { $0.id == contactId }) {
+            conversations[index].unreadCount = 0
+
+            do {
+                try await APIService.shared.markConversationAsRead(contactId: contactId)
+            } catch {
+                print("Failed to mark conversation as read: \(error)")
+            }
+        }
     }
 }

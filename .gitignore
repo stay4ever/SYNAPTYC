@@ -52,3 +52,20 @@ backend/*.db-wal
 
 # SwiftLint
 .swiftlint/
+
+# Node / Expo / React Native
+node_modules/
+dist/
+.expo/
+web-build/
+*.tsbuildinfo
+
+# EAS
+.eas/
+
+# Sensitive files
+ngrok_recovery_codes.txt
+*.p8
+*.p12
+*.mobileprovision
+*.dmg

@@ -1,100 +1,114 @@
 import Foundation
-import SwiftUI
+import Combine
+import CryptoKit
 
 @MainActor
-final class AuthViewModel: ObservableObject {
-    @Published var isLoggedIn  = false
-    @Published var currentUser: AppUser?
-    @Published var isLoading   = false
+class AuthViewModel: ObservableObject {
+    @Published var isAuthenticated = false
+    @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var currentUser: AppUser?
 
-    static let shared = AuthViewModel()
-    private init() { tryRestore() }
+    private var cancellables = Set<AnyCancellable>()
 
-    // MARK: - Session restore
-
-    func tryRestore() {
-        guard let token = KeychainService.load(Config.Keychain.tokenKey),
-              !token.isEmpty else { return }
-        if let data = KeychainService.loadData(Config.Keychain.userKey),
-           let user = try? JSONDecoder().decode(AppUser.self, from: data) {
-            currentUser = user
-            isLoggedIn  = true
-            WebSocketService.shared.connect()
-        }
-        Task { await refreshUser() }
+    init() {
+        checkSavedToken()
     }
 
-    private func refreshUser() async {
-        do {
-            let user = try await APIService.shared.me()
-            currentUser = user
-            isLoggedIn  = true
-            persist(user: user)
-        } catch APIError.unauthorized {
-            logout()
-        } catch {}
+    // MARK: - Auto-login
+
+    private func checkSavedToken() {
+        if let token = KeychainService.shared.loadString(key: "jwt_token") {
+            // Token exists; verify it's still valid
+            Task {
+                do {
+                    let user = try await APIService.shared.verifyToken(token: token)
+                    await MainActor.run {
+                        self.currentUser = user
+                        self.isAuthenticated = true
+                    }
+                } catch {
+                    // Token invalid or expired
+                    KeychainService.shared.deleteString(key: "jwt_token")
+                    await MainActor.run {
+                        self.isAuthenticated = false
+                        self.currentUser = nil
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Login
 
-    func login(email: String, password: String) async {
-        isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+    func login(username: String, password: String) async {
+        isLoading = true
+        errorMessage = nil
+
         do {
-            let resp = try await APIService.shared.login(email: email, password: password)
-            KeychainService.save(resp.token, for: Config.Keychain.tokenKey)
-            persist(user: resp.user)
-            currentUser = resp.user
-            isLoggedIn  = true
-            WebSocketService.shared.connect()
-            _ = await NotificationService.requestPermission()
+            let response = try await APIService.shared.login(username: username, password: password)
+
+            // Store JWT in Keychain
+            KeychainService.shared.saveString(response.token, key: "jwt_token")
+
+            currentUser = response.user
+            isAuthenticated = true
+            isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Login failed: \(error.localizedDescription)"
+            isLoading = false
         }
     }
 
     // MARK: - Register
 
-    func register(username: String, email: String, password: String, displayName: String) async {
-        isLoading = true; errorMessage = nil
-        defer { isLoading = false }
+    func register(username: String, password: String, displayName: String) async {
+        isLoading = true
+        errorMessage = nil
+
         do {
-            _ = try await APIService.shared.register(username: username, email: email,
-                                                      password: password, displayName: displayName)
-            errorMessage = nil
-            // Registration success — user must wait for approval
+            // Generate ECDH P-384 key pair for this user
+            let privateKey = P384.KeyAgreement.PrivateKey()
+            let publicKeyData = privateKey.publicKey.rawRepresentation
+
+            let response = try await APIService.shared.register(
+                username: username,
+                password: password,
+                displayName: displayName,
+                publicKey: publicKeyData
+            )
+
+            // Store JWT and private key in Keychain
+            KeychainService.shared.saveString(response.token, key: "jwt_token")
+            KeychainService.shared.saveData(privateKey.withUnsafeBytes { Data($0) }, key: "user_private_key")
+
+            currentUser = response.user
+            isAuthenticated = true
+            isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Registration failed: \(error.localizedDescription)"
+            isLoading = false
         }
     }
 
     // MARK: - Logout
 
-    func logout() {
-        WebSocketService.shared.disconnect()
-        KeychainService.delete(Config.Keychain.tokenKey)
-        KeychainService.delete(Config.Keychain.userKey)
-        currentUser = nil
-        isLoggedIn  = false
-    }
+    func logout() async {
+        isLoading = true
 
-    // MARK: - Password reset
-
-    func requestPasswordReset(email: String) async -> Bool {
         do {
-            try await APIService.shared.requestPasswordReset(email: email)
-            return true
+            try await APIService.shared.logout()
+
+            // Clear Keychain and local state
+            KeychainService.shared.deleteString(key: "jwt_token")
+            KeychainService.shared.deleteString(key: "user_private_key")
+
+            currentUser = nil
+            isAuthenticated = false
+            isLoading = false
         } catch {
-            errorMessage = error.localizedDescription
-            return false
+            errorMessage = "Logout failed: \(error.localizedDescription)"
+            isLoading = false
         }
-    }
-
-    // MARK: - Private
-
-    private func persist(user: AppUser) {
-        guard let data = try? JSONEncoder().encode(user) else { return }
-        KeychainService.saveData(data, for: Config.Keychain.userKey)
     }
 }

@@ -1,82 +1,159 @@
 import XCTest
 @testable import nano_SYNAPSYS
 
-// swiftlint:disable force_cast force_unwrapping
 final class WebSocketServiceTests: XCTestCase {
 
-    func test_wsMessage_decodeChatMessage() throws {
-        let json = Data("""
-        {"type": "chat_message", "id": 1, "from": 10, "to": 20, "content": "hello", "read": false, "created_at": "2025-01-01T00:00:00Z"}
-        """.utf8)
-        let msg = try JSONDecoder().decode(WSMessage.self, from: json)
-        XCTAssertEqual(msg.type, "chat_message")
-        XCTAssertEqual(msg.from, 10)
-        XCTAssertEqual(msg.to, 20)
-        XCTAssertEqual(msg.content, "hello")
+    // MARK: - WSMessage Decoding
+
+    func test_wsMessage_decodeNewMessage() {
+        let json = """
+        {
+            "type": "message",
+            "payload": {
+                "id": "msg_123",
+                "conversationId": "conv_456",
+                "senderId": "user_789",
+                "content": "Hello",
+                "timestamp": "2026-03-20T12:00:00Z",
+                "status": "sent"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let wsMessage = try! decoder.decode(WSMessage.self, from: json)
+
+        XCTAssertEqual(wsMessage.type, "message")
+        XCTAssertNotNil(wsMessage.payload)
     }
 
-    func test_wsMessage_decodeKeyExchange() throws {
-        let json = Data("""
-        {"type": "key_exchange", "from": 5, "public_key": "dGVzdA=="}
-        """.utf8)
-        let msg = try JSONDecoder().decode(WSMessage.self, from: json)
-        XCTAssertEqual(msg.type, "key_exchange")
-        XCTAssertEqual(msg.publicKey, "dGVzdA==")
+    func test_wsMessage_decodeTyping() {
+        let json = """
+        {
+            "type": "typing",
+            "payload": {
+                "userId": "user_123",
+                "conversationId": "conv_456"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+
+        let wsMessage = try! decoder.decode(WSMessage.self, from: json)
+
+        XCTAssertEqual(wsMessage.type, "typing")
     }
 
-    func test_wsMessage_decodeGroupMessage() throws {
-        let json = Data("""
-        {"type": "group_message", "id": 1, "group_id": 3, "from": 10, "from_username": "alice", "from_display": "Alice", "content": "hi group"}
-        """.utf8)
-        let msg = try JSONDecoder().decode(WSMessage.self, from: json)
-        XCTAssertEqual(msg.type, "group_message")
-        XCTAssertEqual(msg.groupId, 3)
-        XCTAssertEqual(msg.fromUsername, "alice")
+    func test_wsMessage_decodePresence() {
+        let json = """
+        {
+            "type": "presence",
+            "payload": {
+                "userId": "user_123",
+                "status": "online"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+
+        let wsMessage = try! decoder.decode(WSMessage.self, from: json)
+
+        XCTAssertEqual(wsMessage.type, "presence")
     }
 
-    func test_wsMessage_decodeUserList() throws {
-        let json = Data("""
-        {"type": "user_list", "users": [{"id": 1, "username": "alice", "display_name": "Alice", "online": true}]}
-        """.utf8)
-        let msg = try JSONDecoder().decode(WSMessage.self, from: json)
-        XCTAssertEqual(msg.type, "user_list")
-        XCTAssertEqual(msg.users?.count, 1)
-        XCTAssertEqual(msg.users?.first?.username, "alice")
-        XCTAssertTrue(msg.users?.first?.online ?? false)
+    func test_wsMessage_decodeKeyExchange() {
+        let json = """
+        {
+            "type": "keyexchange",
+            "payload": {
+                "userId": "user_123",
+                "publicKeyBase64": "ABC123==",
+                "timestamp": "2026-03-20T12:00:00Z"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let wsMessage = try! decoder.decode(WSMessage.self, from: json)
+
+        XCTAssertEqual(wsMessage.type, "keyexchange")
     }
 
-    func test_wsMessage_decodeMarkRead() throws {
-        let json = Data("""
-        {"type": "mark_read", "message_id": 42, "from": 1, "to": 2}
-        """.utf8)
-        let msg = try JSONDecoder().decode(WSMessage.self, from: json)
-        XCTAssertEqual(msg.type, "mark_read")
-        XCTAssertEqual(msg.messageId, 42)
+    func test_wsMessage_decodeGroupMessage() {
+        let json = """
+        {
+            "type": "groupmessage",
+            "payload": {
+                "id": "gmsg_123",
+                "groupId": "group_1",
+                "senderId": "user_1",
+                "content": "Group message",
+                "timestamp": "2026-03-20T12:00:00Z",
+                "status": "sent"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let wsMessage = try! decoder.decode(WSMessage.self, from: json)
+
+        XCTAssertEqual(wsMessage.type, "groupmessage")
     }
 
-    func test_wsMessage_decodeTyping() throws {
-        let json = Data("""
-        {"type": "typing", "from": 7}
-        """.utf8)
-        let msg = try JSONDecoder().decode(WSMessage.self, from: json)
-        XCTAssertEqual(msg.type, "typing")
-        XCTAssertEqual(msg.from, 7)
+    func test_wsMessage_invalidJSON() {
+        let invalidJSON = "{ invalid json".data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+
+        XCTAssertThrowsError(try decoder.decode(WSMessage.self, from: invalidJSON))
     }
 
-    func test_wsUser_decode() throws {
-        let json = Data("""
-        {"id": 42, "username": "bob", "display_name": "Bob Smith", "online": false}
-        """.utf8)
-        let user = try JSONDecoder().decode(WSUser.self, from: json)
-        XCTAssertEqual(user.id, 42)
-        XCTAssertEqual(user.displayName, "Bob Smith")
-        XCTAssertFalse(user.online)
+    // MARK: - KeyExchangeEvent
+
+    func test_keyExchangeEvent_decode() {
+        let json = """
+        {
+            "userId": "user_abc",
+            "publicKeyBase64": "XYZ789==",
+            "timestamp": "2026-03-20T13:00:00Z"
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let keyExchange = try! decoder.decode(KeyExchangeEvent.self, from: json)
+
+        XCTAssertEqual(keyExchange.userId, "user_abc")
+        XCTAssertEqual(keyExchange.publicKeyBase64, "XYZ789==")
     }
 
-    func test_keyExchangeEvent_storesFields() {
-        let data = Data([0x01, 0x02, 0x03])
-        let event = KeyExchangeEvent(from: 42, publicKeyData: data)
-        XCTAssertEqual(event.from, 42)
-        XCTAssertEqual(event.publicKeyData, data)
+    func test_keyExchangeEvent_encode() {
+        let keyExchange = KeyExchangeEvent(
+            userId: "user_def",
+            publicKeyBase64: "DEF456==",
+            timestamp: Date(timeIntervalSince1970: 1000)
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        let data = try! encoder.encode(keyExchange)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try! decoder.decode(KeyExchangeEvent.self, from: data)
+
+        XCTAssertEqual(decoded.userId, keyExchange.userId)
+        XCTAssertEqual(decoded.publicKeyBase64, keyExchange.publicKeyBase64)
     }
 }

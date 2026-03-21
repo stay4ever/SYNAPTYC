@@ -3,52 +3,37 @@ import SwiftUI
 struct NeonTextField: View {
     let placeholder: String
     @Binding var text: String
-    var isSecure: Bool       = false
-    var icon: String?
-    var keyboardType: UIKeyboardType = .default
-    var autocapitalization: TextInputAutocapitalization = .never
-
-    @State private var showPassword = false
+    let isSecure: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(.matrixGreen)
-                    .frame(width: 20)
-            }
-            SwiftUI.Group {
-                if isSecure && !showPassword {
-                    SecureField(placeholder, text: $text)
-                } else {
-                    TextField(placeholder, text: $text)
-                        .keyboardType(keyboardType)
-                        .textInputAutocapitalization(autocapitalization)
-                        .autocorrectionDisabled()
-                }
-            }
-            .font(.monoBody)
-            .foregroundColor(.neonGreen)
-            .tint(.neonGreen)
-
-            if isSecure {
-                Button { showPassword.toggle() } label: {
-                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                        .font(.system(size: 13))
-                        .foregroundColor(.matrixGreen)
-                }
-            }
+        if isSecure {
+            SecureField(placeholder, text: $text)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+                .cornerRadius(4)
+        } else {
+            TextField(placeholder, text: $text)
+                .font(.system(.body, design: .monospaced))
+                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+                .cornerRadius(4)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.darkGreen.opacity(0.35))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.neonGreen.opacity(0.25), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(placeholder)
     }
+}
+
+#Preview {
+    VStack(spacing: 12) {
+        NeonTextField(placeholder: "USERNAME", text: .constant(""), isSecure: false)
+
+        NeonTextField(placeholder: "PASSWORD", text: .constant(""), isSecure: true)
+    }
+    .padding()
+    .background(Color(red: 0.0, green: 0.055, blue: 0.0))
 }

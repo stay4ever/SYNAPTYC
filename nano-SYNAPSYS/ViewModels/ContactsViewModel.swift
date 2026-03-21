@@ -1,98 +1,91 @@
 import Foundation
+import Combine
 
 @MainActor
-final class ContactsViewModel: ObservableObject {
-    @Published var contacts: [Contact]        = []
-    @Published var allUsers: [AppUser]        = []
-    @Published var isLoading                  = false
+class ContactsViewModel: ObservableObject {
+    @Published var contacts: [Contact] = []
+    @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var successMessage: String?
+    @Published var searchText = ""
 
-    var acceptedContacts: [Contact] { contacts.filter { $0.status == .accepted } }
-    var pendingIncoming: [Contact] {
-        let me = AuthViewModel.shared.currentUser?.id ?? 0
-        return contacts.filter { $0.status == .pending && $0.receiverId == me }
-    }
-    var pendingOutgoing: [Contact] {
-        let me = AuthViewModel.shared.currentUser?.id ?? 0
-        return contacts.filter { $0.status == .pending && $0.requesterId == me }
+    private var cancellables = Set<AnyCancellable>()
+
+    init() {
+        subscribeToWebSocket()
     }
 
-    func load() async {
-        isLoading = true; defer { isLoading = false }
+    // MARK: - Computed Properties
+
+    var filteredContacts: [Contact] {
+        if searchText.isEmpty {
+            return contacts
+        }
+        return contacts.filter { contact in
+            contact.displayName.localizedCaseInsensitiveContains(searchText) ||
+            contact.username.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    // MARK: - Load Contacts
+
+    func loadContacts() async {
+        isLoading = true
+        errorMessage = nil
+
         do {
-            async let c = APIService.shared.contacts()
-            async let u = APIService.shared.users()
-            let (fetched, users) = try await (c, u)
-            contacts = fetched
-            allUsers = users
-            // Attach other user object to each contact
-            let me = AuthViewModel.shared.currentUser?.id ?? 0
-            contacts = contacts.map { contact in
-                var c = contact
-                let otherId = contact.requesterId == me ? contact.receiverId : contact.requesterId
-                c.otherUser = users.first { $0.id == otherId }
-                return c
+            let allContacts = try await APIService.shared.getContacts()
+            self.contacts = allContacts.sorted { $0.displayName < $1.displayName }
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to load contacts: \(error.localizedDescription)"
+            isLoading = false
+        }
+    }
+
+    // MARK: - Add Contact
+
+    func addContact(username: String) async {
+        errorMessage = nil
+
+        do {
+            let newContact = try await APIService.shared.addContact(username: username)
+            if !contacts.contains(where: { $0.id == newContact.id }) {
+                contacts.append(newContact)
+                contacts.sort { $0.displayName < $1.displayName }
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Failed to add contact: \(error.localizedDescription)"
         }
     }
 
-    func sendRequest(to user: AppUser) async {
+    // MARK: - Remove Contact
+
+    func removeContact(id: String) async {
+        errorMessage = nil
+
         do {
-            let contact = try await APIService.shared.sendContactRequest(to: user.id)
-            contacts.append(contact)
-            successMessage = "Request sent to \(user.name)"
+            try await APIService.shared.removeContact(id: id)
+            contacts.removeAll { $0.id == id }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Failed to remove contact: \(error.localizedDescription)"
         }
     }
 
-    func accept(contact: Contact) async {
-        do {
-            let updated = try await APIService.shared.updateContact(id: contact.id, status: "accepted")
-            replace(updated)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    // MARK: - WebSocket Subscription
+
+    private func subscribeToWebSocket() {
+        WebSocketService.shared.presenceUpdate
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handlePresenceUpdate(event)
+            }
+            .store(in: &cancellables)
     }
 
-    func reject(contact: Contact) async {
-        do {
-            let updated = try await APIService.shared.updateContact(id: contact.id, status: "rejected")
-            contacts.removeAll { $0.id == updated.id }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func block(contact: Contact) async {
-        do {
-            let updated = try await APIService.shared.updateContact(id: contact.id, status: "blocked")
-            replace(updated)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    func isContact(_ userId: Int) -> Bool {
-        contacts.contains { c in
-            c.status == .accepted &&
-            (c.requesterId == userId || c.receiverId == userId)
-        }
-    }
-
-    func hasPendingRequest(to userId: Int) -> Bool {
-        contacts.contains { c in
-            c.status == .pending &&
-            (c.requesterId == userId || c.receiverId == userId)
-        }
-    }
-
-    private func replace(_ contact: Contact) {
-        if let idx = contacts.firstIndex(where: { $0.id == contact.id }) {
-            contacts[idx] = contact
+    private func handlePresenceUpdate(_ event: PresenceEvent) {
+        if let index = contacts.firstIndex(where: { $0.id == event.userId }) {
+            contacts[index].isOnline = event.isOnline
+            contacts[index].lastSeenAt = event.timestamp
         }
     }
 }
