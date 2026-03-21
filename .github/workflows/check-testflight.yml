@@ -28,7 +28,7 @@ jobs:
           ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY }}
         run: |
           mkdir -p $HOME/.appstore
-          echo "$ASC_API_KEY_BASE64" | base64 --decode > $HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
+          printf '%s' "$ASC_API_KEY_BASE64" | base64 --decode > $HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
 
       - name: Install App Store Connect CLI dependencies
         run: |
@@ -52,9 +52,12 @@ jobs:
           issuer_id = os.environ.get('ASC_ISSUER_ID')
           key_path = os.path.expanduser('~/.appstore/AuthKey_' + key_id + '.p8')
 
-          # Read private key
+          # Read private key and normalize PEM framing
           with open(key_path, 'r') as f:
-              private_key = f.read()
+              private_key = f.read().strip()
+          if '-----BEGIN' not in private_key:
+              # Raw key data without PEM headers — wrap it
+              private_key = '-----BEGIN PRIVATE KEY-----\n' + private_key + '\n-----END PRIVATE KEY-----'
 
           # Create JWT token
           now = datetime.utcnow()
