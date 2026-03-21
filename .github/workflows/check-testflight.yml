@@ -25,21 +25,21 @@ jobs:
 
       - name: Decode App Store Connect API Key
         env:
-          ASC_API_KEY: ${{ secrets.ASC_API_KEY }}
+          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY }}
         run: |
           mkdir -p $HOME/.appstore
           KEY_FILE="$HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
-          # Write the secret value directly — try raw PEM first
-          printf '%s\n' "$ASC_API_KEY" > "$KEY_FILE"
-          # If it looks base64-encoded (no PEM headers), decode it
-          if ! head -1 "$KEY_FILE" | grep -q "BEGIN"; then
-            printf '%s' "$ASC_API_KEY" | base64 -d > "$KEY_FILE" 2>/dev/null || true
+          echo "$ASC_API_KEY_BASE64" | base64 --decode > "$KEY_FILE" 2>/dev/null || true
+          FILE_SIZE=$(wc -c < "$KEY_FILE")
+          echo "Decoded key file: $FILE_SIZE bytes"
+          # If base64 decode produced empty/tiny file, secret may be raw PEM
+          if [ "$FILE_SIZE" -lt 100 ]; then
+            echo "Base64 decode produced small file, trying raw PEM..."
+            echo "$ASC_API_KEY_BASE64" > "$KEY_FILE"
+            FILE_SIZE=$(wc -c < "$KEY_FILE")
+            echo "Raw write: $FILE_SIZE bytes"
           fi
-          # Debug: show key format (first/last line only, no secret data)
-          echo "Key file format check:"
-          head -1 "$KEY_FILE"
-          tail -1 "$KEY_FILE"
-          wc -c "$KEY_FILE"
+          echo "First line: $(head -1 "$KEY_FILE")"
 
       - name: Install App Store Connect CLI dependencies
         run: |
