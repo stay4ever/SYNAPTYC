@@ -14,7 +14,7 @@ struct nano_SYNAPSYSApp: App {
                     SplashView()
                         .transition(.opacity)
                 } else {
-                    Group {
+                    SwiftUI.Group {
                         if auth.isLoggedIn {
                             MainTabView()
                                 .environmentObject(auth)

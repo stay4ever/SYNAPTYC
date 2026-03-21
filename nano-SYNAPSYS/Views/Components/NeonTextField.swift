@@ -18,7 +18,7 @@ struct NeonTextField: View {
                     .foregroundColor(.matrixGreen)
                     .frame(width: 20)
             }
-            Group {
+            SwiftUI.Group {
                 if isSecure && !showPassword {
                     SecureField(placeholder, text: $text)
                 } else {
