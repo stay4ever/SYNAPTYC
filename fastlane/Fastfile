@@ -30,6 +30,7 @@ platform :ios do
       project: "nano-SYNAPSYS.xcodeproj",
       scheme: "nano-SYNAPSYS",
       export_method: "app-store",
+      destination: "generic/platform=iOS",
       export_options: {
         signingStyle: "automatic",
         teamID: ENV["TEAM_ID"]
