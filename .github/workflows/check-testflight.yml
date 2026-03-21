@@ -32,7 +32,7 @@ jobs:
 
       - name: Install App Store Connect CLI dependencies
         run: |
-          pip install requests cryptography
+          pip install requests cryptography PyJWT
 
       - name: Check latest TestFlight build status
         env:

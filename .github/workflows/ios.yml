@@ -24,15 +24,10 @@ jobs:
         with:
           xcode-version: '15.2'
 
-      - name: Install dependencies
-        run: |
-          cd nano-SYNAPSYS
-          pod install --repo-update || true
-
       - name: Build for testing
         run: |
           xcodebuild \
-            -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
+            -project nano-SYNAPSYS.xcodeproj \
             -scheme nano-SYNAPSYS \
             -sdk iphonesimulator \
             -configuration Debug \
@@ -42,7 +37,7 @@ jobs:
       - name: Run unit tests
         run: |
           xcodebuild \
-            -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
+            -project nano-SYNAPSYS.xcodeproj \
             -scheme nano-SYNAPSYS \
             -sdk iphonesimulator \
             -configuration Debug \
@@ -60,7 +55,7 @@ jobs:
       - name: Build for release
         run: |
           xcodebuild \
-            -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
+            -project nano-SYNAPSYS.xcodeproj \
             -scheme nano-SYNAPSYS \
             -sdk iphonesimulator \
             -configuration Release \
@@ -78,4 +73,4 @@ jobs:
           if ! which swiftlint >/dev/null; then
             brew install swiftlint
           fi
-          swiftlint lint nano-SYNAPSYS/ --reporter github-actions-logging || true
+          swiftlint lint nano-SYNAPSYS --reporter github-actions-logging || true
