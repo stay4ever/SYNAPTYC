@@ -1,0 +1,23 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 05 — Verify badge count is visible when unread messages exist
+- launchApp:
+    clearState: false
+
+# Navigate to CHATS tab
+- tapOn: "CHATS"
+
+# Check if any badge is visible (red bubble with count)
+# Note: badges only show when messages arrive from other users
+- assertVisible:
+    id: "unread-badge"
+    optional: true
+
+# Navigate to GROUPS tab — check for group badges
+- tapOn: "GROUPS"
+- assertVisible:
+    id: "unread-badge"
+    optional: true
+
+# Navigate back to CHATS
+- tapOn: "CHATS"

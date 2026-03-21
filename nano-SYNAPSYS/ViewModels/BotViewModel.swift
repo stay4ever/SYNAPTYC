@@ -3,77 +3,45 @@ import Combine
 
 @MainActor
 class BotViewModel: ObservableObject {
-    @Published var messages: [BotMessage] = []
+    @Published var botMessages: [BotMessage] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
-    @Published var messageText = ""
 
-    private var cancellables = Set<AnyCancellable>()
+    init() {}
 
-    init() {
-        // Bot messages are stored in memory only for this session
-        // No persistence or WebSocket needed
+    var messages: [BotMessage] { botMessages }
+
+    func loadMessages() {
+        // Bot messages are session-only, no persistence
     }
 
-    // MARK: - Send Message to Bot
+    func sendMessage(_ content: String) {
+        Task { await sendMessageAsync(content) }
+    }
 
-    func sendMessage() async {
-        guard !messageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+    private func sendMessageAsync(_ content: String) async {
+        guard !content.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
-        let userMessage = messageText
-        messageText = ""
-
-        // Add user message to conversation
-        let userBotMessage = BotMessage(
-            id: UUID().uuidString,
-            role: "user",
-            content: userMessage,
-            timestamp: Date()
-        )
-        messages.append(userBotMessage)
+        let userMessage = BotMessage(content: content, isFromUser: true)
+        botMessages.append(userMessage)
 
         isLoading = true
         errorMessage = nil
 
         do {
-            // Send to bot API (Claude AI - "Banner")
-            let response = try await APIService.shared.sendBotMessage(content: userMessage)
-
-            // Add bot response to conversation
-            let botBotMessage = BotMessage(
-                id: UUID().uuidString,
-                role: "assistant",
-                content: response.content,
-                timestamp: Date()
-            )
-            messages.append(botBotMessage)
-
-            isLoading = false
+            let response = try await APIService.shared.sendBotMessage(content: content)
+            let botResponse = BotMessage(content: response.content, isFromUser: false)
+            botMessages.append(botResponse)
         } catch {
             errorMessage = "Bot response failed: \(error.localizedDescription)"
-            isLoading = false
-
-            // Add error message from bot
-            let errorBotMessage = BotMessage(
-                id: UUID().uuidString,
-                role: "assistant",
-                content: "Sorry, I encountered an error. Please try again.",
-                timestamp: Date()
-            )
-            messages.append(errorBotMessage)
+            let errorMsg = BotMessage(content: "Sorry, I encountered an error. Please try again.", isFromUser: false)
+            botMessages.append(errorMsg)
         }
+        isLoading = false
     }
-
-    // MARK: - Clear Chat History
 
     func clearHistory() {
-        messages.removeAll()
+        botMessages.removeAll()
         errorMessage = nil
-    }
-
-    // MARK: - Get Conversation Summary
-
-    func getConversationSummary() -> String {
-        messages.map { "\($0.role.uppercased()): \($0.content)" }.joined(separator: "\n\n")
     }
 }

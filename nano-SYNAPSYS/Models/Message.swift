@@ -1,12 +1,11 @@
 import Foundation
 
 /// Message model for direct messages between users.
-/// Content may be plaintext or encrypted (prefixed with "ENC:")
 struct Message: Codable, Identifiable {
     let id: String
     let senderId: String
     let recipientId: String
-    let content: String // May be "ENC:..." ciphertext
+    var content: String
     let timestamp: Date
     let isRead: Bool
     let senderUsername: String?
@@ -21,20 +20,30 @@ struct Message: Codable, Identifiable {
         case senderUsername = "sender_username"
     }
 
-    // MARK: - Computed Properties
-
-    /// Returns true if message content is encrypted (starts with "ENC:")
     var isEncrypted: Bool {
         content.hasPrefix("ENC:")
     }
 
-    /// Returns true if the message was sent by the given user
+    var sentAt: Date { timestamp }
+
+    /// Check if sent by current user (uses stored user ID from keychain)
+    var isFromCurrentUser: Bool {
+        if let storedUserId = KeychainService.shared.loadString(key: "current_user_id") {
+            return senderId == storedUserId
+        }
+        return false
+    }
+
     func isFromCurrentUser(_ userId: String) -> Bool {
         senderId == userId
     }
 
-    /// Convenience for accessing timestamp as sentAt
-    var sentAt: Date { timestamp }
+    /// Formatted timestamp for display
+    var formattedTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: timestamp)
+    }
 
     #if DEBUG
     static var mockSentMessage: Message {

@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SYNAPTYC — Architecture Design Document</title>
+<style>
+  @page { size: A4; margin: 20mm 18mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 11px;
+    line-height: 1.55;
+    background: #fff;
+    padding: 40px 50px;
+  }
+  h1 { font-size: 28px; font-weight: 800; color: #050f05; margin-bottom: 4px; letter-spacing: 2px; }
+  .subtitle { font-size: 13px; color: #00883a; font-weight: 600; margin-bottom: 6px; letter-spacing: 1px; }
+  .meta { font-size: 10px; color: #888; margin-bottom: 30px; }
+  h2 {
+    font-size: 16px; font-weight: 700; color: #050f05;
+    border-bottom: 2px solid #00FF41; padding-bottom: 4px;
+    margin: 28px 0 12px; letter-spacing: 0.5px;
+  }
+  h3 { font-size: 13px; font-weight: 700; color: #004d1a; margin: 16px 0 8px; }
+  h4 { font-size: 11px; font-weight: 700; color: #333; margin: 10px 0 4px; }
+  p, li { font-size: 11px; line-height: 1.6; margin-bottom: 6px; }
+  ul, ol { padding-left: 18px; margin-bottom: 10px; }
+  li { margin-bottom: 3px; }
+  code {
+    font-family: 'Menlo', 'Courier New', monospace;
+    font-size: 10px; background: #f0f7f0; padding: 1px 4px; border-radius: 3px;
+  }
+  pre {
+    font-family: 'Menlo', 'Courier New', monospace;
+    font-size: 9.5px; line-height: 1.5;
+    background: #0a1a0a; color: #00FF41;
+    padding: 12px 16px; border-radius: 8px; margin: 10px 0 14px;
+    overflow-x: auto; white-space: pre; page-break-inside: avoid;
+  }
+  .diagram-box {
+    background: #050f05; color: #00FF41;
+    font-family: 'Menlo', 'Courier New', monospace;
+    font-size: 9px; line-height: 1.45;
+    padding: 16px 20px; border-radius: 10px;
+    margin: 12px 0 18px; overflow-x: auto;
+    border: 1px solid #003d10; page-break-inside: avoid;
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin: 10px 0 16px;
+    font-size: 10px; page-break-inside: avoid;
+  }
+  th {
+    background: #050f05; color: #00FF41;
+    padding: 6px 10px; text-align: left; font-weight: 700;
+    font-size: 9px; letter-spacing: 0.5px;
+  }
+  td { padding: 5px 10px; border-bottom: 1px solid #e0e0e0; }
+  tr:nth-child(even) td { background: #f8fbf8; }
+  .badge {
+    display: inline-block; background: #00FF41; color: #050f05;
+    font-size: 9px; font-weight: 700; padding: 2px 8px;
+    border-radius: 4px; letter-spacing: 0.5px;
+  }
+  .section-icon { font-size: 14px; margin-right: 6px; vertical-align: middle; }
+  .two-col { display: flex; gap: 20px; margin: 10px 0; }
+  .two-col > div { flex: 1; }
+  .note {
+    background: #fffbe6; border-left: 3px solid #c8a200;
+    padding: 8px 12px; font-size: 10px; margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .pagebreak { page-break-before: always; }
+  .cover-logo {
+    font-family: 'Menlo', monospace; font-size: 42px; font-weight: 900;
+    color: #00FF41; letter-spacing: 4px; margin: 60px 0 10px;
+  }
+  hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div style="text-align:center; padding-top: 80px;">
+  <div class="cover-logo">SYNAPTYC</div>
+  <div style="font-size:11px; color:#666; letter-spacing:2px; margin-bottom:8px;">by nano-SYNAPSYS</div>
+  <h1 style="font-size:22px; border:none; margin-top:40px;">Architecture Design Document</h1>
+  <div class="subtitle">End-to-End Encrypted Messaging Platform</div>
+  <div class="meta" style="margin-top:30px;">
+    Version 1.3.1 &nbsp;|&nbsp; March 2026 &nbsp;|&nbsp; Confidential<br>
+    Platform: React Native (Expo) &nbsp;|&nbsp; Backend: Elixir/Phoenix &nbsp;|&nbsp; Storage: Cloudflare R2
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="pagebreak"></div>
+<h2>Table of Contents</h2>
+<ol style="font-size: 12px; line-height: 2.2;">
+  <li>Executive Summary</li>
+  <li>System Architecture Diagram</li>
+  <li>Component Hierarchy</li>
+  <li>Authentication &amp; Session Management</li>
+  <li>End-to-End Encryption (E2EE)</li>
+  <li>Media Encryption &amp; Storage</li>
+  <li>Real-Time Messaging (WebSocket)</li>
+  <li>Local Database &amp; Sync</li>
+  <li>Banner AI Assistant</li>
+  <li>Backend API Reference</li>
+  <li>Security Model</li>
+  <li>Third-Party Integrations</li>
+  <li>Data Flow Diagrams</li>
+</ol>
+
+<!-- 1. EXECUTIVE SUMMARY -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">1</span> Executive Summary</h2>
+<p><strong>SYNAPTYC</strong> is a privacy-first, end-to-end encrypted messaging application built with React Native (Expo). It implements the <strong>Signal Protocol</strong> (X3DH + Double Ratchet) for 1-to-1 messaging and <strong>Sender Keys</strong> for group encryption, ensuring forward secrecy and post-compromise security.</p>
+
+<h3>Key Capabilities</h3>
+<div class="two-col">
+  <div>
+    <ul>
+      <li><strong>E2EE Messaging</strong> — Signal Protocol (X3DH + Double Ratchet)</li>
+      <li><strong>Group Encryption</strong> — Sender Key distribution</li>
+      <li><strong>Encrypted Media</strong> — AES-256-GCM + Cloudflare R2</li>
+      <li><strong>Offline-First</strong> — SQLCipher local DB with delta sync</li>
+      <li><strong>Real-Time</strong> — Phoenix WebSocket channels</li>
+      <li><strong>Biometric Auth</strong> — Face ID + PIN + device binding</li>
+    </ul>
+  </div>
+  <div>
+    <ul>
+      <li><strong>AI Assistant</strong> — Banner with permission-gated tools</li>
+      <li><strong>Disappearing Messages</strong> — 1 min to 30 days</li>
+      <li><strong>Push Notifications</strong> — Expo Push + local alerts</li>
+      <li><strong>Contact Integration</strong> — Phone contacts + SMS invite</li>
+      <li><strong>Themes</strong> — Green (hacker) &amp; Tactical (military)</li>
+      <li><strong>Deep Linking</strong> — Invite tokens via custom scheme</li>
+    </ul>
+  </div>
+</div>
+
+<h3>Technology Stack</h3>
+<table>
+  <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+  <tr><td>Client</td><td>React Native 0.81 + Expo 54</td><td>Cross-platform mobile app</td></tr>
+  <tr><td>Backend</td><td>Elixir / Phoenix</td><td>REST API + WebSocket channels</td></tr>
+  <tr><td>Database (server)</td><td>PostgreSQL</td><td>User data, messages, keys</td></tr>
+  <tr><td>Database (client)</td><td>SQLCipher (op-sqlite)</td><td>Encrypted local message cache</td></tr>
+  <tr><td>Object Storage</td><td>Cloudflare R2</td><td>Encrypted media blobs</td></tr>
+  <tr><td>Crypto (DH)</td><td>tweetnacl (NaCl)</td><td>X25519 key exchange</td></tr>
+  <tr><td>Crypto (KDF)</td><td>@noble/hashes</td><td>HKDF, HMAC-SHA256</td></tr>
+  <tr><td>Crypto (media)</td><td>WebCrypto (AES-256-GCM)</td><td>Media file encryption</td></tr>
+  <tr><td>Key Storage</td><td>expo-secure-store</td><td>Encrypted device keychain</td></tr>
+  <tr><td>Push</td><td>Expo Notifications</td><td>Push token management</td></tr>
+</table>
+
+<!-- 2. SYSTEM ARCHITECTURE DIAGRAM -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">2</span> System Architecture Diagram</h2>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          SYNAPTYC CLIENT (Expo / React Native)              │
+│                                                                             │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐         │
+│  │  CHATS   │ │  GROUPS  │ │  BANNER  │ │ PROFILE  │ │ SETTINGS │         │
+│  │   Tab    │ │   Tab    │ │  AI Tab  │ │   Tab    │ │   Tab    │         │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘         │
+│       │             │            │             │            │               │
+│  ┌────▼─────┐ ┌─────▼────┐      │        ┌────▼─────┐                      │
+│  │ DM Chat  │ │ Group    │      │        │ Image    │                      │
+│  │ Screen   │ │ Chat Scr │      │        │ Picker   │                      │
+│  └────┬─────┘ └────┬─────┘      │        └────┬─────┘                      │
+│       │             │            │             │                            │
+│  ┌────▼─────────────▼────────────▼─────────────▼──────────────────────┐     │
+│  │              ENCRYPTION LAYER (signal_protocol.js)                 │     │
+│  │  ┌──────────┐  ┌──────────────┐  ┌───────────────┐                │     │
+│  │  │  X3DH    │  │ Double       │  │ Sender Keys   │                │     │
+│  │  │ Handshake│  │ Ratchet (DM) │  │ (Groups)      │                │     │
+│  │  └──────────┘  └──────────────┘  └───────────────┘                │     │
+│  │  tweetnacl (X25519)  |  @noble/hashes (HKDF, HMAC-SHA256)        │     │
+│  └────────────────────────┬───────────────────────────────────────────┘     │
+│                           │                                                 │
+│  ┌────────────────────────▼───────────────────────────────────────────┐     │
+│  │                    TRANSPORT LAYER                                 │     │
+│  │  ┌───────────────────┐    ┌───────────────────┐                   │     │
+│  │  │  Phoenix WebSocket │    │   REST API (fetch) │                  │     │
+│  │  │  (real-time msgs)  │    │   (fallback/media) │                  │     │
+│  │  └─────────┬─────────┘    └─────────┬─────────┘                   │     │
+│  └────────────┼────────────────────────┼─────────────────────────────┘     │
+│               │                        │                                    │
+│  ┌────────────▼────────────────────────▼─────────────────────────────┐     │
+│  │                    LOCAL STORAGE                                   │     │
+│  │  ┌──────────────┐  ┌───────────────┐  ┌─────────────────┐        │     │
+│  │  │ SQLCipher DB  │  │ SecureStore   │  │ FileSystem      │        │     │
+│  │  │ (messages,    │  │ (keys, tokens │  │ (profile images │        │     │
+│  │  │  sync cursors)│  │  sessions)    │  │  media cache)   │        │     │
+│  │  └──────────────┘  └───────────────┘  └─────────────────┘        │     │
+│  └───────────────────────────────────────────────────────────────────┘     │
+└───────────────┬─────────────────────────┬─────────────────────────────────┘
+                │  WSS (encrypted)        │  HTTPS (encrypted)
+                ▼                         ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    BACKEND SERVER (Elixir / Phoenix)                       │
+│                    nano-synapsys-server.fly.dev                            │
+│                                                                           │
+│  ┌───────────────┐  ┌───────────────┐  ┌──────────────┐  ┌────────────┐  │
+│  │  Auth Module   │  │  Messaging    │  │  Signal Key  │  │  Banner AI │  │
+│  │  (PIN, JWT,    │  │  (DMs, Groups │  │  Store       │  │  (LLM      │  │
+│  │   Bio-refresh) │  │   Delivery)   │  │  (PreKeys,   │  │   Endpoint)│  │
+│  └───────┬───────┘  └───────┬───────┘  │   SenderKeys)│  └──────┬─────┘  │
+│          │                  │           └──────┬───────┘         │        │
+│  ┌───────▼──────────────────▼──────────────────▼─────────────────▼──────┐ │
+│  │                       PostgreSQL Database                            │ │
+│  │  users | messages | groups | signal_prekeys | sender_keys | devices  │ │
+│  └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                           │
+│  ┌──────────────────────────────┐  ┌─────────────────────────────┐       │
+│  │  Phoenix Channels (WS)       │  │  Presigned URL Generator    │       │
+│  │  room:{peerId}               │  │  → Cloudflare R2            │       │
+│  │  group:{groupId}             │  └──────────────┬──────────────┘       │
+│  └──────────────────────────────┘                 │                      │
+└───────────────────────────────────────────────────┼──────────────────────┘
+                                                    │
+                                                    ▼
+                                    ┌───────────────────────────┐
+                                    │    Cloudflare R2           │
+                                    │    (Encrypted Media Blobs) │
+                                    │    AES-256-GCM ciphertext  │
+                                    └───────────────────────────┘
+</pre>
+</div>
+
+<!-- 3. COMPONENT HIERARCHY -->
+<h2><span class="section-icon">3</span> Component Hierarchy</h2>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+App()
+└─ SkinProvider                        ← Theme context (green | tactical)
+   └─ AppInner                         ← Auth gate + session management
+      ├─ [loading]   → Splash screen
+      ├─ [auth]      → AuthScreen      ← PIN login / register / reset
+      ├─ [biometric] → BiometricUnlock ← Face ID prompt
+      └─ [home]      → HomeScreen      ← Main app (tabs + WS)
+         │
+         ├─ TabBar  [CHATS | GROUPS | BOT | PROFILE | SETTINGS]
+         │
+         ├─ ChatsTab                   ← DM contact grid
+         │  ├─ PhoneContactsSheet      ← Invite contacts
+         │  └─ → DMChatScreen          ← 1:1 encrypted conversation
+         │
+         ├─ GroupsTab                  ← Group grid + create form
+         │  └─ → GroupChatScreen       ← Group encrypted conversation
+         │     └─ GroupMembersModal    ← Member list
+         │
+         ├─ BotTab                     ← Banner AI chat interface
+         │
+         ├─ ProfileTab                 ← Avatar, bio, Face ID setup
+         │
+         └─ SettingsTab               ← Notifications, disappear, theme
+</pre>
+</div>
+
+<!-- 4. AUTHENTICATION -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">4</span> Authentication &amp; Session Management</h2>
+
+<h3>4.1 Authentication Flow</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  ┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
+  │  App Launch  │────►│ Check Token  │────►│ Token exists?   │
+  └─────────────┘     │ (SecureStore)│     └────────┬────────┘
+                      └──────────────┘              │
+                              ┌──────────────────────┤
+                              │ NO                    │ YES
+                              ▼                       ▼
+                   ┌──────────────────┐    ┌──────────────────┐
+                   │   Auth Screen    │    │ Check skip-auth  │
+                   │   (PIN Entry)    │    │ (24h window?)    │
+                   └────────┬─────────┘    └────────┬─────────┘
+                            │                       │
+              ┌─────────────┼────────┐    ┌─────────┼──────────┐
+              │ LOGIN       │ REGISTER    │ YES     │ NO
+              ▼             ▼             ▼         ▼
+   ┌────────────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐
+   │POST /auth/     │ │POST /auth│ │bio-refresh│ │Bio enabled?  │
+   │  pin-login     │ │ /register│ │(silent)   │ └──────┬───────┘
+   │{device_id, pin}│ │{username,│ └─────┬────┘   YES  │  NO
+   └───────┬────────┘ │ device_id│       │         ▼    ▼
+           │          │ pin}     │       │   ┌──────────┐ ┌──────┐
+           │          └────┬─────┘       │   │ Face ID  │ │ Home │
+           │               │             │   │ Prompt   │ │Screen│
+           ▼               ▼             ▼   └────┬─────┘ └──────┘
+   ┌───────────────────────────────────────────────▼──────────────┐
+   │                    { token, user, refresh }                   │
+   │  → SecureStore: JWT_KEY, USER_KEY, BIO_REFRESH_KEY           │
+   │  → _setSession(token, refresh, updater)                      │
+   │  → Navigate to HomeScreen                                    │
+   └──────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>4.2 JWT Auto-Refresh</h3>
+<p>Every API call checks for <code>401 Unauthorized</code>. On expiry, the client automatically refreshes:</p>
+<ol>
+  <li>Send stored refresh token to <code>POST /auth/bio-refresh</code></li>
+  <li>Receive new access token + refresh token</li>
+  <li>Persist both to SecureStore</li>
+  <li>Retry the original request (one retry only)</li>
+</ol>
+
+<h3>4.3 Device Binding</h3>
+<p>Each device generates a <strong>UUID v4</strong> on first launch, stored permanently in SecureStore. All authentication is tied to this device ID — a PIN only works on the device where it was registered.</p>
+
+<h3>4.4 Secure Storage Keys</h3>
+<table>
+  <tr><th>Key</th><th>Value</th><th>Purpose</th></tr>
+  <tr><td><code>nano_jwt</code></td><td>JWT access token</td><td>API authentication</td></tr>
+  <tr><td><code>nano_user</code></td><td>User JSON object</td><td>Current user data</td></tr>
+  <tr><td><code>nano_bio_refresh</code></td><td>Refresh token</td><td>Bio/silent token refresh</td></tr>
+  <tr><td><code>nano_bio_enabled</code></td><td>'1' or '0'</td><td>Face ID toggle</td></tr>
+  <tr><td><code>nano_device_id</code></td><td>UUID v4</td><td>Permanent device identity</td></tr>
+  <tr><td><code>nano_skip_auth</code></td><td>Expiry timestamp</td><td>24h skip auth window</td></tr>
+  <tr><td><code>nano_profile_image</code></td><td>Local file URI</td><td>Profile avatar path</td></tr>
+  <tr><td><code>nano_skin</code></td><td>'green' or 'tactical'</td><td>UI theme preference</td></tr>
+  <tr><td><code>nano_disappear</code></td><td>Seconds (null/60/...)</td><td>Disappearing message timer</td></tr>
+</table>
+
+<!-- 5. E2EE -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">5</span> End-to-End Encryption (E2EE)</h2>
+
+<h3>5.1 Cryptographic Primitives</h3>
+<table>
+  <tr><th>Primitive</th><th>Algorithm</th><th>Library</th><th>Usage</th></tr>
+  <tr><td>Key Exchange</td><td>X25519 (Curve25519)</td><td>tweetnacl</td><td>DH in X3DH &amp; Double Ratchet</td></tr>
+  <tr><td>Symmetric Encryption</td><td>XSalsa20-Poly1305</td><td>tweetnacl</td><td>Message ciphertext</td></tr>
+  <tr><td>KDF</td><td>HKDF-SHA256</td><td>@noble/hashes</td><td>Root key &amp; chain key derivation</td></tr>
+  <tr><td>MAC</td><td>HMAC-SHA256</td><td>@noble/hashes</td><td>Chain key advance, pre-key signing</td></tr>
+  <tr><td>Media Encryption</td><td>AES-256-GCM</td><td>WebCrypto</td><td>Image/file encryption</td></tr>
+  <tr><td>RNG</td><td>CSPRNG</td><td>react-native-get-random-values</td><td>Key &amp; nonce generation</td></tr>
+</table>
+
+<h3>5.2 Key Hierarchy</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  IDENTITY KEY (IK)                    ← Long-term, generated once per device
+  │                                       Stored: sig_identity_key_v1
+  │
+  ├── SIGNED PRE-KEY (SPK)             ← Medium-term, rotatable
+  │   │  Signed by IK via HMAC-SHA256    Stored: sig_signed_prekey_v1
+  │   │  Uploaded to server
+  │   │
+  │   └── ONE-TIME PRE-KEYS (OPK)      ← Ephemeral, batch of 50
+  │       Uploaded to server              Stored: sig_one_time_prekeys_v1
+  │       Server maintains pool ≥ 20      Consumed on first contact
+  │
+  ├── EPHEMERAL KEY (EK)                ← Generated per X3DH session
+  │   │  Never stored (used and discarded)
+  │   │
+  │   └── SESSION (Double Ratchet)      ← Derived from X3DH shared secret
+  │       ├── Root Key (RK)               Ratchets on each DH exchange
+  │       ├── Sending Chain Key (CKs)     Advances per message sent
+  │       ├── Receiving Chain Key (CKr)   Advances per message received
+  │       └── Message Key (MK)            One-time use, derived from CK
+  │
+  └── SENDER KEY (Group)                ← Per-group, per-member
+      ├── Chain Key                       Advances per group message
+      └── Distributed via DM sessions    Encrypted with Double Ratchet
+</pre>
+</div>
+
+<h3>5.3 X3DH Key Agreement (Session Init)</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  ALICE (initiator)                              BOB (responder)
+  ──────────────────                             ──────────────────
+  Has: IK_A (identity)                           Has: IK_B (identity)
+  Generates: EK_A (ephemeral)                         SPK_B (signed pre-key)
+                                                      OPK_B (one-time, optional)
+
+  1. Alice fetches Bob's pre-key bundle:
+     GET /api/signal/prekeys/{bobId}
+     → { identity_key, signed_prekey, one_time_prekey }
+
+  2. Alice computes 3-4 DH exchanges:
+     DH1 = X25519(IK_A.secret,  SPK_B.public)   ← Identity × Signed PreKey
+     DH2 = X25519(EK_A.secret,  IK_B.public)    ← Ephemeral × Identity
+     DH3 = X25519(EK_A.secret,  SPK_B.public)   ← Ephemeral × Signed PreKey
+     DH4 = X25519(EK_A.secret,  OPK_B.public)   ← Ephemeral × One-Time (opt.)
+
+  3. Derive shared secret:
+     SK = HKDF(DH1 || DH2 || DH3 [|| DH4], salt=0, info='SYNAPTYC_X3DH', len=64)
+
+  4. Initialize Double Ratchet with SK as root key
+     → Alice: sender ratchet (DHs = EK_A, DHr = SPK_B)
+
+  5. First message includes X3DH metadata:
+     { ik: IK_A.pub, ek: EK_A.pub, spk_id, opk_id }
+
+  6. Bob receives → runs X3DH responder with same DH exchanges
+     → Bob: receiver ratchet (DHs = SPK_B, DHr = EK_A)
+</pre>
+</div>
+
+<h3>5.4 Double Ratchet (DM Messages)</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  SENDING A MESSAGE                         RECEIVING A MESSAGE
+  ─────────────────                         ───────────────────
+  1. Derive message key:                    1. Parse header: { spk, n, pn }
+     MK = HMAC(CKs, 0x01)
+     CKs_next = HMAC(CKs, 0x02)            2. If sender DH key changed:
+                                                - Store skipped keys (up to 1000)
+  2. Encrypt:                                   - DH ratchet step:
+     nonce = random(24 bytes)                     dh_out = X25519(DHs, new_DHr)
+     ct = XSalsa20-Poly1305(MK, nonce, pt)       [RK, CKr] = HKDF(dh_out, RK)
+                                                  Generate new DHs keypair
+  3. Build header:                                [RK, CKs] = HKDF(X25519(new_DHs,
+     { spk: DHs.pub, n: msgIdx, pn: prev }                         DHr), RK)
+
+  4. Wrap in Signal envelope:               3. Derive message key:
+     { sig:true, v:1,                          MK = HMAC(CKr, 0x01)
+       hdr: JSON(header),                      CKr_next = HMAC(CKr, 0x02)
+       ct: base64(nonce + ct) }
+                                            4. Decrypt:
+  5. Send via WS or REST                       pt = XSalsa20-Poly1305.open(MK,
+                                                    nonce, ct)
+
+  ROOT KEY RATCHET:
+  ─────────────────
+  KDF_RK(rk, dh_out) = HKDF(dh_out, rk, 'SYNAPTYC_DR_ROOT', 64)
+                      → first 32 bytes = new Root Key
+                      → last 32 bytes  = new Chain Key
+</pre>
+</div>
+
+<h3>5.5 Sender Keys (Group Messages)</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  GROUP KEY DISTRIBUTION
+  ──────────────────────
+  1. Creator generates sender key:
+     chainKey = random(32 bytes), iteration = 0
+
+  2. For each group member:
+     encrypted_sk = DM_Encrypt(mySession[member], serialize(senderKey))
+
+  3. Upload to server:
+     POST /api/signal/sender-keys { group_id, keys: [{recipient_id, encrypted_sk}] }
+
+  4. Members fetch &amp; decrypt:
+     GET /api/signal/sender-keys/{groupId}
+     For each: senderKey = DM_Decrypt(session[sender], encrypted_sk)
+
+  GROUP MESSAGE ENCRYPTION
+  ────────────────────────
+  1. Advance chain: MK = HMAC(chainKey, 0x01), chainKey = HMAC(chainKey, 0x02)
+  2. Encrypt: nonce = random(24), ct = XSalsa20-Poly1305(MK, nonce, plaintext)
+  3. Envelope: { gsig:true, v:1, sid:myId, hdr:iteration_b64, ct:nonce+ct_b64 }
+  4. All members decrypt with sender's cached chain key (advance to iteration)
+</pre>
+</div>
+
+<!-- 6. MEDIA ENCRYPTION -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">6</span> Media Encryption &amp; Storage</h2>
+
+<h3>6.1 Encrypted Media Upload Flow</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  ┌──────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+  │  Image    │    │  AES-256-GCM │    │  Presign URL │    │  Cloudflare  │
+  │  Picker   │───►│  Encrypt     │───►│  from Server │───►│  R2 Upload   │
+  │ (base64)  │    │  (WebCrypto) │    │  POST /media │    │  PUT (presign│
+  └──────────┘    └──────┬───────┘    │  /presign    │    │  no auth)    │
+                         │            └──────────────┘    └──────────────┘
+                         │                                        │
+                         ▼                                        ▼
+                  ┌──────────────┐                      ┌──────────────────┐
+                  │ key + iv     │                      │ public_url       │
+                  │ (both base64)│                      │ (R2 download URL)│
+                  └──────┬───────┘                      └────────┬─────────┘
+                         │                                       │
+                         └──────────────┬────────────────────────┘
+                                        ▼
+                              ┌────────────────────┐
+                              │ Media Payload JSON  │
+                              │ {type:"media",      │
+                              │  url, key, iv}      │
+                              └─────────┬──────────┘
+                                        │
+                                        ▼
+                              ┌────────────────────┐
+                              │ Signal Encrypt      │
+                              │ (Double Ratchet or  │
+                              │  Sender Keys)       │
+                              └─────────┬──────────┘
+                                        │
+                                        ▼
+                              ┌────────────────────┐
+                              │ Send as normal msg  │
+                              │ (WS or REST)        │
+                              └────────────────────┘
+</pre>
+</div>
+
+<p><strong>Key insight:</strong> The media payload (URL + decryption key + IV) is itself encrypted by the Signal Protocol. Even if someone intercepts the R2 URL, the blob is AES-256-GCM encrypted. And even if they get the blob, they need the key which was Signal-encrypted.</p>
+
+<h3>6.2 Media Decryption (Receiver)</h3>
+<ol>
+  <li>Signal-decrypt the message → get JSON payload <code>{type:"media", url, key, iv}</code></li>
+  <li>Fetch encrypted blob from Cloudflare R2 (public URL, no auth)</li>
+  <li>Import AES-256-GCM key from base64</li>
+  <li><code>crypto.subtle.decrypt({name:'AES-GCM', iv}, key, cipherBuf)</code></li>
+  <li>Convert decrypted bytes to <code>data:image/jpeg;base64,...</code> URI</li>
+  <li>Render in <code>&lt;Image&gt;</code> component</li>
+</ol>
+
+<!-- 7. WEBSOCKET -->
+<h2><span class="section-icon">7</span> Real-Time Messaging (WebSocket)</h2>
+
+<h3>7.1 Phoenix Channel Architecture</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  CLIENT                                         SERVER (Phoenix)
+  ──────                                         ────────────────
+
+  WebSocket Connect ──────────────────────────►  Accept (JWT auth)
+  wss://nano-synapsys-server.fly.dev
+       /socket/websocket?token={JWT}
+
+  phx_join("room:123") ──────────────────────►  Join room:123 channel
+  ◄──────────────────────────── phx_reply(ok)
+
+  phx_join("group:456") ─────────────────────►  Join group:456 channel
+  ◄──────────────────────────── phx_reply(ok)
+
+  new_message({content}) ────────────────────►  Broadcast to room:123
+  ◄──── new_message({id, from_user, content})   Echo back to all
+
+  group_message({content}) ──────────────────►  Broadcast to group:456
+  ◄─ group.message({id, from_user, content})    Echo to all members
+
+  heartbeat (every 30s) ─────────────────────►  Keep alive
+  ◄──────────────────────────── phx_reply(ok)
+
+  RECONNECTION:
+  on close → exponential backoff (1s → 2s → 4s → ... → 30s max)
+  on reconnect → delta-sync all conversations (syncOnConnect)
+</pre>
+</div>
+
+<h3>7.2 Message Delivery Strategy</h3>
+<table>
+  <tr><th>Scenario</th><th>Transport</th><th>Fallback</th></tr>
+  <tr><td>Text DM (WS open)</td><td>Phoenix WebSocket</td><td>—</td></tr>
+  <tr><td>Text DM (WS closed)</td><td>REST POST /api/messages</td><td>—</td></tr>
+  <tr><td>Image DM (any)</td><td>Always REST (too large for WS)</td><td>—</td></tr>
+  <tr><td>Group text (WS open)</td><td>Phoenix WebSocket</td><td>REST POST</td></tr>
+  <tr><td>Reconnect</td><td>Delta-sync all convos</td><td>Direct API fetch</td></tr>
+</table>
+
+<!-- 8. LOCAL DB -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">8</span> Local Database &amp; Sync</h2>
+
+<h3>8.1 SQLCipher Schema</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  SQLCipher Database: synaptyc.db                                 │
+  │  Encryption: 256-bit key stored in SecureStore                   │
+  │  Key: synaptyc_db_key_v1 (hex-encoded random bytes)              │
+  │                                                                  │
+  │  ┌──────────────────────────────────────────────────────────┐    │
+  │  │  TABLE: messages                                         │    │
+  │  ├────────────┬──────────┬──────────────────────────────────┤    │
+  │  │ id         │ INTEGER  │ PRIMARY KEY (server message ID)  │    │
+  │  │ convo_key  │ TEXT     │ 'dm_123' or 'group_456'         │    │
+  │  │ from_id    │ TEXT     │ sender user ID                   │    │
+  │  │ content    │ TEXT     │ decrypted plaintext              │    │
+  │  │ is_media   │ INTEGER  │ 1 if media payload               │    │
+  │  │ media_url  │ TEXT     │ R2 URL (for indexing)            │    │
+  │  │ created_at │ TEXT     │ ISO 8601 timestamp               │    │
+  │  └────────────┴──────────┴──────────────────────────────────┘    │
+  │  INDEX: idx_msg_convo (convo_key, created_at)                    │
+  │  INDEX: idx_msg_content (content) — full-text search             │
+  │                                                                  │
+  │  ┌──────────────────────────────────────────────────────────┐    │
+  │  │  TABLE: sync_cursors                                     │    │
+  │  ├────────────┬──────────┬──────────────────────────────────┤    │
+  │  │ convo_key  │ TEXT     │ PRIMARY KEY                      │    │
+  │  │ last_msg_id│ INTEGER  │ High-water mark (newest msg ID)  │    │
+  │  └────────────┴──────────┴──────────────────────────────────┘    │
+  └──────────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>8.2 Two-Phase Load Strategy</h3>
+<ol>
+  <li><strong>Phase 1 (instant):</strong> Load cached messages from local SQLCipher DB → display immediately</li>
+  <li><strong>Phase 2 (background):</strong> Delta-sync from server (<code>GET /api/messages/{id}?after_id={cursor}</code>) → decrypt → upsert to DB → refresh UI</li>
+</ol>
+<p>This ensures the user sees messages instantly even on slow networks.</p>
+
+<h3>8.3 Delta Sync</h3>
+<p>Each conversation tracks a <code>last_msg_id</code> cursor. On sync, only messages with ID > cursor are fetched. After decrypt and persist, the cursor advances to the new max ID.</p>
+
+<!-- 9. BANNER AI -->
+<h2><span class="section-icon">9</span> Banner AI Assistant</h2>
+
+<h3>9.1 Architecture</h3>
+<p>Banner is an AI-powered assistant with <strong>permission-gated</strong> access to device capabilities. All inference happens server-side via <code>POST /api/bot/chat</code>.</p>
+
+<h3>9.2 Permission Model</h3>
+<table>
+  <tr><th>Permission</th><th>Key</th><th>Grants Access To</th></tr>
+  <tr><td>Read Messages</td><td><code>banner_perm_msgs</code></td><td>Message history from conversations</td></tr>
+  <tr><td>Send Messages</td><td><code>banner_perm_send</code></td><td>Send messages to contacts on user's behalf</td></tr>
+  <tr><td>Calendar</td><td><code>banner_perm_cal</code></td><td>Read events (7-day window), create events</td></tr>
+  <tr><td>Contacts</td><td><code>banner_perm_con</code></td><td>List phone contacts (up to 300)</td></tr>
+</table>
+
+<h3>9.3 Action System</h3>
+<p>Banner can embed structured actions in its response using <code>&lt;&lt;&lt;ACTION:{...}&gt;&gt;&gt;</code> blocks. Each action requires explicit user confirmation before execution.</p>
+
+<table>
+  <tr><th>Action Type</th><th>Payload</th><th>Effect</th></tr>
+  <tr><td><code>send_message</code></td><td><code>{to_username, content}</code></td><td>Send encrypted DM to contact</td></tr>
+  <tr><td><code>create_event</code></td><td><code>{title, start, end, notes}</code></td><td>Create calendar event</td></tr>
+  <tr><td><code>send_sms</code></td><td><code>{to_phone, to_name, content}</code></td><td>Open SMS composer</td></tr>
+</table>
+
+<!-- 10. API REFERENCE -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">10</span> Backend API Reference</h2>
+<p><strong>Base URL:</strong> <code>https://nano-synapsys-server.fly.dev</code></p>
+
+<h3>10.1 Authentication</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Body</th><th>Response</th></tr>
+  <tr><td>POST</td><td>/auth/register</td><td>{username, device_id, pin}</td><td>{token, user, refresh}</td></tr>
+  <tr><td>POST</td><td>/auth/pin-login</td><td>{device_id, pin}</td><td>{token, user, refresh}</td></tr>
+  <tr><td>POST</td><td>/auth/pin-reset</td><td>{device_id, username, new_pin}</td><td>{token, user, refresh}</td></tr>
+  <tr><td>POST</td><td>/auth/bio-refresh</td><td>{refresh}</td><td>{token, refresh, user}</td></tr>
+  <tr><td>GET</td><td>/auth/me</td><td>—</td><td>{user}</td></tr>
+</table>
+
+<h3>10.2 Messaging</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Body / Query</th><th>Description</th></tr>
+  <tr><td>GET</td><td>/api/users</td><td>—</td><td>List all users</td></tr>
+  <tr><td>POST</td><td>/api/messages</td><td>{to, content}</td><td>Send DM</td></tr>
+  <tr><td>GET</td><td>/api/messages/{peerId}</td><td>?after_id=N</td><td>Fetch DM history (delta)</td></tr>
+  <tr><td>DELETE</td><td>/api/messages/delete/{userId}</td><td>—</td><td>Delete conversation</td></tr>
+  <tr><td>GET</td><td>/api/groups</td><td>—</td><td>List groups</td></tr>
+  <tr><td>POST</td><td>/api/groups</td><td>{name, description}</td><td>Create group</td></tr>
+  <tr><td>GET</td><td>/api/groups/{id}/messages</td><td>?after_id=N</td><td>Fetch group messages</td></tr>
+  <tr><td>POST</td><td>/api/groups/{id}/messages</td><td>{content}</td><td>Send group message</td></tr>
+  <tr><td>DELETE</td><td>/api/groups/{id}</td><td>—</td><td>Delete group (admin)</td></tr>
+  <tr><td>POST</td><td>/api/groups/{id}/leave</td><td>—</td><td>Leave group</td></tr>
+</table>
+
+<h3>10.3 Signal Protocol / Keys</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Body</th><th>Description</th></tr>
+  <tr><td>POST</td><td>/api/signal/prekeys</td><td>{identity_key, signed_prekey_id, signed_prekey, signed_prekey_signature}</td><td>Upload pre-key bundle</td></tr>
+  <tr><td>GET</td><td>/api/signal/prekeys/{userId}</td><td>—</td><td>Fetch peer's pre-key bundle</td></tr>
+  <tr><td>GET</td><td>/api/signal/prekeys/count</td><td>—</td><td>Check remaining one-time keys</td></tr>
+  <tr><td>POST</td><td>/api/signal/prekeys/one-time</td><td>{one_time_prekeys: [{id, key}]}</td><td>Upload one-time pre-keys</td></tr>
+  <tr><td>POST</td><td>/api/signal/sender-keys</td><td>{group_id, keys: [{recipient_id, encrypted_sk}]}</td><td>Distribute group sender keys</td></tr>
+  <tr><td>GET</td><td>/api/signal/sender-keys/{groupId}</td><td>—</td><td>Fetch group sender keys</td></tr>
+</table>
+
+<h3>10.4 Media &amp; Other</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Body</th><th>Description</th></tr>
+  <tr><td>POST</td><td>/api/media/presign</td><td>{mime}</td><td>Get presigned R2 upload URL</td></tr>
+  <tr><td>POST</td><td>/api/push-token</td><td>{token}</td><td>Register Expo push token</td></tr>
+  <tr><td>PATCH</td><td>/api/profile</td><td>{display_name, avatar_base64, ...}</td><td>Update profile</td></tr>
+  <tr><td>POST</td><td>/api/bot/chat</td><td>{message, image_base64, permissions, ...}</td><td>Banner AI inference</td></tr>
+  <tr><td>GET</td><td>/api/contacts</td><td>—</td><td>List accepted contacts</td></tr>
+  <tr><td>GET</td><td>/api/invites/validate/{token}</td><td>—</td><td>Validate invite token</td></tr>
+</table>
+
+<!-- 11. SECURITY MODEL -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">11</span> Security Model</h2>
+
+<h3>11.1 Threat Model</h3>
+<table>
+  <tr><th>Threat</th><th>Mitigation</th></tr>
+  <tr><td>Server compromise</td><td>E2EE — server never sees plaintext. Keys stored only on device.</td></tr>
+  <tr><td>Network interception</td><td>TLS (HTTPS/WSS) + Signal Protocol encryption layer.</td></tr>
+  <tr><td>Device theft (locked)</td><td>Face ID + PIN required. SQLCipher DB encrypted at rest.</td></tr>
+  <tr><td>Device theft (unlocked)</td><td>24h skip-auth limits exposure window. Keys in SecureStore (Keychain).</td></tr>
+  <tr><td>Media interception</td><td>AES-256-GCM encryption before upload. Key distributed via Signal.</td></tr>
+  <tr><td>Key compromise</td><td>Forward secrecy — Double Ratchet ensures past messages unrecoverable.</td></tr>
+  <tr><td>Replay attack</td><td>Unique nonces per message. Chain key advances prevent reuse.</td></tr>
+  <tr><td>Out-of-order delivery</td><td>Skipped message key cache (up to 1000) handles reordering.</td></tr>
+</table>
+
+<h3>11.2 What the Server Knows</h3>
+<ul>
+  <li>Who is messaging whom (metadata: sender ID, recipient ID, timestamps)</li>
+  <li>Message sizes (encrypted blob length)</li>
+  <li>Group membership lists</li>
+  <li>Public keys (identity, signed pre-keys, one-time pre-keys)</li>
+</ul>
+
+<h3>11.3 What the Server Does NOT Know</h3>
+<ul>
+  <li>Message content (all messages are E2EE)</li>
+  <li>Media content (AES-256-GCM encrypted, key distributed via Signal)</li>
+  <li>User PINs (hashed server-side, never stored in plaintext)</li>
+  <li>Private keys (generated and stored only on device)</li>
+</ul>
+
+<h3>11.4 Disappearing Messages</h3>
+<p>Messages with a <code>disappear_after</code> value are deleted client-side after the timer expires. The server may also enforce server-side deletion. Timer options: 1 min, 5 min, 10 min, 5 days, 10 days, 30 days.</p>
+
+<!-- 12. THIRD PARTY -->
+<h2><span class="section-icon">12</span> Third-Party Integrations</h2>
+
+<table>
+  <tr><th>Service</th><th>Purpose</th><th>Data Shared</th></tr>
+  <tr><td>Cloudflare R2</td><td>Encrypted media storage</td><td>AES-256-GCM ciphertext only (opaque blobs)</td></tr>
+  <tr><td>Expo Push</td><td>Push notification routing</td><td>Expo push token, notification payload</td></tr>
+  <tr><td>Fly.dev</td><td>Backend hosting</td><td>API requests (encrypted payloads)</td></tr>
+  <tr><td>Apple (Face ID)</td><td>Biometric authentication</td><td>None (on-device only)</td></tr>
+  <tr><td>Apple (Keychain)</td><td>SecureStore backend</td><td>Encrypted key-value pairs</td></tr>
+</table>
+
+<!-- 13. DATA FLOW DIAGRAMS -->
+<div class="pagebreak"></div>
+<h2><span class="section-icon">13</span> Data Flow Diagrams</h2>
+
+<h3>13.1 DM Message Send → Receive (Complete Flow)</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  ALICE                          SERVER                           BOB
+  ─────                          ──────                           ───
+  1. Type message
+     │
+  2. encryptDM(plaintext)
+     ├─ Get/build Signal session
+     ├─ Double Ratchet encrypt
+     └─ Wrap in envelope:
+        {sig:true, v:1,
+         hdr:{spk, n, pn},
+         ct:base64(nonce+ct)}
+     │
+  3. WS: phx_send("room:bob",  ─────────►  4. Receive encrypted
+         "new_message",                        envelope (opaque)
+         {content: envelope})                  │
+                                            5. Broadcast to Bob
+                                  ◄────────    via room:bob channel
+                                               │
+                                               ▼
+                                            6. Bob receives via WS
+                                               │
+                                            7. decryptDM(envelope)
+                                               ├─ Parse Signal envelope
+                                               ├─ Get/build session
+                                               │  (X3DH if first msg)
+                                               ├─ Double Ratchet decrypt
+                                               └─ Return plaintext
+                                               │
+                                            8. Display in UI
+                                            9. Persist to SQLCipher DB
+                                           10. Update sync cursor
+</pre>
+</div>
+
+<h3>13.2 App Initialization Flow</h3>
+
+<div class="diagram-box">
+<pre style="background:transparent;color:inherit;padding:0;margin:0;border:none;">
+  App Launch
+     │
+     ▼
+  Register Push Notifications
+     │
+     ▼
+  Check SecureStore for JWT ──── NO ──► Show Auth Screen (PIN)
+     │                                          │
+     YES                               ┌───────┼────────┐
+     │                                  │       │        │
+     ▼                              Login   Register   Reset
+  Check 24h Skip Window                │       │        │
+     │                                  └───────┼────────┘
+  ┌──┴──┐                                      │
+  │YES  │NO                                     ▼
+  │     │                               POST /auth/{endpoint}
+  │     ▼                                       │
+  │  Bio enabled? ── NO ──► Validate ──────────►│
+  │     │                     stored             │
+  │    YES                    token              │
+  │     │                     GET /auth/me       │
+  │     ▼                         │              │
+  │  Face ID                      ▼              │
+  │  Prompt ◄─────────── {token, user, refresh}  │
+  │     │                         │              │
+  │     ▼                         │              │
+  │  bio-refresh                  │              │
+  │  (silent) ◄───────────────────┘              │
+  │     │                                        │
+  └──┬──┘                                        │
+     │                                           │
+     ▼                                           ▼
+  HomeScreen ◄────────────────────────────── Save to SecureStore
+     │
+     ├─ initE2EE(token)         ← Generate/upload Signal pre-keys
+     ├─ registerPushToken()     ← Upload Expo push token
+     ├─ connectWS()             ← Open Phoenix WebSocket
+     └─ Render tabs
+</pre>
+</div>
+
+<hr>
+<div style="text-align:center; margin-top: 40px; color: #888; font-size: 10px;">
+  <p>SYNAPTYC Architecture Design Document &nbsp;|&nbsp; Version 1.3.1 &nbsp;|&nbsp; March 2026</p>
+  <p style="color:#00883a; font-weight:600; letter-spacing: 1px;">CONFIDENTIAL — nano-SYNAPSYS</p>
+</div>
+
+</body>
+</html>

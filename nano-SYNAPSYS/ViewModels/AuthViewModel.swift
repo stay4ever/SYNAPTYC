@@ -5,109 +5,92 @@ import CryptoKit
 @MainActor
 class AuthViewModel: ObservableObject {
     @Published var isAuthenticated = false
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+    @Published var isLoading = true
+    @Published var errorMessage: String = ""
     @Published var currentUser: AppUser?
 
-    private var cancellables = Set<AnyCancellable>()
+    // Form fields used by LoginView / RegisterView
+    @Published var username = ""
+    @Published var password = ""
+    @Published var confirmPassword = ""
+    @Published var displayName = ""
 
-    init() {
-        checkSavedToken()
-    }
+    init() {}
 
-    // MARK: - Auto-login
+    // MARK: - Restore Session
 
-    private func checkSavedToken() {
-        if let token = KeychainService.shared.loadString(key: "jwt_token") {
-            // Token exists; verify it's still valid
+    func restoreSession() {
+        if let token = KeychainService.shared.load(key: "jwt_token") {
             Task {
                 do {
                     let user = try await APIService.shared.verifyToken(token: token)
-                    await MainActor.run {
-                        self.currentUser = user
-                        self.isAuthenticated = true
-                    }
+                    self.currentUser = user
+                    self.isAuthenticated = true
                 } catch {
-                    // Token invalid or expired
-                    KeychainService.shared.deleteString(key: "jwt_token")
-                    await MainActor.run {
-                        self.isAuthenticated = false
-                        self.currentUser = nil
-                    }
+                    try? KeychainService.shared.delete(key: "jwt_token")
+                    self.isAuthenticated = false
+                    self.currentUser = nil
                 }
+                self.isLoading = false
             }
+        } else {
+            isLoading = false
         }
     }
 
     // MARK: - Login
 
-    func login(username: String, password: String) async {
-        isLoading = true
-        errorMessage = nil
+    func login() {
+        Task { await loginAsync() }
+    }
 
+    private func loginAsync() async {
+        isLoading = true
+        errorMessage = ""
         do {
             let response = try await APIService.shared.login(username: username, password: password)
-
-            // Store JWT in Keychain
-            KeychainService.shared.saveString(response.token, key: "jwt_token")
-
+            try? KeychainService.shared.save(key: "jwt_token", value: response.token)
             currentUser = response.user
             isAuthenticated = true
-            isLoading = false
         } catch {
             errorMessage = "Login failed: \(error.localizedDescription)"
-            isLoading = false
         }
+        isLoading = false
     }
 
     // MARK: - Register
 
-    func register(username: String, password: String, displayName: String) async {
+    func register() {
+        Task { await registerAsync() }
+    }
+
+    private func registerAsync() async {
         isLoading = true
-        errorMessage = nil
-
+        errorMessage = ""
         do {
-            // Generate ECDH P-384 key pair for this user
-            let privateKey = P384.KeyAgreement.PrivateKey()
-            let publicKeyData = privateKey.publicKey.rawRepresentation
-
             let response = try await APIService.shared.register(
                 username: username,
                 password: password,
-                displayName: displayName,
-                publicKey: publicKeyData
+                displayName: displayName
             )
-
-            // Store JWT and private key in Keychain
-            KeychainService.shared.saveString(response.token, key: "jwt_token")
-            KeychainService.shared.saveData(privateKey.withUnsafeBytes { Data($0) }, key: "user_private_key")
-
+            try? KeychainService.shared.save(key: "jwt_token", value: response.token)
             currentUser = response.user
             isAuthenticated = true
-            isLoading = false
         } catch {
             errorMessage = "Registration failed: \(error.localizedDescription)"
-            isLoading = false
         }
+        isLoading = false
     }
 
     // MARK: - Logout
 
-    func logout() async {
-        isLoading = true
-
-        do {
-            try await APIService.shared.logout()
-
-            // Clear Keychain and local state
-            KeychainService.shared.deleteString(key: "jwt_token")
-            KeychainService.shared.deleteString(key: "user_private_key")
-
+    func logout() {
+        Task {
+            isLoading = true
+            try? await APIService.shared.logout()
+            try? KeychainService.shared.delete(key: "jwt_token")
             currentUser = nil
             isAuthenticated = false
-            isLoading = false
-        } catch {
-            errorMessage = "Logout failed: \(error.localizedDescription)"
             isLoading = false
         }
     }

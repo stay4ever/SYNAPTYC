@@ -10,29 +10,28 @@ struct Group: Codable, Identifiable {
     var updatedAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case name
+        case id, name
         case creatorId = "creator_id"
         case members
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
 
+    var memberCount: Int { members.count }
+
+    var lastMessageTime: String { "" }
+
+    var lastMessage: String { "" }
+
     #if DEBUG
     static var mockGroup: Group {
-        Group(
-            id: "group-1",
-            name: "Zion Operators",
-            creatorId: "user-1",
-            members: [],
-            createdAt: Date(),
-            updatedAt: nil
-        )
+        Group(id: "group-1", name: "Zion Operators", creatorId: "user-1",
+              members: [], createdAt: Date(), updatedAt: nil)
     }
     #endif
 }
 
-/// GroupMember model representing a member within a group.
+/// GroupMember model.
 struct GroupMember: Codable, Identifiable {
     let id: String
     let username: String
@@ -42,15 +41,15 @@ struct GroupMember: Codable, Identifiable {
     var joinedAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case id
-        case username
+        case id, username
         case displayName = "display_name"
         case role
         case publicKey = "public_key"
         case joinedAt = "joined_at"
     }
 
-    init(id: String, username: String, displayName: String? = nil, role: String? = nil, publicKey: String? = nil, joinedAt: Date? = nil) {
+    init(id: String, username: String, displayName: String? = nil,
+         role: String? = nil, publicKey: String? = nil, joinedAt: Date? = nil) {
         self.id = id
         self.username = username
         self.displayName = displayName
@@ -60,13 +59,13 @@ struct GroupMember: Codable, Identifiable {
     }
 }
 
-/// GroupMessage model representing a message within a group chat.
+/// GroupMessage model.
 struct GroupMessage: Codable, Identifiable {
     let id: String
     let groupId: String
     let senderId: String
     let senderUsername: String?
-    let content: String
+    var content: String
     let timestamp: Date
     let isRead: Bool
 
@@ -75,12 +74,17 @@ struct GroupMessage: Codable, Identifiable {
         case groupId = "group_id"
         case senderId = "sender_id"
         case senderUsername = "sender_username"
-        case content
-        case timestamp
+        case content, timestamp
         case isRead = "is_read"
     }
 
-    var isEncrypted: Bool {
-        content.hasPrefix("ENC:")
+    var isEncrypted: Bool { content.hasPrefix("ENC:") }
+    var sentAt: Date { timestamp }
+    var senderName: String { senderUsername ?? senderId }
+
+    var formattedTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: timestamp)
     }
 }

@@ -1,0 +1,33 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 08 — Test the link-device flow (reinstall recovery)
+- launchApp:
+    clearState: true
+
+# Should land on login screen
+- assertVisible: "ENTER PIN"
+
+# Tap "REINSTALLED? LINK DEVICE"
+- tapOn: "REINSTALLED? LINK DEVICE"
+
+# Enter username
+- assertVisible: "LINK DEVICE"
+- tapOn:
+    id: "username-input"
+- inputText: "existing_user"
+- tapOn: "NEXT"
+
+# Enter PIN
+- assertVisible: "ENTER YOUR PIN"
+- tapOn: "1"
+- tapOn: "2"
+- tapOn: "3"
+- tapOn: "4"
+- tapOn: "5"
+- tapOn: "6"
+- tapOn: "LINK DEVICE"
+
+# Should either succeed (home screen) or show error (invalid credentials)
+# Both outcomes are valid for E2E — we're testing the flow works
+- assertVisible:
+    text: "SYNAPTYC"

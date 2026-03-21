@@ -41,8 +41,20 @@ final class APIService {
         return authResponse
     }
 
-    /// Register a new account with username, password, and display name.
-    func register(username: String, password: String, displayName: String) async throws -> AuthResponse {
+    /// Verify an existing JWT token and return the user.
+    func verifyToken(token: String) async throws -> AppUser {
+        let url = baseURL.appendingPathComponent("/auth/verify")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        try validateResponse(response)
+        jwtToken = token
+        return try JSONDecoder().decode(AppUser.self, from: data)
+    }
+
+    /// Register a new account.
+    func register(username: String, password: String, displayName: String, publicKey: Data? = nil) async throws -> AuthResponse {
         let url = baseURL.appendingPathComponent("/auth/register")
 
         let body: [String: String] = [
@@ -269,7 +281,10 @@ final class APIService {
     }
 
     /// Clear stored authentication (logout).
-    func logout() throws {
+    func logout() async throws {
+        // Try to notify server
+        let url = baseURL.appendingPathComponent("/auth/logout")
+        _ = try? await performAuthenticatedRequest(url: url, method: "POST")
         jwtToken = nil
         try keychain.delete(key: "jwt_token")
     }

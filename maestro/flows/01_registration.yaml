@@ -1,0 +1,45 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 01 — Register a new account with a 6-digit PIN
+- launchApp:
+    clearState: true
+
+# Should land on login screen
+- assertVisible: "SYNAPTYC"
+- assertVisible: "ENTER PIN"
+
+# Navigate to registration
+- tapOn: "NEW DEVICE? REGISTER"
+
+# Enter username
+- assertVisible: "CREATE ACCOUNT"
+- tapOn:
+    id: "username-input"
+- inputText: "testuser_${maestro.run_id}"
+- tapOn: "NEXT"
+
+# Set PIN
+- assertVisible: "SET YOUR PIN"
+- tapOn: "1"
+- tapOn: "2"
+- tapOn: "3"
+- tapOn: "4"
+- tapOn: "5"
+- tapOn: "6"
+- tapOn: "NEXT"
+
+# Confirm PIN
+- assertVisible: "CONFIRM PIN"
+- tapOn: "1"
+- tapOn: "2"
+- tapOn: "3"
+- tapOn: "4"
+- tapOn: "5"
+- tapOn: "6"
+- tapOn: "CREATE ACCOUNT"
+
+# Should land on home screen
+- assertVisible: "SYNAPTYC"
+- assertVisible:
+    text: "CHATS"
+    optional: true

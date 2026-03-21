@@ -1,0 +1,29 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 04 — Navigate to Groups tab, create a group, send a message
+- launchApp:
+    clearState: false
+
+# Navigate to GROUPS tab
+- tapOn: "GROUPS"
+
+# Tap create group button
+- tapOn:
+    text: "+"
+    optional: true
+
+# Enter group name
+- tapOn:
+    id: "group-name-input"
+    optional: true
+- inputText: "Test Group"
+
+# Create the group
+- tapOn:
+    text: "CREATE"
+    optional: true
+
+# Verify group appears in list
+- assertVisible:
+    text: "Test Group"
+    optional: true

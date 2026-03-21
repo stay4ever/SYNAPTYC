@@ -18,17 +18,11 @@ struct MessageBubble: View {
                         .cornerRadius(8)
 
                     HStack(spacing: 6) {
-                        if message.isRead {
-                            Image(systemName: "checkmark.double")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
-                        } else {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
-                        }
+                        Image(systemName: message.isRead ? "checkmark.double" : "checkmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(message.isRead ? 1.0 : 0.6))
 
-                        Text(message.timestamp)
+                        Text(message.formattedTime)
                             .font(.system(size: 10, weight: .regular, design: .monospaced))
                             .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
                     }
@@ -42,10 +36,10 @@ struct MessageBubble: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                         .background(Color(red: 0.0, green: 0.1, blue: 0.0))
-                        .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.4), width: 1)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.4), lineWidth: 1))
                         .cornerRadius(8)
 
-                    Text(message.timestamp)
+                    Text(message.formattedTime)
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
                         .padding(.horizontal, 6)

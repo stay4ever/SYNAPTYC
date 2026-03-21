@@ -8,7 +8,7 @@ struct ChatView: View {
 
     init(conversation: Conversation) {
         self.conversation = conversation
-        _viewModel = StateObject(wrappedValue: ChatViewModel(contactID: conversation.contact.id))
+        _viewModel = StateObject(wrappedValue: ChatViewModel(contactId: conversation.contact.id))
     }
 
     var body: some View {
@@ -32,16 +32,14 @@ struct ChatView: View {
 
                         Text(conversation.isOnline ? "ONLINE" : "OFFLINE")
                             .font(.system(size: 11, weight: .regular, design: .monospaced))
-                            .foregroundColor(conversation.isOnline ? Color(red: 0.0, green: 1.0, blue: 0.255) : Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(conversation.isOnline ? 1.0 : 0.5))
                     }
 
                     Spacer()
-
                     EncryptionBadge()
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
 
                 // Messages list
                 ScrollViewReader { proxy in
@@ -63,61 +61,41 @@ struct ChatView: View {
                     .background(Color.clear)
                     .scrollContentBackground(.hidden)
                     .onChange(of: viewModel.messages.count) { _ in
-                        if let lastMessage = viewModel.messages.last {
-                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                    .onChange(of: viewModel.isRemoteTyping) { _ in
-                        withAnimation {
-                            proxy.scrollTo("typingIndicator", anchor: .bottom)
+                        if let last = viewModel.messages.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }
                 }
 
                 // Message input
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        TextField("MESSAGE...", text: $messageText)
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(Color(red: 0.04, green: 0.1, blue: 0.04))
-                            .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
-                            .cornerRadius(4)
+                HStack(spacing: 8) {
+                    TextField("MESSAGE...", text: $messageText)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), lineWidth: 1))
 
-                        Button(action: {
-                            if !messageText.trimmingCharacters(in: .whitespaces).isEmpty {
-                                viewModel.sendMessage(messageText)
-                                messageText = ""
-                            }
-                        }) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
-                        }
-                        .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button(action: {
+                        let text = messageText.trimmingCharacters(in: .whitespaces)
+                        guard !text.isEmpty else { return }
+                        viewModel.sendMessage(text)
+                        messageText = ""
+                    }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                    .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                .padding(.top, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(Color(red: 0.04, green: 0.1, blue: 0.04).opacity(0.5))
-                .borderTop(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
             }
         }
         .navigationBarBackButtonHidden(true)
-        .onAppear {
-            viewModel.loadMessages()
-        }
-    }
-}
-
-extension View {
-    func borderTop(_ color: Color, width: CGFloat) -> some View {
-        self.border(color, width: width)
+        .onAppear { viewModel.loadMessages() }
     }
 }
 

@@ -5,11 +5,10 @@ struct ContactRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
             ZStack {
                 Circle()
                     .fill(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1))
-                    .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+                    .overlay(Circle().stroke(Color(red: 0.0, green: 1.0, blue: 0.255), lineWidth: 1))
 
                 Text(contact.initials)
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
@@ -38,7 +37,6 @@ struct ContactRow: View {
             Spacer()
         }
         .padding(.vertical, 8)
-        .neonCard()
         .contentShape(Rectangle())
     }
 }

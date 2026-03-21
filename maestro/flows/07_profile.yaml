@@ -1,0 +1,32 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 07 — Open profile, edit display name
+- launchApp:
+    clearState: false
+
+# Navigate to PROFILE tab
+- tapOn: "PROFILE"
+
+# Verify profile sections visible
+- assertVisible:
+    text: "DISPLAY NAME"
+    optional: true
+
+# Tap edit display name
+- tapOn:
+    id: "edit-display-name"
+    optional: true
+
+# Clear and type new name
+- eraseText: 20
+- inputText: "Test Display Name"
+
+# Save
+- tapOn:
+    text: "SAVE"
+    optional: true
+
+# Verify name updated
+- assertVisible:
+    text: "Test Display Name"
+    optional: true

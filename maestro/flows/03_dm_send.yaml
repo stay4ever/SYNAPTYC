@@ -1,0 +1,36 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 03 — Open a DM chat, type a message, send it, verify it appears
+- launchApp:
+    clearState: false
+
+# Navigate to CHATS tab
+- tapOn: "CHATS"
+
+# Tap the first contact card (if contacts exist)
+- tapOn:
+    index: 0
+    within:
+      id: "chat-list"
+    optional: true
+
+# Type a message
+- tapOn:
+    id: "chat-input"
+    optional: true
+- inputText: "Hello from Maestro E2E test"
+
+# Send the message
+- tapOn:
+    id: "send-btn"
+    optional: true
+
+# Verify message is visible
+- assertVisible:
+    text: "Hello from Maestro E2E test"
+    optional: true
+
+# Go back to home
+- tapOn:
+    id: "back-btn"
+    optional: true

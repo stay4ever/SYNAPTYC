@@ -1,0 +1,2196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nano-SYNAPSYS — Design Overhaul v2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* GHOST */
+  --g-bg: #050f05;
+  --g-surface: #0a1a0a;
+  --g-panel: #0d200d;
+  --g-accent: #00FF41;
+  --g-green: #00C832;
+  --g-text: #aad0aa;
+  --g-bright: #e8f8e8;
+  --g-border: #1a3a1a;
+  --g-dim: #4a8a4a;
+  --g-red: #ef4444;
+  --g-amber: #f59e0b;
+  --g-shadow: 0 4px 20px rgba(0,255,65,0.12), 0 2px 8px rgba(0,0,0,0.4);
+  --g-shadow-sm: 0 2px 10px rgba(0,255,65,0.08), 0 1px 4px rgba(0,0,0,0.3);
+
+  /* TACTICAL */
+  --t-bg: #0c0c0e;
+  --t-surface: #141418;
+  --t-panel: #1a1a22;
+  --t-accent: #a8b8cc;
+  --t-green: #6888a0;
+  --t-text: #9090a8;
+  --t-bright: #d8d8ec;
+  --t-border: #28283a;
+  --t-dim: #505068;
+  --t-red: #c04848;
+  --t-amber: #b89060;
+  --t-shadow: 0 4px 20px rgba(168,184,204,0.08), 0 2px 8px rgba(0,0,0,0.4);
+  --t-shadow-sm: 0 2px 10px rgba(168,184,204,0.05), 0 1px 4px rgba(0,0,0,0.3);
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: #111115;
+  color: #d0d0e0;
+  line-height: 1.5;
+}
+
+/* ============================================================
+   PRINT & PAGE
+   ============================================================ */
+@media print {
+  body { background: #fff; }
+  .page-break { page-break-after: always; }
+}
+
+/* ============================================================
+   DOCUMENT LAYOUT
+   ============================================================ */
+.doc-wrapper {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 40px 32px;
+}
+
+/* ============================================================
+   TITLE PAGE
+   ============================================================ */
+.title-page {
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  border-bottom: 1px solid #2a2a3a;
+  padding-bottom: 48px;
+  margin-bottom: 56px;
+  position: relative;
+}
+
+.title-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse 60% 40% at 20% 50%, rgba(0,255,65,0.04) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 50%, rgba(168,184,204,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.title-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #00FF41;
+  background: rgba(0,255,65,0.08);
+  border: 1px solid rgba(0,255,65,0.2);
+  padding: 6px 16px;
+  border-radius: 20px;
+  margin-bottom: 24px;
+}
+
+.title-main {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 42px;
+  font-weight: 700;
+  color: #e8f8e8;
+  letter-spacing: -1px;
+  margin-bottom: 8px;
+}
+
+.title-main span { color: #00FF41; }
+
+.title-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 400;
+  color: #6070a0;
+  margin-bottom: 32px;
+  letter-spacing: 1px;
+}
+
+.title-meta {
+  display: flex;
+  gap: 32px;
+  font-size: 13px;
+  color: #5a5a7a;
+  font-family: 'Inter', sans-serif;
+}
+
+.title-meta span { display: flex; align-items: center; gap: 6px; }
+.title-meta strong { color: #9090b0; }
+
+/* ============================================================
+   SECTION HEADERS
+   ============================================================ */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #1e1e2e;
+}
+
+.section-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: #00FF41;
+  background: rgba(0,255,65,0.08);
+  border: 1px solid rgba(0,255,65,0.15);
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+}
+
+.section-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px;
+  font-weight: 600;
+  color: #d8d8ec;
+  letter-spacing: -0.5px;
+}
+
+.section-desc {
+  font-size: 13px;
+  color: #5a5a7a;
+  margin-left: auto;
+  font-style: italic;
+}
+
+.doc-section {
+  margin-bottom: 72px;
+}
+
+/* ============================================================
+   TWO-COLUMN LAYOUT
+   ============================================================ */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.skin-col-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  display: inline-block;
+}
+
+.skin-col-label.ghost {
+  color: #00FF41;
+  background: rgba(0,255,65,0.07);
+  border: 1px solid rgba(0,255,65,0.15);
+}
+
+.skin-col-label.tactical {
+  color: #a8b8cc;
+  background: rgba(168,184,204,0.07);
+  border: 1px solid rgba(168,184,204,0.15);
+}
+
+/* ============================================================
+   PHONE FRAME
+   ============================================================ */
+.phone-frame-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.phone-outer {
+  width: 260px;
+  height: 560px;
+  border-radius: 44px;
+  padding: 10px;
+  position: relative;
+  box-shadow: 
+    0 0 0 1px rgba(255,255,255,0.06),
+    0 20px 60px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.phone-outer.ghost-frame {
+  background: linear-gradient(145deg, #1a2a1a, #0a150a);
+  border: 2px solid #1a3a1a;
+}
+
+.phone-outer.tactical-frame {
+  background: linear-gradient(145deg, #222230, #141420);
+  border: 2px solid #28283a;
+}
+
+.phone-notch {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 22px;
+  background: #080810;
+  border-radius: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.phone-notch .camera {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1a1a2a;
+  border: 1px solid #2a2a3a;
+}
+
+.phone-notch .speaker {
+  width: 28px;
+  height: 4px;
+  background: #1a1a2a;
+  border-radius: 2px;
+}
+
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  border-radius: 36px;
+  overflow: hidden;
+  position: relative;
+}
+
+.phone-screen.ghost-screen { background: var(--g-bg); }
+.phone-screen.tactical-screen { background: var(--t-bg); }
+
+/* Tactical texture overlay */
+.tactical-texture {
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cpath d='M0 0 L20 0 L10 15 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M20 0 L60 0 L45 20 L30 5 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M0 0 L10 15 L0 30 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M10 15 L30 5 L45 20 L25 35 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M0 30 L10 15 L25 35 L15 50 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M45 20 L60 10 L60 40 L50 35 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M25 35 L45 20 L50 35 L35 55 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M15 50 L25 35 L35 55 L20 60 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M35 55 L50 35 L60 40 L60 60 L35 60 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M0 30 L15 50 L0 60 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.screen-content {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  padding-top: 44px;
+}
+
+/* ============================================================
+   STATUS BAR
+   ============================================================ */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.status-bar.ghost { color: var(--g-dim); }
+.status-bar.tactical { color: var(--t-dim); }
+.status-icons { display: flex; gap: 4px; align-items: center; }
+
+/* ============================================================
+   SCREEN: LOGIN
+   ============================================================ */
+.login-screen { padding: 8px 16px 16px; flex: 1; display: flex; flex-direction: column; }
+
+.login-logo-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0 16px;
+}
+
+.login-logo-hex {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+.login-logo-hex.ghost { background: rgba(0,255,65,0.15); color: #00FF41; border: 1px solid rgba(0,255,65,0.3); }
+.login-logo-hex.tactical { background: rgba(168,184,204,0.1); color: #a8b8cc; }
+
+.login-app-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.login-app-name.ghost { color: var(--g-bright); }
+.login-app-name.tactical { color: var(--t-bright); }
+
+.login-tagline {
+  font-size: 8px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.login-tagline.ghost { color: var(--g-dim); }
+.login-tagline.tactical { color: var(--t-dim); }
+
+.login-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+
+.ui-input-wrap { position: relative; }
+
+.ui-input-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  display: block;
+}
+
+.ui-input-label.ghost { color: var(--g-dim); }
+.ui-input-label.tactical { color: var(--t-dim); }
+
+.ui-input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  outline: none;
+}
+
+.ui-input.ghost {
+  background: var(--g-surface);
+  border-color: var(--g-border);
+  color: var(--g-bright);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.ui-input.tactical {
+  background: var(--t-surface);
+  border-color: var(--t-border);
+  color: var(--t-bright);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.ui-input::placeholder { opacity: 0.35; }
+
+.ui-btn {
+  width: 100%;
+  padding: 9px;
+  border-radius: 12px;
+  border: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.ui-btn.ghost-primary {
+  background: linear-gradient(135deg, #00FF41, #00C832);
+  color: #050f05;
+  box-shadow: 0 4px 20px rgba(0,255,65,0.25), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.ui-btn.tactical-primary {
+  background: linear-gradient(135deg, #a8b8cc, #8898b0);
+  color: #0c0c0e;
+  box-shadow: 0 4px 20px rgba(168,184,204,0.15), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.ui-btn.ghost-secondary {
+  background: transparent;
+  color: var(--g-accent);
+  border: 1px solid var(--g-border);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.ui-btn.tactical-secondary {
+  background: transparent;
+  color: var(--t-accent);
+  border: 1px solid var(--t-border);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 8px;
+  margin: 4px 0;
+}
+
+.login-divider::before, .login-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+
+.login-divider.ghost { color: var(--g-dim); }
+.login-divider.ghost::before, .login-divider.ghost::after { background: var(--g-border); }
+.login-divider.tactical { color: var(--t-dim); }
+.login-divider.tactical::before, .login-divider.tactical::after { background: var(--t-border); }
+
+.login-footer {
+  margin-top: auto;
+  text-align: center;
+  font-size: 8px;
+  padding-top: 8px;
+}
+
+.login-footer.ghost { color: var(--g-dim); }
+.login-footer.tactical { color: var(--t-dim); }
+
+/* ============================================================
+   SCREEN: CHAT
+   ============================================================ */
+.chat-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px 8px;
+  gap: 8px;
+  border-bottom: 1px solid;
+}
+
+.chat-header.ghost { border-color: var(--g-border); background: var(--g-surface); }
+.chat-header.tactical { border-color: var(--t-border); background: var(--t-surface); }
+
+.chat-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.chat-avatar.ghost { background: rgba(0,255,65,0.12); color: #00FF41; border: 1px solid rgba(0,255,65,0.2); }
+.chat-avatar.tactical { background: rgba(168,184,204,0.1); color: #a8b8cc; border: 1px solid rgba(168,184,204,0.15); }
+
+.chat-contact-info { flex: 1; min-width: 0; }
+
+.chat-contact-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.chat-contact-name.ghost { color: var(--g-bright); }
+.chat-contact-name.tactical { color: var(--t-bright); }
+
+.chat-contact-status { font-size: 8px; margin-top: 1px; }
+.chat-contact-status.ghost { color: var(--g-green); }
+.chat-contact-status.tactical { color: var(--t-green); }
+
+.chat-header-icons {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.chat-header-icons.ghost { color: var(--g-dim); }
+.chat-header-icons.tactical { color: var(--t-dim); }
+
+.chat-messages {
+  flex: 1;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.msg-bubble {
+  max-width: 78%;
+  padding: 6px 9px;
+  font-size: 9px;
+  line-height: 1.4;
+  font-family: 'Inter', sans-serif;
+  position: relative;
+}
+
+.msg-bubble.incoming {
+  align-self: flex-start;
+  border-radius: 4px 18px 18px 18px;
+}
+
+.msg-bubble.outgoing {
+  align-self: flex-end;
+  border-radius: 18px 4px 18px 18px;
+}
+
+.msg-bubble.ghost.incoming {
+  background: var(--g-surface);
+  border: 1px solid var(--g-border);
+  color: var(--g-text);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.msg-bubble.ghost.outgoing {
+  background: rgba(0,255,65,0.1);
+  border: 1px solid rgba(0,255,65,0.2);
+  color: var(--g-bright);
+  box-shadow: 0 2px 10px rgba(0,255,65,0.08), 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.msg-bubble.tactical.incoming {
+  background: var(--t-surface);
+  border: 1px solid var(--t-border);
+  color: var(--t-text);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.msg-bubble.tactical.outgoing {
+  background: rgba(104,136,160,0.15);
+  border: 1px solid rgba(168,184,204,0.15);
+  color: var(--t-bright);
+  box-shadow: 0 2px 10px rgba(168,184,204,0.06), 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.msg-time {
+  font-size: 7px;
+  opacity: 0.5;
+  margin-top: 2px;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.msg-sender {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.msg-sender.ghost { color: var(--g-accent); }
+.msg-sender.tactical { color: var(--t-accent); }
+
+.chat-input-bar {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  gap: 6px;
+  border-top: 1px solid;
+}
+
+.chat-input-bar.ghost { border-color: var(--g-border); background: var(--g-surface); }
+.chat-input-bar.tactical { border-color: var(--t-border); background: var(--t-surface); }
+
+.chat-input-field {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-size: 9px;
+  font-family: 'Inter', sans-serif;
+}
+
+.chat-input-field.ghost {
+  background: var(--g-panel);
+  border-color: var(--g-border);
+  color: var(--g-text);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.chat-input-field.tactical {
+  background: var(--t-panel);
+  border-color: var(--t-border);
+  color: var(--t-text);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.chat-send-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.chat-send-btn.ghost {
+  background: linear-gradient(135deg, #00FF41, #00C832);
+  color: #050f05;
+  box-shadow: 0 2px 10px rgba(0,255,65,0.25);
+}
+
+.chat-send-btn.tactical {
+  background: linear-gradient(135deg, #a8b8cc, #8898b0);
+  color: #0c0c0e;
+  box-shadow: 0 2px 10px rgba(168,184,204,0.15);
+}
+
+/* ============================================================
+   SCREEN: CONTACTS
+   ============================================================ */
+.contacts-header {
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid;
+}
+
+.contacts-header.ghost { border-color: var(--g-border); background: var(--g-surface); }
+.contacts-header.tactical { border-color: var(--t-border); background: var(--t-surface); }
+
+.contacts-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.contacts-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.contacts-title.ghost { color: var(--g-bright); }
+.contacts-title.tactical { color: var(--t-bright); }
+
+.contacts-add-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 300;
+  border: none;
+  cursor: pointer;
+}
+
+.contacts-add-btn.ghost {
+  background: rgba(0,255,65,0.12);
+  color: #00FF41;
+  border: 1px solid rgba(0,255,65,0.2);
+}
+
+.contacts-add-btn.tactical {
+  background: rgba(168,184,204,0.08);
+  color: #a8b8cc;
+  border: 1px solid rgba(168,184,204,0.15);
+}
+
+.contacts-search {
+  width: 100%;
+  padding: 5px 10px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-size: 9px;
+  font-family: 'Inter', sans-serif;
+}
+
+.contacts-search.ghost {
+  background: var(--g-panel);
+  border-color: var(--g-border);
+  color: var(--g-text);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.contacts-search.tactical {
+  background: var(--t-panel);
+  border-color: var(--t-border);
+  color: var(--t-text);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.contacts-list { flex: 1; overflow: hidden; padding: 4px 0; }
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  padding: 7px 12px;
+  gap: 9px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.contact-item.ghost:hover { background: rgba(0,255,65,0.04); }
+.contact-item.tactical:hover { background: rgba(168,184,204,0.03); }
+
+.contact-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.contact-avatar.ghost { background: rgba(0,255,65,0.08); color: #00FF41; border: 1px solid rgba(0,255,65,0.15); }
+.contact-avatar.tactical { background: rgba(168,184,204,0.07); color: #a8b8cc; border: 1px solid rgba(168,184,204,0.12); }
+.contact-avatar.online-ghost { box-shadow: 0 0 0 2px var(--g-bg), 0 0 0 3px #00C832; }
+.contact-avatar.online-tactical { box-shadow: 0 0 0 2px var(--t-bg), 0 0 0 3px #6888a0; }
+
+.contact-info { flex: 1; min-width: 0; }
+
+.contact-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.contact-name.ghost { color: var(--g-bright); }
+.contact-name.tactical { color: var(--t-bright); }
+
+.contact-handle { font-size: 8px; margin-top: 1px; }
+.contact-handle.ghost { color: var(--g-dim); }
+.contact-handle.tactical { color: var(--t-dim); }
+
+.contact-meta { font-size: 8px; }
+.contact-meta.ghost { color: var(--g-dim); }
+.contact-meta.tactical { color: var(--t-dim); }
+
+.contact-separator {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 12px 2px;
+}
+
+.contact-separator.ghost { color: rgba(0,255,65,0.4); }
+.contact-separator.tactical { color: rgba(168,184,204,0.35); }
+
+/* ============================================================
+   SCREEN: PROFILE
+   ============================================================ */
+.profile-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.profile-header.ghost { border-color: var(--g-border); background: var(--g-surface); }
+.profile-header.tactical { border-color: var(--t-border); background: var(--t-surface); }
+
+.profile-header-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.profile-header-title.ghost { color: var(--g-bright); }
+.profile-header-title.tactical { color: var(--t-bright); }
+
+.profile-edit-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid;
+  cursor: pointer;
+  background: transparent;
+  letter-spacing: 0.5px;
+}
+
+.profile-edit-btn.ghost { color: var(--g-accent); border-color: rgba(0,255,65,0.2); }
+.profile-edit-btn.tactical { color: var(--t-accent); border-color: rgba(168,184,204,0.2); }
+
+.profile-body { flex: 1; padding: 8px 12px; overflow: hidden; }
+
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  border: 1px solid;
+}
+
+.profile-hero.ghost {
+  background: var(--g-surface);
+  border-color: var(--g-border);
+  box-shadow: var(--g-shadow);
+}
+
+.profile-hero.tactical {
+  background: var(--t-surface);
+  border-color: var(--t-border);
+  box-shadow: var(--t-shadow);
+}
+
+.profile-big-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.profile-big-avatar.ghost {
+  background: rgba(0,255,65,0.1);
+  color: #00FF41;
+  border: 2px solid rgba(0,255,65,0.25);
+  box-shadow: 0 0 16px rgba(0,255,65,0.15);
+}
+
+.profile-big-avatar.tactical {
+  background: rgba(168,184,204,0.08);
+  color: #a8b8cc;
+  border: 2px solid rgba(168,184,204,0.2);
+  box-shadow: 0 0 16px rgba(168,184,204,0.08);
+}
+
+.profile-name-block { flex: 1; }
+
+.profile-display-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-display-name.ghost { color: var(--g-bright); }
+.profile-display-name.tactical { color: var(--t-bright); }
+
+.profile-handle { font-size: 8px; margin-top: 2px; }
+.profile-handle.ghost { color: var(--g-accent); }
+.profile-handle.tactical { color: var(--t-accent); }
+
+.profile-bio { font-size: 8px; margin-top: 3px; }
+.profile-bio.ghost { color: var(--g-text); }
+.profile-bio.tactical { color: var(--t-text); }
+
+.profile-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.stat-card {
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px solid;
+  text-align: center;
+}
+
+.stat-card.ghost {
+  background: var(--g-surface);
+  border-color: var(--g-border);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.stat-card.tactical {
+  background: var(--t-surface);
+  border-color: var(--t-border);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  display: block;
+}
+
+.stat-value.ghost { color: var(--g-accent); }
+.stat-value.tactical { color: var(--t-accent); }
+
+.stat-label { font-size: 7px; margin-top: 1px; display: block; }
+.stat-label.ghost { color: var(--g-dim); }
+.stat-label.tactical { color: var(--t-dim); }
+
+.profile-section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.profile-section-label.ghost { color: rgba(0,255,65,0.5); }
+.profile-section-label.tactical { color: rgba(168,184,204,0.4); }
+
+.profile-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid;
+  margin-bottom: 5px;
+}
+
+.profile-setting-row.ghost {
+  background: var(--g-surface);
+  border-color: var(--g-border);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.profile-setting-row.tactical {
+  background: var(--t-surface);
+  border-color: var(--t-border);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.setting-label { font-size: 9px; }
+.setting-label.ghost { color: var(--g-text); }
+.setting-label.tactical { color: var(--t-text); }
+
+.toggle {
+  width: 24px;
+  height: 13px;
+  border-radius: 7px;
+  position: relative;
+}
+
+.toggle.on.ghost { background: rgba(0,255,65,0.3); border: 1px solid rgba(0,255,65,0.4); }
+.toggle.on.tactical { background: rgba(168,184,204,0.2); border: 1px solid rgba(168,184,204,0.3); }
+.toggle.off.ghost { background: var(--g-panel); border: 1px solid var(--g-border); }
+.toggle.off.tactical { background: var(--t-panel); border: 1px solid var(--t-border); }
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  top: 1px;
+  transition: left 0.2s;
+}
+
+.toggle.on::after { left: 13px; }
+.toggle.off::after { left: 1px; }
+.toggle.on.ghost::after { background: #00FF41; }
+.toggle.on.tactical::after { background: #a8b8cc; }
+.toggle.off.ghost::after { background: var(--g-dim); }
+.toggle.off.tactical::after { background: var(--t-dim); }
+
+/* ============================================================
+   BOTTOM NAV
+   ============================================================ */
+.bottom-nav {
+  display: flex;
+  border-top: 1px solid;
+  padding: 6px 0 8px;
+}
+
+.bottom-nav.ghost { border-color: var(--g-border); background: var(--g-surface); }
+.bottom-nav.tactical { border-color: var(--t-border); background: var(--t-surface); }
+
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.nav-icon { font-size: 14px; line-height: 1; }
+.nav-label { font-family: 'JetBrains Mono', monospace; font-size: 6px; font-weight: 600; letter-spacing: 0.5px; }
+
+.nav-item.active.ghost .nav-icon,
+.nav-item.active.ghost .nav-label { color: #00FF41; }
+
+.nav-item.inactive.ghost .nav-icon,
+.nav-item.inactive.ghost .nav-label { color: var(--g-dim); }
+
+.nav-item.active.tactical .nav-icon,
+.nav-item.active.tactical .nav-label { color: #a8b8cc; }
+
+.nav-item.inactive.tactical .nav-icon,
+.nav-item.inactive.tactical .nav-label { color: var(--t-dim); }
+
+/* ============================================================
+   COLOUR SWATCHES SECTION
+   ============================================================ */
+.swatches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 10px;
+}
+
+.swatch {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.swatch-color {
+  height: 52px;
+}
+
+.swatch-info {
+  padding: 6px 8px;
+  background: #161620;
+}
+
+.swatch-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 600;
+  color: #8888a8;
+  display: block;
+}
+
+.swatch-hex {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #c0c0d8;
+  display: block;
+  margin-top: 1px;
+}
+
+/* ============================================================
+   TYPOGRAPHY SECTION
+   ============================================================ */
+.type-samples {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: #0e0e16;
+  border-radius: 12px;
+  border: 1px solid #1e1e2e;
+}
+
+.type-row {
+  display: flex;
+  align-items: baseline;
+  gap: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #181828;
+}
+
+.type-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+.type-meta {
+  width: 120px;
+  flex-shrink: 0;
+}
+
+.type-meta-name {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: #5050a0;
+  display: block;
+}
+
+.type-meta-spec {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  color: #383858;
+  display: block;
+  margin-top: 2px;
+}
+
+/* ============================================================
+   COMPONENT SHOWCASE
+   ============================================================ */
+.component-showcase {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.component-panel {
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid;
+}
+
+.component-panel.ghost {
+  background: var(--g-bg);
+  border-color: var(--g-border);
+}
+
+.component-panel.tactical {
+  background: var(--t-bg);
+  border-color: var(--t-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.component-panel.tactical::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cpath d='M0 0 L20 0 L10 15 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M20 0 L60 0 L45 20 L30 5 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M0 0 L10 15 L0 30 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M10 15 L30 5 L45 20 L25 35 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M0 30 L10 15 L25 35 L15 50 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M45 20 L60 10 L60 40 L50 35 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M25 35 L45 20 L50 35 L35 55 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M15 50 L25 35 L35 55 L20 60 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M35 55 L50 35 L60 40 L60 60 L35 60 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3Cpath d='M0 30 L15 50 L0 60 Z' fill='none' stroke='%23a8b8cc' stroke-width='0.4'/%3E%3C/svg%3E");
+  background-size: 60px 60px;
+  pointer-events: none;
+}
+
+.component-panel > * { position: relative; z-index: 1; }
+
+.comp-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid;
+  display: block;
+}
+
+.comp-label.ghost { color: rgba(0,255,65,0.5); border-color: rgba(0,255,65,0.1); }
+.comp-label.tactical { color: rgba(168,184,204,0.4); border-color: rgba(168,184,204,0.08); }
+
+.comp-sublabel {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 12px 0 6px;
+  display: block;
+}
+
+.comp-sublabel.ghost { color: rgba(0,255,65,0.35); }
+.comp-sublabel.tactical { color: rgba(168,184,204,0.3); }
+
+.comp-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+
+.showcase-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  margin-bottom: 8px;
+  outline: none;
+}
+
+.showcase-input.ghost {
+  background: var(--g-surface);
+  border-color: var(--g-border);
+  color: var(--g-bright);
+  box-shadow: var(--g-shadow);
+}
+
+.showcase-input.ghost:focus {
+  border-color: rgba(0,255,65,0.4);
+  box-shadow: 0 4px 20px rgba(0,255,65,0.15), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.showcase-input.tactical {
+  background: var(--t-surface);
+  border-color: var(--t-border);
+  color: var(--t-bright);
+  box-shadow: var(--t-shadow);
+}
+
+.showcase-input.tactical:focus {
+  border-color: rgba(168,184,204,0.3);
+  box-shadow: 0 4px 20px rgba(168,184,204,0.1), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.showcase-btn {
+  padding: 9px 18px;
+  border-radius: 11px;
+  border: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+
+.showcase-btn.g-primary {
+  background: linear-gradient(135deg, #00FF41, #00C832);
+  color: #050f05;
+  box-shadow: 0 4px 20px rgba(0,255,65,0.25), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.showcase-btn.g-secondary {
+  background: rgba(0,255,65,0.06);
+  color: #00FF41;
+  border: 1px solid rgba(0,255,65,0.2) !important;
+  box-shadow: 0 4px 20px rgba(0,255,65,0.06), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.showcase-btn.g-danger {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.25) !important;
+  box-shadow: 0 4px 20px rgba(239,68,68,0.08), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.showcase-btn.t-primary {
+  background: linear-gradient(135deg, #a8b8cc, #8898b0);
+  color: #0c0c0e;
+  box-shadow: 0 4px 20px rgba(168,184,204,0.15), 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.showcase-btn.t-secondary {
+  background: rgba(168,184,204,0.06);
+  color: #a8b8cc;
+  border: 1px solid rgba(168,184,204,0.18) !important;
+  box-shadow: 0 4px 20px rgba(168,184,204,0.04), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.showcase-btn.t-danger {
+  background: rgba(192,72,72,0.12);
+  color: #c04848;
+  border: 1px solid rgba(192,72,72,0.25) !important;
+  box-shadow: 0 4px 20px rgba(192,72,72,0.06), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.showcase-bubble-incoming {
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 4px 18px 18px 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.showcase-bubble-outgoing {
+  max-width: 70%;
+  padding: 10px 14px;
+  border-radius: 18px 4px 18px 18px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  margin-bottom: 8px;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.showcase-bubble-incoming.ghost {
+  background: var(--g-surface);
+  border: 1px solid var(--g-border);
+  color: var(--g-text);
+  box-shadow: var(--g-shadow-sm);
+}
+
+.showcase-bubble-outgoing.ghost {
+  background: rgba(0,255,65,0.09);
+  border: 1px solid rgba(0,255,65,0.18);
+  color: var(--g-bright);
+  box-shadow: 0 2px 10px rgba(0,255,65,0.08), 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.showcase-bubble-incoming.tactical {
+  background: var(--t-surface);
+  border: 1px solid var(--t-border);
+  color: var(--t-text);
+  box-shadow: var(--t-shadow-sm);
+}
+
+.showcase-bubble-outgoing.tactical {
+  background: rgba(104,136,160,0.14);
+  border: 1px solid rgba(168,184,204,0.14);
+  color: var(--t-bright);
+  box-shadow: 0 2px 10px rgba(168,184,204,0.05), 0 1px 4px rgba(0,0,0,0.3);
+}
+
+.showcase-card {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid;
+  margin-bottom: 8px;
+}
+
+.showcase-card.ghost {
+  background: var(--g-surface);
+  border-color: var(--g-border);
+  box-shadow: var(--g-shadow);
+}
+
+.showcase-card.tactical {
+  background: var(--t-surface);
+  border-color: var(--t-border);
+  box-shadow: var(--t-shadow);
+}
+
+.card-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.card-title.ghost { color: var(--g-bright); }
+.card-title.tactical { color: var(--t-bright); }
+
+.card-body-text { font-size: 12px; }
+.card-body-text.ghost { color: var(--g-text); }
+.card-body-text.tactical { color: var(--t-text); }
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #2a2a3a 30%, #2a2a3a 70%, transparent);
+  margin: 56px 0;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.doc-footer {
+  border-top: 1px solid #1e1e2e;
+  padding-top: 24px;
+  margin-top: 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #3a3a5a;
+}
+
+.doc-footer strong { color: #5a5a8a; font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+<div class="doc-wrapper">
+
+  <!-- ============================================================
+       TITLE PAGE
+       ============================================================ -->
+  <div class="title-page">
+    <div class="title-badge">Design Specification Document</div>
+    <h1 class="title-main">nano-<span>SYNAPSYS</span></h1>
+    <p class="title-sub">Design Overhaul v2.0 — Dual Skin System</p>
+    <div class="title-meta">
+      <span><strong>Skins:</strong> GHOST (green) / TACTICAL (dark steel)</span>
+      <span><strong>Screens:</strong> Login, Chat, Contacts, Profile</span>
+      <span><strong>Version:</strong> 2.0.0</span>
+      <span><strong>Date:</strong> 2026-02-25</span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SECTION 1: COLOUR PALETTE
+       ============================================================ -->
+  <div class="doc-section">
+    <div class="section-header">
+      <span class="section-number">01</span>
+      <h2 class="section-title">Colour Palette</h2>
+      <span class="section-desc">Brand tokens for both skin systems</span>
+    </div>
+
+    <div class="two-col">
+      <!-- GHOST swatches -->
+      <div>
+        <span class="skin-col-label ghost">GHOST Skin</span>
+        <div class="swatches-grid">
+          <div class="swatch"><div class="swatch-color" style="background:#050f05"></div><div class="swatch-info"><span class="swatch-name">bg</span><span class="swatch-hex">#050f05</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#0a1a0a"></div><div class="swatch-info"><span class="swatch-name">surface</span><span class="swatch-hex">#0a1a0a</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#0d200d"></div><div class="swatch-info"><span class="swatch-name">panel</span><span class="swatch-hex">#0d200d</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#00FF41"></div><div class="swatch-info"><span class="swatch-name">accent</span><span class="swatch-hex">#00FF41</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#00C832"></div><div class="swatch-info"><span class="swatch-name">green</span><span class="swatch-hex">#00C832</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#aad0aa"></div><div class="swatch-info"><span class="swatch-name">text</span><span class="swatch-hex">#aad0aa</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#e8f8e8"></div><div class="swatch-info"><span class="swatch-name">bright</span><span class="swatch-hex">#e8f8e8</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#1a3a1a"></div><div class="swatch-info"><span class="swatch-name">border</span><span class="swatch-hex">#1a3a1a</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#4a8a4a"></div><div class="swatch-info"><span class="swatch-name">dim</span><span class="swatch-hex">#4a8a4a</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#ef4444"></div><div class="swatch-info"><span class="swatch-name">red</span><span class="swatch-hex">#ef4444</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#f59e0b"></div><div class="swatch-info"><span class="swatch-name">amber</span><span class="swatch-hex">#f59e0b</span></div></div>
+        </div>
+      </div>
+
+      <!-- TACTICAL swatches -->
+      <div>
+        <span class="skin-col-label tactical">TACTICAL Skin</span>
+        <div class="swatches-grid">
+          <div class="swatch"><div class="swatch-color" style="background:#0c0c0e"></div><div class="swatch-info"><span class="swatch-name">bg</span><span class="swatch-hex">#0c0c0e</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#141418"></div><div class="swatch-info"><span class="swatch-name">surface</span><span class="swatch-hex">#141418</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#1a1a22"></div><div class="swatch-info"><span class="swatch-name">panel</span><span class="swatch-hex">#1a1a22</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#a8b8cc"></div><div class="swatch-info"><span class="swatch-name">accent</span><span class="swatch-hex">#a8b8cc</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#6888a0"></div><div class="swatch-info"><span class="swatch-name">green</span><span class="swatch-hex">#6888a0</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#9090a8"></div><div class="swatch-info"><span class="swatch-name">text</span><span class="swatch-hex">#9090a8</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#d8d8ec"></div><div class="swatch-info"><span class="swatch-name">bright</span><span class="swatch-hex">#d8d8ec</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#28283a"></div><div class="swatch-info"><span class="swatch-name">border</span><span class="swatch-hex">#28283a</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#505068"></div><div class="swatch-info"><span class="swatch-name">dim</span><span class="swatch-hex">#505068</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#c04848"></div><div class="swatch-info"><span class="swatch-name">red</span><span class="swatch-hex">#c04848</span></div></div>
+          <div class="swatch"><div class="swatch-color" style="background:#b89060"></div><div class="swatch-info"><span class="swatch-name">amber</span><span class="swatch-hex">#b89060</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- ============================================================
+       SECTION 2: TYPOGRAPHY
+       ============================================================ -->
+  <div class="doc-section">
+    <div class="section-header">
+      <span class="section-number">02</span>
+      <h2 class="section-title">Typography</h2>
+      <span class="section-desc">JetBrains Mono (headers/labels) + Inter (body/inputs)</span>
+    </div>
+
+    <div class="type-samples">
+      <div class="type-row">
+        <div class="type-meta">
+          <span class="type-meta-name">H1 / Screen Title</span>
+          <span class="type-meta-spec">JetBrains Mono 700<br>28px / -0.5px</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:700;color:#e8f8e8;letter-spacing:-0.5px;">nano-SYNAPSYS</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">
+          <span class="type-meta-name">H2 / Section Head</span>
+          <span class="type-meta-spec">JetBrains Mono 600<br>18px / -0.3px</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:600;color:#d8d8ec;letter-spacing:-0.3px;">CONTACTS — 24 Online</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">
+          <span class="type-meta-name">Label / Tag</span>
+          <span class="type-meta-spec">JetBrains Mono 700<br>11px / 2px UC</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:#00FF41;letter-spacing:2px;text-transform:uppercase;">ENCRYPTED CHANNEL</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">
+          <span class="type-meta-name">Body / Message</span>
+          <span class="type-meta-spec">Inter 400<br>14px / 1.5</span>
+        </div>
+        <div style="font-family:'Inter',sans-serif;font-size:14px;font-weight:400;color:#aad0aa;line-height:1.5;max-width:480px;">Secure end-to-end encrypted messaging with zero metadata retention. Your conversations stay private.</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">
+          <span class="type-meta-name">Input Placeholder</span>
+          <span class="type-meta-spec">Inter 400<br>13px, opacity 0.35</span>
+        </div>
+        <div style="font-family:'Inter',sans-serif;font-size:13px;font-weight:400;color:#aad0aa;opacity:0.35;">Enter your callsign or handle...</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">
+          <span class="type-meta-name">Code / Monospace</span>
+          <span class="type-meta-spec">JetBrains Mono 400<br>12px, #00FF41</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#00FF41;">AES-256-GCM :: HMAC-SHA512 :: EC-P384</div>
+      </div>
+      <div class="type-row">
+        <div class="type-meta">
+          <span class="type-meta-name">Timestamp / Meta</span>
+          <span class="type-meta-spec">JetBrains Mono 400<br>9px, dim</span>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#4a8a4a;">14:32:07 — DELIVERED</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- ============================================================
+       SECTION 3: COMPONENT SHOWCASE
+       ============================================================ -->
+  <div class="doc-section">
+    <div class="section-header">
+      <span class="section-number">03</span>
+      <h2 class="section-title">Component Showcase</h2>
+      <span class="section-desc">Inputs, Buttons, Bubbles, Cards — side by side</span>
+    </div>
+
+    <div class="component-showcase">
+
+      <!-- GHOST Components -->
+      <div class="component-panel ghost">
+        <span class="comp-label ghost">GHOST — Component Library</span>
+
+        <span class="comp-sublabel ghost">Inputs (radius: 12px, floating shadow)</span>
+        <input class="showcase-input ghost" type="text" placeholder="Callsign or handle..." value="GHOST_OPS">
+        <input class="showcase-input ghost" type="text" placeholder="Passphrase..." style="font-family:'JetBrains Mono',monospace;letter-spacing:3px;" value="••••••••••••">
+
+        <span class="comp-sublabel ghost">Buttons (radius: 10–12px, floating shadow)</span>
+        <div class="comp-row">
+          <button class="showcase-btn g-primary">CONNECT</button>
+          <button class="showcase-btn g-secondary">CANCEL</button>
+          <button class="showcase-btn g-danger">WIPE</button>
+        </div>
+
+        <span class="comp-sublabel ghost">Message Bubbles (radius: 18px, WhatsApp-style)</span>
+        <div class="showcase-bubble-incoming ghost">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#00FF41;margin-bottom:3px;">ALPHA_BASE</div>
+          Sector 7 is clear. Proceed on schedule.
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#4a8a4a;margin-top:4px;text-align:right;">14:32 ✓✓</div>
+        </div>
+        <div class="showcase-bubble-outgoing ghost">
+          Copy that. Moving in 60 seconds.
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#4a8a4a;margin-top:4px;text-align:right;">14:33 ✓✓</div>
+        </div>
+
+        <span class="comp-sublabel ghost">Cards (radius: 12px, elevated shadow)</span>
+        <div class="showcase-card ghost">
+          <div class="card-title ghost">Encrypted Channel</div>
+          <div class="card-body-text ghost">AES-256-GCM · 2 participants · 147 messages</div>
+          <div style="margin-top:8px;display:flex;gap:6px;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:rgba(0,255,65,0.08);border:1px solid rgba(0,255,65,0.15);color:#00FF41;padding:2px 7px;border-radius:5px;">SECURE</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:rgba(0,200,50,0.06);border:1px solid rgba(0,200,50,0.12);color:#00C832;padding:2px 7px;border-radius:5px;">ONLINE</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- TACTICAL Components -->
+      <div class="component-panel tactical">
+        <span class="comp-label tactical">TACTICAL — Component Library</span>
+
+        <span class="comp-sublabel tactical">Inputs (radius: 12px, floating shadow)</span>
+        <input class="showcase-input tactical" type="text" placeholder="Operator ID..." value="UNIT_BRAVO">
+        <input class="showcase-input tactical" type="text" placeholder="Access code..." style="font-family:'JetBrains Mono',monospace;letter-spacing:3px;" value="••••••••••••">
+
+        <span class="comp-sublabel tactical">Buttons (radius: 10–12px, floating shadow)</span>
+        <div class="comp-row">
+          <button class="showcase-btn t-primary">CONNECT</button>
+          <button class="showcase-btn t-secondary">CANCEL</button>
+          <button class="showcase-btn t-danger">WIPE</button>
+        </div>
+
+        <span class="comp-sublabel tactical">Message Bubbles (radius: 18px, WhatsApp-style)</span>
+        <div class="showcase-bubble-incoming tactical">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#a8b8cc;margin-bottom:3px;">COMMAND_NET</div>
+          Perimeter secured. All units report in.
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#505068;margin-top:4px;text-align:right;">14:32 ✓✓</div>
+        </div>
+        <div class="showcase-bubble-outgoing tactical">
+          Unit 4 reporting. Position confirmed.
+          <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#505068;margin-top:4px;text-align:right;">14:33 ✓✓</div>
+        </div>
+
+        <span class="comp-sublabel tactical">Cards (radius: 12px, elevated shadow)</span>
+        <div class="showcase-card tactical">
+          <div class="card-title tactical">Encrypted Channel</div>
+          <div class="card-body-text tactical">AES-256-GCM · 2 participants · 147 messages</div>
+          <div style="margin-top:8px;display:flex;gap:6px;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:rgba(168,184,204,0.07);border:1px solid rgba(168,184,204,0.15);color:#a8b8cc;padding:2px 7px;border-radius:5px;">SECURE</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;background:rgba(104,136,160,0.06);border:1px solid rgba(104,136,160,0.12);color:#6888a0;padding:2px 7px;border-radius:5px;">ONLINE</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- ============================================================
+       SECTION 4: LOGIN SCREEN
+       ============================================================ -->
+  <div class="doc-section">
+    <div class="section-header">
+      <span class="section-number">04</span>
+      <h2 class="section-title">Screen — Login</h2>
+      <span class="section-desc">Authentication entry point, both skins</span>
+    </div>
+
+    <div class="two-col">
+
+      <!-- GHOST Login -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label ghost">GHOST Skin</span>
+        <div class="phone-outer ghost-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen ghost-screen">
+            <div class="screen-content">
+              <div class="status-bar ghost">
+                <span>09:41</span>
+                <div class="status-icons"><span>▲▲▲</span><span>WiFi</span><span>100%</span></div>
+              </div>
+              <div class="login-screen">
+                <div class="login-logo-area">
+                  <div class="login-logo-hex ghost">NS</div>
+                  <span class="login-app-name ghost">nano-SYNAPSYS</span>
+                  <span class="login-tagline ghost">Secure Comms Platform</span>
+                </div>
+                <div class="login-form">
+                  <div class="ui-input-wrap">
+                    <label class="ui-input-label ghost">Callsign</label>
+                    <input class="ui-input ghost" type="text" value="GHOST_OPS" readonly>
+                  </div>
+                  <div class="ui-input-wrap">
+                    <label class="ui-input-label ghost">Passphrase</label>
+                    <input class="ui-input ghost" type="password" value="passphrase" readonly>
+                  </div>
+                  <button class="ui-btn ghost-primary">AUTHENTICATE</button>
+                  <div class="login-divider ghost">OR</div>
+                  <button class="ui-btn ghost-secondary">SCAN QR CODE</button>
+                </div>
+                <div class="login-footer ghost">
+                  v2.0.0 · AES-256-GCM · E2E Encrypted
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TACTICAL Login -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label tactical">TACTICAL Skin</span>
+        <div class="phone-outer tactical-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen tactical-screen">
+            <div class="tactical-texture"></div>
+            <div class="screen-content">
+              <div class="status-bar tactical">
+                <span>09:41</span>
+                <div class="status-icons"><span>▲▲▲</span><span>WiFi</span><span>100%</span></div>
+              </div>
+              <div class="login-screen">
+                <div class="login-logo-area">
+                  <div class="login-logo-hex tactical">NS</div>
+                  <span class="login-app-name tactical">nano-SYNAPSYS</span>
+                  <span class="login-tagline tactical">Secure Comms Platform</span>
+                </div>
+                <div class="login-form">
+                  <div class="ui-input-wrap">
+                    <label class="ui-input-label tactical">Operator ID</label>
+                    <input class="ui-input tactical" type="text" value="UNIT_BRAVO" readonly>
+                  </div>
+                  <div class="ui-input-wrap">
+                    <label class="ui-input-label tactical">Access Code</label>
+                    <input class="ui-input tactical" type="password" value="accesscode" readonly>
+                  </div>
+                  <button class="ui-btn tactical-primary">AUTHENTICATE</button>
+                  <div class="login-divider tactical">OR</div>
+                  <button class="ui-btn tactical-secondary">SCAN QR CODE</button>
+                </div>
+                <div class="login-footer tactical">
+                  v2.0.0 · AES-256-GCM · E2E Encrypted
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- ============================================================
+       SECTION 5: CHAT SCREEN
+       ============================================================ -->
+  <div class="doc-section">
+    <div class="section-header">
+      <span class="section-number">05</span>
+      <h2 class="section-title">Screen — Chat</h2>
+      <span class="section-desc">Message thread with WhatsApp-style bubbles</span>
+    </div>
+
+    <div class="two-col">
+
+      <!-- GHOST Chat -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label ghost">GHOST Skin</span>
+        <div class="phone-outer ghost-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen ghost-screen">
+            <div class="screen-content">
+              <div class="status-bar ghost">
+                <span>14:33</span>
+                <div class="status-icons"><span>▲▲▲</span><span>100%</span></div>
+              </div>
+              <div class="chat-header ghost">
+                <div class="chat-avatar ghost">AB</div>
+                <div class="chat-contact-info">
+                  <div class="chat-contact-name ghost">ALPHA_BASE</div>
+                  <div class="chat-contact-status ghost">● Online · Encrypted</div>
+                </div>
+                <div class="chat-header-icons ghost"><span>☎</span><span>⋮</span></div>
+              </div>
+              <div class="chat-messages" style="flex:1;">
+                <div class="msg-bubble ghost incoming">
+                  <div class="msg-sender ghost">ALPHA_BASE</div>
+                  Sector 7 is clear. Proceed on schedule.
+                  <div class="msg-time">14:30 ✓✓</div>
+                </div>
+                <div class="msg-bubble ghost outgoing">
+                  Copy that. Moving in 60 seconds.
+                  <div class="msg-time">14:31 ✓✓</div>
+                </div>
+                <div class="msg-bubble ghost incoming">
+                  <div class="msg-sender ghost">ALPHA_BASE</div>
+                  Confirm when in position.
+                  <div class="msg-time">14:32 ✓</div>
+                </div>
+                <div class="msg-bubble ghost outgoing">
+                  In position. All clear.
+                  <div class="msg-time">14:33 ✓</div>
+                </div>
+                <div class="msg-bubble ghost incoming">
+                  <div class="msg-sender ghost">ALPHA_BASE</div>
+                  Good. Stand by for signal.
+                  <div class="msg-time">14:33 ●</div>
+                </div>
+              </div>
+              <div class="chat-input-bar ghost">
+                <input class="chat-input-field ghost" type="text" placeholder="Type a message..." readonly>
+                <button class="chat-send-btn ghost">↑</button>
+              </div>
+              <div class="bottom-nav ghost">
+                <div class="nav-item inactive ghost"><span class="nav-icon">◎</span><span class="nav-label">Feed</span></div>
+                <div class="nav-item active ghost"><span class="nav-icon">✉</span><span class="nav-label">Chat</span></div>
+                <div class="nav-item inactive ghost"><span class="nav-icon">◉</span><span class="nav-label">Contacts</span></div>
+                <div class="nav-item inactive ghost"><span class="nav-icon">☰</span><span class="nav-label">Profile</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TACTICAL Chat -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label tactical">TACTICAL Skin</span>
+        <div class="phone-outer tactical-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen tactical-screen">
+            <div class="tactical-texture"></div>
+            <div class="screen-content">
+              <div class="status-bar tactical">
+                <span>14:33</span>
+                <div class="status-icons"><span>▲▲▲</span><span>100%</span></div>
+              </div>
+              <div class="chat-header tactical">
+                <div class="chat-avatar tactical">CN</div>
+                <div class="chat-contact-info">
+                  <div class="chat-contact-name tactical">COMMAND_NET</div>
+                  <div class="chat-contact-status tactical">● Online · Encrypted</div>
+                </div>
+                <div class="chat-header-icons tactical"><span>☎</span><span>⋮</span></div>
+              </div>
+              <div class="chat-messages" style="flex:1;">
+                <div class="msg-bubble tactical incoming">
+                  <div class="msg-sender tactical">COMMAND_NET</div>
+                  Perimeter secured. All units report in.
+                  <div class="msg-time">14:30 ✓✓</div>
+                </div>
+                <div class="msg-bubble tactical outgoing">
+                  Unit 4 confirming. Position secure.
+                  <div class="msg-time">14:31 ✓✓</div>
+                </div>
+                <div class="msg-bubble tactical incoming">
+                  <div class="msg-sender tactical">COMMAND_NET</div>
+                  Acknowledged. Maintain radio silence.
+                  <div class="msg-time">14:32 ✓</div>
+                </div>
+                <div class="msg-bubble tactical outgoing">
+                  Wilco. Out.
+                  <div class="msg-time">14:33 ✓</div>
+                </div>
+                <div class="msg-bubble tactical incoming">
+                  <div class="msg-sender tactical">COMMAND_NET</div>
+                  Op begins at 15:00 hrs.
+                  <div class="msg-time">14:33 ●</div>
+                </div>
+              </div>
+              <div class="chat-input-bar tactical">
+                <input class="chat-input-field tactical" type="text" placeholder="Type a message..." readonly>
+                <button class="chat-send-btn tactical">↑</button>
+              </div>
+              <div class="bottom-nav tactical">
+                <div class="nav-item inactive tactical"><span class="nav-icon">◎</span><span class="nav-label">Feed</span></div>
+                <div class="nav-item active tactical"><span class="nav-icon">✉</span><span class="nav-label">Chat</span></div>
+                <div class="nav-item inactive tactical"><span class="nav-icon">◉</span><span class="nav-label">Contacts</span></div>
+                <div class="nav-item inactive tactical"><span class="nav-icon">☰</span><span class="nav-label">Profile</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- ============================================================
+       SECTION 6: CONTACTS SCREEN
+       ============================================================ -->
+  <div class="doc-section">
+    <div class="section-header">
+      <span class="section-number">06</span>
+      <h2 class="section-title">Screen — Contacts</h2>
+      <span class="section-desc">Operator directory with search and online status</span>
+    </div>
+
+    <div class="two-col">
+
+      <!-- GHOST Contacts -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label ghost">GHOST Skin</span>
+        <div class="phone-outer ghost-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen ghost-screen">
+            <div class="screen-content">
+              <div class="status-bar ghost">
+                <span>09:41</span>
+                <div class="status-icons"><span>▲▲▲</span><span>100%</span></div>
+              </div>
+              <div class="contacts-header ghost">
+                <div class="contacts-title-row">
+                  <span class="contacts-title ghost">Contacts</span>
+                  <button class="contacts-add-btn ghost">+</button>
+                </div>
+                <input class="contacts-search ghost" type="text" placeholder="Search operators..." readonly>
+              </div>
+              <div class="contacts-list">
+                <div class="contact-separator ghost">— ONLINE (3)</div>
+                <div class="contact-item ghost">
+                  <div class="contact-avatar ghost online-ghost">AB</div>
+                  <div class="contact-info">
+                    <div class="contact-name ghost">ALPHA_BASE</div>
+                    <div class="contact-handle ghost">@alpha.base · Sector 7</div>
+                  </div>
+                  <div class="contact-meta ghost">14:33</div>
+                </div>
+                <div class="contact-item ghost">
+                  <div class="contact-avatar ghost online-ghost">GX</div>
+                  <div class="contact-info">
+                    <div class="contact-name ghost">GHOST_X</div>
+                    <div class="contact-handle ghost">@ghost.x · Recon</div>
+                  </div>
+                  <div class="contact-meta ghost">14:20</div>
+                </div>
+                <div class="contact-item ghost">
+                  <div class="contact-avatar ghost online-ghost">SR</div>
+                  <div class="contact-info">
+                    <div class="contact-name ghost">SHADOW_RUN</div>
+                    <div class="contact-handle ghost">@shadow.run</div>
+                  </div>
+                  <div class="contact-meta ghost">14:01</div>
+                </div>
+                <div class="contact-separator ghost">— OFFLINE (2)</div>
+                <div class="contact-item ghost">
+                  <div class="contact-avatar ghost">DX</div>
+                  <div class="contact-info">
+                    <div class="contact-name ghost">DELTA_X</div>
+                    <div class="contact-handle ghost">@delta.x</div>
+                  </div>
+                  <div class="contact-meta ghost">2h ago</div>
+                </div>
+                <div class="contact-item ghost">
+                  <div class="contact-avatar ghost">NR</div>
+                  <div class="contact-info">
+                    <div class="contact-name ghost">NIGHT_RECON</div>
+                    <div class="contact-handle ghost">@night.recon</div>
+                  </div>
+                  <div class="contact-meta ghost">1d ago</div>
+                </div>
+              </div>
+              <div class="bottom-nav ghost">
+                <div class="nav-item inactive ghost"><span class="nav-icon">◎</span><span class="nav-label">Feed</span></div>
+                <div class="nav-item inactive ghost"><span class="nav-icon">✉</span><span class="nav-label">Chat</span></div>
+                <div class="nav-item active ghost"><span class="nav-icon">◉</span><span class="nav-label">Contacts</span></div>
+                <div class="nav-item inactive ghost"><span class="nav-icon">☰</span><span class="nav-label">Profile</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TACTICAL Contacts -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label tactical">TACTICAL Skin</span>
+        <div class="phone-outer tactical-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen tactical-screen">
+            <div class="tactical-texture"></div>
+            <div class="screen-content">
+              <div class="status-bar tactical">
+                <span>09:41</span>
+                <div class="status-icons"><span>▲▲▲</span><span>100%</span></div>
+              </div>
+              <div class="contacts-header tactical">
+                <div class="contacts-title-row">
+                  <span class="contacts-title tactical">Contacts</span>
+                  <button class="contacts-add-btn tactical">+</button>
+                </div>
+                <input class="contacts-search tactical" type="text" placeholder="Search operators..." readonly>
+              </div>
+              <div class="contacts-list">
+                <div class="contact-separator tactical">— ONLINE (3)</div>
+                <div class="contact-item tactical">
+                  <div class="contact-avatar tactical online-tactical">CN</div>
+                  <div class="contact-info">
+                    <div class="contact-name tactical">COMMAND_NET</div>
+                    <div class="contact-handle tactical">@cmd.net · HQ</div>
+                  </div>
+                  <div class="contact-meta tactical">14:33</div>
+                </div>
+                <div class="contact-item tactical">
+                  <div class="contact-avatar tactical online-tactical">U4</div>
+                  <div class="contact-info">
+                    <div class="contact-name tactical">UNIT_FOUR</div>
+                    <div class="contact-handle tactical">@unit.4 · Field</div>
+                  </div>
+                  <div class="contact-meta tactical">14:22</div>
+                </div>
+                <div class="contact-item tactical">
+                  <div class="contact-avatar tactical online-tactical">BR</div>
+                  <div class="contact-info">
+                    <div class="contact-name tactical">BRAVO_LEAD</div>
+                    <div class="contact-handle tactical">@bravo.lead</div>
+                  </div>
+                  <div class="contact-meta tactical">14:05</div>
+                </div>
+                <div class="contact-separator tactical">— OFFLINE (2)</div>
+                <div class="contact-item tactical">
+                  <div class="contact-avatar tactical">FW</div>
+                  <div class="contact-info">
+                    <div class="contact-name tactical">FORWARD_OBS</div>
+                    <div class="contact-handle tactical">@fwd.obs</div>
+                  </div>
+                  <div class="contact-meta tactical">3h ago</div>
+                </div>
+                <div class="contact-item tactical">
+                  <div class="contact-avatar tactical">QR</div>
+                  <div class="contact-info">
+                    <div class="contact-name tactical">QRF_BRAVO</div>
+                    <div class="contact-handle tactical">@qrf.bravo</div>
+                  </div>
+                  <div class="contact-meta tactical">1d ago</div>
+                </div>
+              </div>
+              <div class="bottom-nav tactical">
+                <div class="nav-item inactive tactical"><span class="nav-icon">◎</span><span class="nav-label">Feed</span></div>
+                <div class="nav-item inactive tactical"><span class="nav-icon">✉</span><span class="nav-label">Chat</span></div>
+                <div class="nav-item active tactical"><span class="nav-icon">◉</span><span class="nav-label">Contacts</span></div>
+                <div class="nav-item inactive tactical"><span class="nav-icon">☰</span><span class="nav-label">Profile</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="section-divider"></div>
+
+  <!-- ============================================================
+       SECTION 7: PROFILE SCREEN
+       ============================================================ -->
+  <div class="doc-section">
+    <div class="section-header">
+      <span class="section-number">07</span>
+      <h2 class="section-title">Screen — Profile</h2>
+      <span class="section-desc">User settings, stats, and skin toggle</span>
+    </div>
+
+    <div class="two-col">
+
+      <!-- GHOST Profile -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label ghost">GHOST Skin</span>
+        <div class="phone-outer ghost-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen ghost-screen">
+            <div class="screen-content">
+              <div class="status-bar ghost">
+                <span>09:41</span>
+                <div class="status-icons"><span>▲▲▲</span><span>100%</span></div>
+              </div>
+              <div class="profile-header ghost">
+                <span class="profile-header-title ghost">Profile</span>
+                <button class="profile-edit-btn ghost">EDIT</button>
+              </div>
+              <div class="profile-body">
+                <div class="profile-hero ghost">
+                  <div class="profile-big-avatar ghost">GO</div>
+                  <div class="profile-name-block">
+                    <div class="profile-display-name ghost">GHOST_OPS</div>
+                    <div class="profile-handle ghost">@ghost.ops</div>
+                    <div class="profile-bio ghost">Shadow operative. Always encrypted.</div>
+                  </div>
+                </div>
+                <div class="profile-stats">
+                  <div class="stat-card ghost">
+                    <span class="stat-value ghost">147</span>
+                    <span class="stat-label ghost">Messages</span>
+                  </div>
+                  <div class="stat-card ghost">
+                    <span class="stat-value ghost">24</span>
+                    <span class="stat-label ghost">Contacts</span>
+                  </div>
+                  <div class="stat-card ghost">
+                    <span class="stat-value ghost">98%</span>
+                    <span class="stat-label ghost">Uptime</span>
+                  </div>
+                </div>
+                <div class="profile-section-label ghost">SETTINGS</div>
+                <div class="profile-setting-row ghost">
+                  <span class="setting-label ghost">End-to-End Encryption</span>
+                  <div class="toggle on ghost"></div>
+                </div>
+                <div class="profile-setting-row ghost">
+                  <span class="setting-label ghost">Disappearing Messages</span>
+                  <div class="toggle on ghost"></div>
+                </div>
+                <div class="profile-setting-row ghost">
+                  <span class="setting-label ghost">Read Receipts</span>
+                  <div class="toggle off ghost"></div>
+                </div>
+                <div class="profile-section-label ghost" style="margin-top:8px;">APPEARANCE</div>
+                <div class="profile-setting-row ghost">
+                  <span class="setting-label ghost">Active Skin: GHOST</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:#00FF41;">●</span>
+                </div>
+              </div>
+              <div class="bottom-nav ghost">
+                <div class="nav-item inactive ghost"><span class="nav-icon">◎</span><span class="nav-label">Feed</span></div>
+                <div class="nav-item inactive ghost"><span class="nav-icon">✉</span><span class="nav-label">Chat</span></div>
+                <div class="nav-item inactive ghost"><span class="nav-icon">◉</span><span class="nav-label">Contacts</span></div>
+                <div class="nav-item active ghost"><span class="nav-icon">☰</span><span class="nav-label">Profile</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TACTICAL Profile -->
+      <div class="phone-frame-wrap">
+        <span class="skin-col-label tactical">TACTICAL Skin</span>
+        <div class="phone-outer tactical-frame">
+          <div class="phone-notch"><div class="camera"></div><div class="speaker"></div><div class="camera"></div></div>
+          <div class="phone-screen tactical-screen">
+            <div class="tactical-texture"></div>
+            <div class="screen-content">
+              <div class="status-bar tactical">
+                <span>09:41</span>
+                <div class="status-icons"><span>▲▲▲</span><span>100%</span></div>
+              </div>
+              <div class="profile-header tactical">
+                <span class="profile-header-title tactical">Profile</span>
+                <button class="profile-edit-btn tactical">EDIT</button>
+              </div>
+              <div class="profile-body">
+                <div class="profile-hero tactical">
+                  <div class="profile-big-avatar tactical">UB</div>
+                  <div class="profile-name-block">
+                    <div class="profile-display-name tactical">UNIT_BRAVO</div>
+                    <div class="profile-handle tactical">@unit.bravo</div>
+                    <div class="profile-bio tactical">Field operative. Tactical comms specialist.</div>
+                  </div>
+                </div>
+                <div class="profile-stats">
+                  <div class="stat-card tactical">
+                    <span class="stat-value tactical">293</span>
+                    <span class="stat-label tactical">Messages</span>
+                  </div>
+                  <div class="stat-card tactical">
+                    <span class="stat-value tactical">18</span>
+                    <span class="stat-label tactical">Contacts</span>
+                  </div>
+                  <div class="stat-card tactical">
+                    <span class="stat-value tactical">99%</span>
+                    <span class="stat-label tactical">Uptime</span>
+                  </div>
+                </div>
+                <div class="profile-section-label tactical">SETTINGS</div>
+                <div class="profile-setting-row tactical">
+                  <span class="setting-label tactical">End-to-End Encryption</span>
+                  <div class="toggle on tactical"></div>
+                </div>
+                <div class="profile-setting-row tactical">
+                  <span class="setting-label tactical">Disappearing Messages</span>
+                  <div class="toggle on tactical"></div>
+                </div>
+                <div class="profile-setting-row tactical">
+                  <span class="setting-label tactical">Read Receipts</span>
+                  <div class="toggle off tactical"></div>
+                </div>
+                <div class="profile-section-label tactical" style="margin-top:8px;">APPEARANCE</div>
+                <div class="profile-setting-row tactical">
+                  <span class="setting-label tactical">Active Skin: TACTICAL</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:#a8b8cc;">●</span>
+                </div>
+              </div>
+              <div class="bottom-nav tactical">
+                <div class="nav-item inactive tactical"><span class="nav-icon">◎</span><span class="nav-label">Feed</span></div>
+                <div class="nav-item inactive tactical"><span class="nav-icon">✉</span><span class="nav-label">Chat</span></div>
+                <div class="nav-item inactive tactical"><span class="nav-icon">◉</span><span class="nav-label">Contacts</span></div>
+                <div class="nav-item active tactical"><span class="nav-icon">☰</span><span class="nav-label">Profile</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FOOTER
+       ============================================================ -->
+  <div class="doc-footer">
+    <span><strong>nano-SYNAPSYS</strong> Design Overhaul v2.0 — Dual Skin Specification</span>
+    <span>Screens: Login · Chat · Contacts · Profile</span>
+    <span>2026-02-25 · Confidential</span>
+  </div>
+
+</div>
+</body>
+</html>

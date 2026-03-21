@@ -1,0 +1,23 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 02 — PIN login (assumes account already exists on this device)
+- launchApp:
+    clearState: false
+
+# Should land on login screen
+- assertVisible: "ENTER PIN"
+
+# Enter 6-digit PIN
+- tapOn: "1"
+- tapOn: "2"
+- tapOn: "3"
+- tapOn: "4"
+- tapOn: "5"
+- tapOn: "6"
+- tapOn: "UNLOCK"
+
+# Should land on home screen
+- assertVisible: "SYNAPTYC"
+- assertVisible:
+    text: "CHATS"
+    optional: true

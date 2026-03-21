@@ -1,0 +1,105 @@
+{
+  "expo": {
+    "name": "SYNAPTYC",
+    "slug": "nano-synapsys",
+    "version": "1.4.2",
+    "scheme": "synaptyc",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#050f05",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#050f05"
+    },
+    "ios": {
+      "bundleIdentifier": "com.aievolution.synaptyc",
+      "buildNumber": "75",
+      "supportsTablet": false,
+      "icon": "./assets/icon.png",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "SYNAPTYC uses Face ID to protect your secure messages.",
+        "NSContactsUsageDescription": "SYNAPTYC reads your contacts so you can invite them to join.",
+        "NSCameraUsageDescription": "SYNAPTYC uses the camera to capture images for chat.",
+        "NSPhotoLibraryUsageDescription": "SYNAPTYC accesses your photos to send images in chat.",
+        "NSLocationWhenInUseUsageDescription": "SYNAPTYC uses your location to attach GPS coordinates to your profile.",
+        "NSCalendarsFullAccessUsageDescription": "SYNAPTYC reads your calendar so Banner AI can see your schedule and create events.",
+        "NSRemindersFullAccessUsageDescription": "SYNAPTYC reads your reminders so Banner AI can help manage your tasks.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.aievolution.synaptyc",
+      "versionCode": 3,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#050f05"
+      },
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.SEND_SMS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.WRITE_CONTACTS"
+      ]
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "SYNAPTYC reads your calendar so Banner AI can see your schedule and create events.",
+          "remindersPermission": "SYNAPTYC reads your reminders so Banner AI can help manage your tasks."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "SYNAPTYC uses Face ID to protect your secure messages."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SYNAPTYC accesses your photos to send images in chat.",
+          "cameraPermission": "SYNAPTYC uses the camera to capture images for chat."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SYNAPTYC uses your location to attach GPS coordinates to your profile.",
+          "locationWhenInUsePermission": "SYNAPTYC uses your location to attach GPS coordinates to your profile."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "SYNAPTYC reads your contacts so you can invite them to join."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#00FF41",
+          "sounds": []
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ba1c7dde-e3ed-40ec-bd13-a72a95819d72"
+      }
+    },
+    "owner": "jmarti21"
+  }
+}

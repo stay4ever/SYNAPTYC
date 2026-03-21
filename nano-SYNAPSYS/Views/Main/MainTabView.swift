@@ -61,15 +61,15 @@ struct MainTabView: View {
                 appearance.backgroundColor = UIColor(red: 0.04, green: 0.1, blue: 0.04, alpha: 0.95)
 
                 // Tab bar border
-                appearance.shadowColor = UIColor(red: 0.0, green: 1.0, blue: 0.255).withAlphaComponent(0.3)
+                appearance.shadowColor = UIColor(red: 0.0, green: 1.0, blue: 0.255, alpha: 1.0).withAlphaComponent(0.3)
 
                 // Text colors
                 let normalAttributes: [NSAttributedString.Key: Any] = [
-                    .foregroundColor: UIColor(red: 0.0, green: 1.0, blue: 0.255).withAlphaComponent(0.6),
+                    .foregroundColor: UIColor(red: 0.0, green: 1.0, blue: 0.255, alpha: 1.0).withAlphaComponent(0.6),
                     .font: UIFont.monospacedSystemFont(ofSize: 10, weight: .regular)
                 ]
                 let selectedAttributes: [NSAttributedString.Key: Any] = [
-                    .foregroundColor: UIColor(red: 0.0, green: 1.0, blue: 0.255),
+                    .foregroundColor: UIColor(red: 0.0, green: 1.0, blue: 0.255, alpha: 1.0),
                     .font: UIFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
                 ]
 

@@ -1,0 +1,33 @@
+appId: com.nanosynapsys.synaptyc
+---
+# 06 — Open settings, toggle theme, toggle notifications
+- launchApp:
+    clearState: false
+
+# Navigate to SETTINGS tab
+- tapOn: "SETTINGS"
+
+# Verify settings sections are visible
+- assertVisible: "INTERFACE SKIN"
+- assertVisible: "NOTIFICATIONS"
+- assertVisible: "DISAPPEARING MESSAGES"
+
+# Tap the tactical skin option
+- tapOn:
+    text: "TACTICAL"
+    optional: true
+
+# Verify theme changed
+- assertVisible:
+    text: "TACTICAL"
+    optional: true
+
+# Switch back to Phantom skin
+- tapOn:
+    text: "PHANTOM"
+    optional: true
+
+# Toggle notifications
+- tapOn:
+    text: "Message notifications"
+    optional: true

@@ -7,16 +7,22 @@ struct BotMessage: Codable, Identifiable, Equatable {
     let isFromUser: Bool
     let timestamp: Date
 
+    /// Role string for API compatibility
+    var role: String { isFromUser ? "user" : "assistant" }
+
+    /// Formatted timestamp for display
+    var formattedTime: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: timestamp)
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id
-        case content
+        case id, content
         case isFromUser = "is_from_user"
         case timestamp
     }
 
-    // MARK: - Initializer
-
-    /// Initialize a new bot message with a unique UUID.
     init(id: UUID = UUID(), content: String, isFromUser: Bool, timestamp: Date = Date()) {
         self.id = id
         self.content = content
@@ -24,19 +30,14 @@ struct BotMessage: Codable, Identifiable, Equatable {
         self.timestamp = timestamp
     }
 
-    // MARK: - Codable
-
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-
-        // Decode id as UUID or String and convert if needed
         if let uuidString = try container.decodeIfPresent(String.self, forKey: .id),
            let uuid = UUID(uuidString: uuidString) {
             self.id = uuid
         } else {
             self.id = try container.decode(UUID.self, forKey: .id)
         }
-
         self.content = try container.decode(String.self, forKey: .content)
         self.isFromUser = try container.decode(Bool.self, forKey: .isFromUser)
         self.timestamp = try container.decode(Date.self, forKey: .timestamp)
@@ -50,12 +51,8 @@ struct BotMessage: Codable, Identifiable, Equatable {
         try container.encode(timestamp, forKey: .timestamp)
     }
 
-    // MARK: - Equatable
-
     static func == (lhs: BotMessage, rhs: BotMessage) -> Bool {
-        lhs.id == rhs.id
-            && lhs.content == rhs.content
-            && lhs.isFromUser == rhs.isFromUser
-            && lhs.timestamp == rhs.timestamp
+        lhs.id == rhs.id && lhs.content == rhs.content
+            && lhs.isFromUser == rhs.isFromUser && lhs.timestamp == rhs.timestamp
     }
 }

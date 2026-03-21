@@ -10,13 +10,11 @@ struct BotChatView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Header
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("BANNER")
                             .font(.system(.headline, design: .monospaced))
                             .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
-
                         Text("CLAUDE AI ASSISTANT")
                             .font(.system(size: 11, weight: .regular, design: .monospaced))
                             .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.6))
@@ -30,9 +28,7 @@ struct BotChatView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
 
-                // Messages list
                 ScrollViewReader { proxy in
                     List {
                         ForEach(viewModel.botMessages) { message in
@@ -47,11 +43,9 @@ struct BotChatView: View {
                                 ProgressView()
                                     .scaleEffect(0.8)
                                     .tint(Color(red: 0.0, green: 1.0, blue: 0.255))
-
                                 Text("BANNER IS THINKING...")
                                     .font(.system(size: 12, weight: .regular, design: .monospaced))
                                     .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.7))
-
                                 Spacer()
                             }
                             .padding(.horizontal, 12)
@@ -64,53 +58,37 @@ struct BotChatView: View {
                     .background(Color.clear)
                     .scrollContentBackground(.hidden)
                     .onChange(of: viewModel.botMessages.count) { _ in
-                        if let lastMessage = viewModel.botMessages.last {
-                            withAnimation {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                    .onChange(of: viewModel.isLoading) { _ in
-                        withAnimation {
-                            proxy.scrollTo("loading", anchor: .bottom)
+                        if let last = viewModel.botMessages.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }
                 }
 
-                // Message input
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        TextField("ASK BANNER...", text: $messageText)
-                            .font(.system(.body, design: .monospaced))
+                HStack(spacing: 8) {
+                    TextField("ASK BANNER...", text: $messageText)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(Color(red: 0.04, green: 0.1, blue: 0.04))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), lineWidth: 1))
+
+                    Button(action: {
+                        let text = messageText.trimmingCharacters(in: .whitespaces)
+                        guard !text.isEmpty else { return }
+                        viewModel.sendMessage(text)
+                        messageText = ""
+                    }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 10)
-                            .background(Color(red: 0.04, green: 0.1, blue: 0.04))
-                            .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
-                            .cornerRadius(4)
-
-                        Button(action: {
-                            if !messageText.trimmingCharacters(in: .whitespaces).isEmpty {
-                                viewModel.sendMessage(messageText)
-                                messageText = ""
-                            }
-                        }) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
-                        }
-                        .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isLoading)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                    .disabled(messageText.trimmingCharacters(in: .whitespaces).isEmpty || viewModel.isLoading)
                 }
-                .padding(.top, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(Color(red: 0.04, green: 0.1, blue: 0.04).opacity(0.5))
-                .borderTop(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
             }
-        }
-        .onAppear {
-            viewModel.loadMessages()
         }
     }
 }
@@ -132,15 +110,14 @@ struct BotMessageBubble: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                         .background(Color(red: 0.0, green: 0.15, blue: 0.15))
-                        .border(Color(red: 0.2, green: 1.0, blue: 1.0).opacity(0.3), width: 1)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(red: 0.2, green: 1.0, blue: 1.0).opacity(0.3), lineWidth: 1))
                         .cornerRadius(8)
 
-                    Text(message.timestamp)
+                    Text(message.formattedTime)
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundColor(Color(red: 0.2, green: 1.0, blue: 1.0).opacity(0.5))
                         .padding(.horizontal, 6)
                 }
-
                 Spacer()
             } else {
                 Spacer()
@@ -154,7 +131,7 @@ struct BotMessageBubble: View {
                         .background(Color(red: 0.0, green: 1.0, blue: 0.255))
                         .cornerRadius(8)
 
-                    Text(message.timestamp)
+                    Text(message.formattedTime)
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.5))
                         .padding(.horizontal, 6)

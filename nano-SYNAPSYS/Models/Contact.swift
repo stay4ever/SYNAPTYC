@@ -3,12 +3,12 @@ import Foundation
 /// Contact model representing a user contact in the address book.
 struct Contact: Codable, Identifiable {
     let id: String
-    let userId: String // Current user's ID
-    let contactId: String // Contact's user ID
+    let userId: String
+    let contactId: String
     let contactUsername: String
     let contactDisplayName: String?
-    let publicKey: String? // Contact's ECDH P-384 public key
-    let isOnline: Bool
+    let publicKey: String?
+    var isOnline: Bool
     let addedAt: Date?
 
     enum CodingKeys: String, CodingKey {
@@ -22,21 +22,27 @@ struct Contact: Codable, Identifiable {
         case addedAt = "added_at"
     }
 
-    // MARK: - Computed Properties
+    // MARK: - Convenience accessors (used by Views)
 
-    /// Display name if available, otherwise username
+    var displayName: String {
+        contactDisplayName ?? contactUsername
+    }
+
+    var username: String {
+        contactUsername
+    }
+
     var displayNameOrUsername: String {
         contactDisplayName ?? contactUsername
     }
 
-    /// Initials derived from displayName or username
     var initials: String {
-        let name = contactDisplayName ?? contactUsername
+        let name = displayName
         let components = name.split(separator: " ")
         if components.count > 1 {
             return String(components[0].prefix(1)) + String(components[1].prefix(1))
         }
-        return String(name.prefix(1))
+        return String(name.prefix(1)).uppercased()
     }
 
     #if DEBUG
