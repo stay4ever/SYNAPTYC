@@ -19,7 +19,7 @@ struct ContactRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(contact.displayName)
-                        .font(.system(.body, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 17, weight: .semibold, design: .monospaced))
                         .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
 
                     Spacer()

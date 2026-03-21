@@ -117,7 +117,7 @@ struct AddContactSheet: View {
                     HStack(spacing: 12) {
                         Button(action: { isPresented = false }) {
                             Text("CANCEL")
-                                .font(.system(.body, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 17, weight: .semibold, design: .monospaced))
                                 .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
@@ -129,7 +129,7 @@ struct AddContactSheet: View {
                             isPresented = false
                         }) {
                             Text("ADD")
-                                .font(.system(.body, weight: .semibold, design: .monospaced))
+                                .font(.system(size: 17, weight: .semibold, design: .monospaced))
                                 .foregroundColor(Color(red: 0.0, green: 0.055, blue: 0.0))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)

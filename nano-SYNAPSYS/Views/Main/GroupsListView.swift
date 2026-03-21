@@ -57,12 +57,12 @@ struct GroupsListView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(Color(red: 0.04, green: 0.1, blue: 0.04))
-                    .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3), width: 1)
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.3))} 
                     .cornerRadius(4)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .borderBottom(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1), width: 1)
+                .overlay(alignment: .bottom) { Divider().background(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1))} 
 
                 // Groups list
                 if filteredGroups.isEmpty {
@@ -120,7 +120,7 @@ struct GroupRow: View {
             ZStack {
                 Circle()
                     .fill(Color(red: 0.0, green: 1.0, blue: 0.255).opacity(0.1))
-                    .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+                    .border(Color(red: 0.0, green: 1.0, blue: 0.255))} 
 
                 Image(systemName: "person.2.fill")
                     .font(.system(size: 16, weight: .semibold))
@@ -200,7 +200,7 @@ struct CreateGroupSheet: View {
                                 .foregroundColor(Color(red: 0.0, green: 1.0, blue: 0.255))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .border(Color(red: 0.0, green: 1.0, blue: 0.255), width: 1)
+                                .border(Color(red: 0.0, green: 1.0, blue: 0.255))} 
                                 .cornerRadius(4)
                         }
 
