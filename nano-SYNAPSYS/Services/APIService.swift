@@ -257,53 +257,6 @@ struct AuthResponse: Codable {
     let user: AppUser
 }
 
-struct AppUser: Codable, Identifiable {
-    let id: String
-    let username: String
-    let displayName: String
-    let publicKey: String?
-}
-
-struct Message: Codable, Identifiable {
-    let id: String
-    let senderId: String
-    let recipientId: String
-    let content: String
-    let timestamp: Double
-    let encrypted: Bool
-}
-
-struct Contact: Codable, Identifiable {
-    let id: String
-    let username: String
-    let displayName: String
-    let publicKey: String?
-    let online: Bool
-}
-
-struct Group: Codable, Identifiable {
-    let id: String
-    let name: String
-    let creatorId: String
-    let members: [String]
-    let createdAt: Double
-}
-
-struct GroupMessage: Codable, Identifiable {
-    let id: String
-    let groupId: String
-    let senderId: String
-    let content: String
-    let timestamp: Double
-    let encrypted: Bool
-}
-
-struct BotMessage: Codable, Identifiable {
-    let id: String
-    let content: String
-    let timestamp: Double
-}
-
 // MARK: - APIError
 
 enum APIError: LocalizedError {
