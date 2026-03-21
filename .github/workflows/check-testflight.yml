@@ -113,11 +113,17 @@ jobs:
               exit(0)
 
           print('Latest builds:')
-          for build in builds[:3]:
+          for build in builds[:5]:
               attrs = build['attributes']
-              print(f"  Build #{attrs['version']}.{attrs['buildNumber']}")
-              print(f"    Status: {attrs['processingState']}")
-              print(f"    Uploaded: {attrs['uploadedDate']}")
+              version = attrs.get('version', 'N/A')
+              processing = attrs.get('processingState', 'N/A')
+              uploaded = attrs.get('uploadedDate', 'N/A')
+              expired = attrs.get('expirationDate', '')
+              print(f"  Build {version}")
+              print(f"    Processing: {processing}")
+              print(f"    Uploaded:   {uploaded}")
+              if expired:
+                  print(f"    Expires:    {expired}")
           SCRIPT
 
       - name: Clean up
