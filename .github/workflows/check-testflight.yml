@@ -23,23 +23,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Decode App Store Connect API Key
+      - name: Write App Store Connect API Key
         env:
-          ASC_API_KEY_BASE64: ${{ secrets.ASC_API_KEY }}
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
         run: |
           mkdir -p $HOME/.appstore
-          KEY_FILE="$HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8"
-          echo "$ASC_API_KEY_BASE64" | base64 --decode > "$KEY_FILE" 2>/dev/null || true
-          FILE_SIZE=$(wc -c < "$KEY_FILE")
-          echo "Decoded key file: $FILE_SIZE bytes"
-          # If base64 decode produced empty/tiny file, secret may be raw PEM
-          if [ "$FILE_SIZE" -lt 100 ]; then
-            echo "Base64 decode produced small file, trying raw PEM..."
-            echo "$ASC_API_KEY_BASE64" > "$KEY_FILE"
-            FILE_SIZE=$(wc -c < "$KEY_FILE")
-            echo "Raw write: $FILE_SIZE bytes"
-          fi
-          echo "First line: $(head -1 "$KEY_FILE")"
+          echo "$ASC_KEY_CONTENT" > $HOME/.appstore/AuthKey_${{ secrets.ASC_KEY_ID }}.p8
 
       - name: Install App Store Connect CLI dependencies
         run: |
@@ -55,7 +44,6 @@ jobs:
           import json
           import requests
           import jwt
-          from cryptography.hazmat.primitives.serialization import load_pem_private_key
           from datetime import datetime, timedelta
 
           # App Store Connect API credentials
@@ -63,17 +51,9 @@ jobs:
           issuer_id = os.environ.get('ASC_ISSUER_ID')
           key_path = os.path.expanduser('~/.appstore/AuthKey_' + key_id + '.p8')
 
-          # Read and load private key
-          with open(key_path, 'rb') as f:
-              key_data = f.read().strip()
-
-          try:
-              private_key = load_pem_private_key(key_data, password=None)
-          except Exception as e:
-              print(f'Key load failed: {e}')
-              print(f'Key starts with: {key_data[:30]}')
-              print(f'Key length: {len(key_data)} bytes')
-              exit(1)
+          # Read private key
+          with open(key_path, 'r') as f:
+              private_key = f.read()
 
           # Create JWT token
           now = datetime.utcnow()
