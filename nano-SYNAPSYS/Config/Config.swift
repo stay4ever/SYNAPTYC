@@ -4,8 +4,16 @@ import Foundation
 struct Config {
     // MARK: - App Info
     static let bundleID = "com.aievolve.nanosynapsys"
-    static let appVersion = "1.1.0"
-    static let buildNumber = "13"
+    
+    /// App version - reads from bundle Info.plist
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.5.0"
+    }
+    
+    /// Build number - reads from bundle Info.plist
+    static var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "80"
+    }
 
     // MARK: - API Configuration
     static let apiBaseURL = "https://api.nanosynapsys.com"
@@ -87,7 +95,7 @@ struct Config {
 
     /// Constructs full API endpoint URL with query parameters
     static func apiURL(_ endpoint: Endpoint, queryParams: [String: String]) -> URL? {
-        guard var url = apiURL(endpoint) else { return nil }
+        guard let url = apiURL(endpoint) else { return nil }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.queryItems = queryParams.map { URLQueryItem(name: $0.key, value: $0.value) }
         return components?.url

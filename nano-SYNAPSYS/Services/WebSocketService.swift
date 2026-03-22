@@ -338,9 +338,9 @@ enum AnyCodable: Codable {
             self = .double(double)
         } else if let string = try? container.decode(String.self) {
             self = .string(string)
-        } else if var array = try? container.decode([AnyCodable].self) {
+        } else if let array = try? container.decode([AnyCodable].self) {
             self = .array(array)
-        } else if var object = try? container.decode([String: AnyCodable].self) {
+        } else if let object = try? container.decode([String: AnyCodable].self) {
             self = .object(object)
         } else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode AnyCodable")

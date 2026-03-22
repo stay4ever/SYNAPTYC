@@ -10,6 +10,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     private let notificationCenter = UNUserNotificationCenter.current()
     private var deviceToken: String?
+    private var badgeCount: Int = 0
 
     // Combine publishers for notification events
     let deviceTokenPublisher = PassthroughSubject<String, Never>()
@@ -65,7 +66,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         content.title = title
         content.body = body
         content.sound = .default
-        content.badge = NSNumber(value: UIApplication.shared.applicationIconBadgeNumber + 1)
+        badgeCount += 1
+        content.badge = NSNumber(value: badgeCount)
 
         // Custom data for handling notification tap
         content.userInfo = [
@@ -99,7 +101,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         content.title = title
         content.body = body
         content.sound = .default
-        content.badge = NSNumber(value: UIApplication.shared.applicationIconBadgeNumber + 1)
+        badgeCount += 1
+        content.badge = NSNumber(value: badgeCount)
 
         content.userInfo = [
             "groupId": groupId,
@@ -131,7 +134,8 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         content.title = title
         content.body = body
         content.sound = .default
-        content.badge = NSNumber(value: UIApplication.shared.applicationIconBadgeNumber + 1)
+        badgeCount += 1
+        content.badge = NSNumber(value: badgeCount)
 
         content.userInfo = ["isBot": true]
 
@@ -153,18 +157,21 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
     /// Set the application badge count.
     func setBadgeCount(_ count: Int) {
-        UIApplication.shared.applicationIconBadgeNumber = count
+        badgeCount = count
+        Task { try? await notificationCenter.setBadgeCount(count) }
     }
 
     /// Increment the application badge count.
     func incrementBadgeCount() {
-        let current = UIApplication.shared.applicationIconBadgeNumber
-        UIApplication.shared.applicationIconBadgeNumber = current + 1
+        badgeCount += 1
+        let count = badgeCount
+        Task { try? await notificationCenter.setBadgeCount(count) }
     }
 
     /// Reset the application badge count to zero.
     func resetBadgeCount() {
-        UIApplication.shared.applicationIconBadgeNumber = 0
+        badgeCount = 0
+        Task { try? await notificationCenter.setBadgeCount(0) }
     }
 
     // MARK: - Notification Center Delegate

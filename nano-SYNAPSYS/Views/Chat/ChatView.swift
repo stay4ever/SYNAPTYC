@@ -60,7 +60,7 @@ struct ChatView: View {
                     .listStyle(.plain)
                     .background(Color.clear)
                     .scrollContentBackground(.hidden)
-                    .onChange(of: viewModel.messages.count) { _ in
+                    .onChange(of: viewModel.messages.count) {
                         if let last = viewModel.messages.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }

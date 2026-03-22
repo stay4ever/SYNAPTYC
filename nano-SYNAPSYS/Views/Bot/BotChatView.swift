@@ -57,7 +57,7 @@ struct BotChatView: View {
                     .listStyle(.plain)
                     .background(Color.clear)
                     .scrollContentBackground(.hidden)
-                    .onChange(of: viewModel.botMessages.count) { _ in
+                    .onChange(of: viewModel.botMessages.count) {
                         if let last = viewModel.botMessages.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
