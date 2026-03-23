@@ -32,21 +32,24 @@ platform :ios do
       in_house: false
     )
 
-    # Build and archive — pass ASC auth flags so xcodebuild can auto-provision
+    # Build and archive using the certificate + profile installed by the workflow steps
     build_app(
       project: "SYNAPTYC.xcodeproj",
       scheme: "SYNAPTYC",
       configuration: "Release",
       export_method: "app-store",
       export_options: {
-        signingStyle: "automatic",
+        signingStyle: "manual",
         stripSwiftSymbols: true,
-        teamID: "LF9DXU9P25"
+        teamID: "LF9DXU9P25",
+        provisioningProfiles: {
+          "com.aievolution.nanosynapsys" => ENV["PP_NAME"]
+        }
       },
       output_directory: "build",
       output_name: "SYNAPTYC.ipa",
       destination: "generic/platform=iOS",
-      xcargs: "-allowProvisioningUpdates -authenticationKeyPath #{ENV['ASC_KEY_PATH']} -authenticationKeyID #{ENV['ASC_KEY_ID']} -authenticationKeyIssuerID #{ENV['ASC_ISSUER_ID']} DEVELOPMENT_TEAM=LF9DXU9P25 CODE_SIGN_STYLE=Automatic"
+      xcargs: "CODE_SIGN_STYLE=Manual PROVISIONING_PROFILE_SPECIFIER='#{ENV['PP_NAME']}' DEVELOPMENT_TEAM=LF9DXU9P25"
     )
 
     # Upload to TestFlight
