@@ -23,7 +23,16 @@ platform :ios do
       xcodeproj: "SYNAPTYC.xcodeproj"
     )
 
-    # Build the app — Xcode automatic signing with ASC API key
+    # Set up ASC API key BEFORE build so Xcode can auto-provision
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_filepath: ENV["ASC_KEY_PATH"],
+      duration: 1200,
+      in_house: false
+    )
+
+    # Build and archive — API key enables automatic provisioning in CI
     build_app(
       project: "SYNAPTYC.xcodeproj",
       scheme: "SYNAPTYC",
@@ -37,14 +46,8 @@ platform :ios do
       output_directory: "build",
       output_name: "SYNAPTYC.ipa",
       destination: "generic/platform=iOS",
-      xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=LF9DXU9P25 CODE_SIGN_STYLE=Automatic"
-    )
-
-    # Set up API key for upload
-    api_key = app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
-      key_filepath: ENV["ASC_KEY_PATH"]
+      xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=LF9DXU9P25 CODE_SIGN_STYLE=Automatic",
+      api_key: api_key
     )
 
     # Upload to TestFlight
