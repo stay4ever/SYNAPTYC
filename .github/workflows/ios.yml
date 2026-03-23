@@ -67,7 +67,7 @@ jobs:
             -scheme SYNAPTYC \
             -sdk iphonesimulator \
             -configuration Release \
-            -derivedDataPath build \
+            -derivedDataPath build-release \
             build
 
   lint:
