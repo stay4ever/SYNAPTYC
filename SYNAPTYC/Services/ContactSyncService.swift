@@ -26,7 +26,7 @@ final class ContactSyncService: ObservableObject {
             await performSync()
         case .notDetermined:
             await requestAndSync()
-        case .denied, .restricted:
+        case .denied, .restricted, .limited:
             syncStatus = .denied
         @unknown default:
             break

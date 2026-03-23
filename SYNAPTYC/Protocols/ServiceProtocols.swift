@@ -6,7 +6,8 @@ import CryptoKit
 /// Protocol for API networking — allows mocking in tests
 protocol APIServiceProtocol: Sendable {
     func login(email: String, password: String) async throws -> AuthResponse
-    func register(username: String, email: String, password: String, displayName: String) async throws -> AuthResponse
+    func register(username: String, email: String, password: String, displayName: String, phoneNumberHash: String?) async throws -> AuthResponse
+    func syncContacts(hashes: [String]) async throws -> [AppUser]
     func me() async throws -> AppUser
     func requestPasswordReset(email: String) async throws
     func users() async throws -> [AppUser]
