@@ -93,5 +93,8 @@ db.exec(`
   );
 `);
 
+// Add phone_number_hash column if upgrading from older schema
+try { db.exec("ALTER TABLE users ADD COLUMN phone_number_hash TEXT"); } catch (_) {}
+
 console.log("✅ Database migrated successfully:", DB_PATH);
 db.close();

@@ -14,13 +14,13 @@
 		19DB1613AEA04B2DB6D20C3A /* SYNAPTYCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1612116813C4AEABB5FA765 /* SYNAPTYCApp.swift */; };
 		1AE3197DD19F466FB49C6718 /* Contact.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120C4EC38E534B2695F5CDBF /* Contact.swift */; };
 		1E3A2D100FBB43178C121637 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3100E83E7E704461A7BD9C37 /* SettingsView.swift */; };
+		1E68170BD87E53F72BF5D2DE /* ContactSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41AE284325F97B6694AA4432 /* ContactSyncService.swift */; };
 		26D6E481816344369547B5AF /* GroupChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9876FE55FB24BE4A808E498 /* GroupChatViewModel.swift */; };
 		361EB4F36E004F74A534461D /* BotViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C647F3E11144EB97AC714A /* BotViewModel.swift */; };
 		38DC828B608247ECB2C17704 /* AuthViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D995E5BFBBBE4DA6994889AE /* AuthViewModel.swift */; };
 		3E54ABF4261D49D8B5D3EF46 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D4E490C2434BAEB5169C13 /* AppTheme.swift */; };
 		450EE32A63CB4BED873DA79A /* OnlineDot.swift in Sources */ = {isa = PBXBuildFile; fileRef = B202E1F5D7EE4CB7B5DBEC4B /* OnlineDot.swift */; };
 		4A6BF3EEE6D34515ACB6798F /* EncryptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B58B15AD92334D5BA2C74A45 /* EncryptionService.swift */; };
-		DR00SVCBF000000000000001 /* DoubleRatchet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DR00SVCFR000000000000001 /* DoubleRatchet.swift */; };
 		598727CF52404A1EAAE5AF21 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = B348EF163F84408F8382F22B /* MessageBubble.swift */; };
 		61187D622416452D8942AFB5 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359DA86FE2F146548C8B14BA /* ConversationsListView.swift */; };
 		65C0CC61AA0D48E187404C6E /* EncryptionBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E15081408C4DBF87A64CA7 /* EncryptionBadge.swift */; };
@@ -42,7 +42,6 @@
 		AA01SLC1BF0000000000E004 /* String+Localized.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01SLC1FR0000000000E004 /* String+Localized.swift */; };
 		AA01SVC1BF0000000000E002 /* ServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01SVC1FR0000000000E002 /* ServiceProtocols.swift */; };
 		AA01TST1BF0000000000F001 /* EncryptionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01TST1FR0000000000F001 /* EncryptionServiceTests.swift */; };
-		DRTST1BF000000000000ABCD /* DoubleRatchetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DRTST1FR000000000000ABCD /* DoubleRatchetTests.swift */; };
 		AA01TST2BF0000000000F002 /* KeychainServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01TST2FR0000000000F002 /* KeychainServiceTests.swift */; };
 		AA01TST3BF0000000000F003 /* ModelCodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01TST3FR0000000000F003 /* ModelCodingTests.swift */; };
 		AA01TST4BF0000000000F004 /* ConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01TST4FR0000000000F004 /* ConfigTests.swift */; };
@@ -52,6 +51,7 @@
 		AA01UIT1BF0000000000F008 /* SYNAPTYCUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01UIT1FR0000000000F008 /* SYNAPTYCUITests.swift */; };
 		AA01UIT2BF0000000000F009 /* SYNAPTYCUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01UIT2FR0000000000F009 /* SYNAPTYCUITestsLaunchTests.swift */; };
 		AA01VAC1BF0000000000E003 /* View+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01VAC1FR0000000000E003 /* View+Accessibility.swift */; };
+		AE94FBF10197B873F21F7C83 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A24B53544DCA3CBB7EA1EA23 /* ThemeManager.swift */; };
 		AEA37D267147482588E7FC28 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 348797FF9DC64DD39BD855B7 /* MainTabView.swift */; };
 		AFE84E0688A8416F8455CFCA /* WebSocketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F123673E686547D9B6D47988 /* WebSocketService.swift */; };
 		B3C49BF8CBA04D31A82C7BB8 /* TypingIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BFA2949F4214943A5104C1D /* TypingIndicator.swift */; };
@@ -59,6 +59,8 @@
 		BC40967AEBC747208E752EF0 /* GroupsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0557D8DCF1AE4733872761B7 /* GroupsViewModel.swift */; };
 		C89545D7B5F146FEB9A9F4F5 /* ContactRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55424A8F213429480210E92 /* ContactRow.swift */; };
 		D66FE9CADEE64638AC3B2F72 /* NeonTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF2297550EB34F2CA0CF05FA /* NeonTextField.swift */; };
+		DR00SVCBF000000000000001 /* DoubleRatchet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DR00SVCFR000000000000001 /* DoubleRatchet.swift */; };
+		DRTST1BF000000000000ABCD /* DoubleRatchetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DRTST1FR000000000000ABCD /* DoubleRatchetTests.swift */; };
 		EE550D7DBF964742A5A6E265 /* GroupChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BFBAEED953541E886BE2EB3 /* GroupChatView.swift */; };
 		F1CA781D3B8C4EB5B2FB7B7C /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41C0FDFFF4A54347B49B405D /* Message.swift */; };
 		F2675BB043EB4C879B5F58C4 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1992A0F54F4C9B92951008 /* NotificationService.swift */; };
@@ -70,14 +72,14 @@
 			containerPortal = A02A3D8597DA45FC93774B28 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 72799EF3AA0C453495E92319;
-			remoteInfo = "SYNAPTYC";
+			remoteInfo = SYNAPTYC;
 		};
 		AA01UITPRX000000000000A2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A02A3D8597DA45FC93774B28 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 72799EF3AA0C453495E92319;
-			remoteInfo = "SYNAPTYC";
+			remoteInfo = SYNAPTYC;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -93,39 +95,39 @@
 		348797FF9DC64DD39BD855B7 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		359DA86FE2F146548C8B14BA /* ConversationsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationsListView.swift; sourceTree = "<group>"; };
 		3D1992A0F54F4C9B92951008 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		41AE284325F97B6694AA4432 /* ContactSyncService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ContactSyncService.swift; path = ContactSyncService.swift; sourceTree = "<group>"; };
 		41C0FDFFF4A54347B49B405D /* Message.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
 		44FCAF490E8948B3B3951B44 /* GroupsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupsListView.swift; sourceTree = "<group>"; };
 		48C647F3E11144EB97AC714A /* BotViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotViewModel.swift; sourceTree = "<group>"; };
 		5E7D1FA59BCC4256849650F8 /* BotMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotMessage.swift; sourceTree = "<group>"; };
 		675F9BD7833D409284ED3B85 /* Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Group.swift; sourceTree = "<group>"; };
-		72A141E5E5AF4DA4B99AF567 /* SYNAPTYC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SYNAPTYC.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		72A141E5E5AF4DA4B99AF567 /* SYNAPTYC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SYNAPTYC.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		801B8683DD03482BB706BE50 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
 		8449711ABA9F4CF8BD5425CB /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
 		9633D702F257460EB7A19D52 /* RegisterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterView.swift; sourceTree = "<group>"; };
 		9BFA2949F4214943A5104C1D /* TypingIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicator.swift; sourceTree = "<group>"; };
 		A1439888075443F78D6DDB11 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A24B53544DCA3CBB7EA1EA23 /* ThemeManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ThemeManager.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		A4D4E490C2434BAEB5169C13 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		AA01ENV1FR0000000000E001 /* Environment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Environment.swift; sourceTree = "<group>"; };
 		AA01LOC1FR0000000000E005 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = Resources/en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		AA01SLC1FR0000000000E004 /* String+Localized.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Localized.swift"; sourceTree = "<group>"; };
 		AA01SVC1FR0000000000E002 /* ServiceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceProtocols.swift; sourceTree = "<group>"; };
 		AA01TST1FR0000000000F001 /* EncryptionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionServiceTests.swift; sourceTree = "<group>"; };
-		DRTST1FR000000000000ABCD /* DoubleRatchetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleRatchetTests.swift; sourceTree = "<group>"; };
 		AA01TST2FR0000000000F002 /* KeychainServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainServiceTests.swift; sourceTree = "<group>"; };
 		AA01TST3FR0000000000F003 /* ModelCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCodingTests.swift; sourceTree = "<group>"; };
 		AA01TST4FR0000000000F004 /* ConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigTests.swift; sourceTree = "<group>"; };
 		AA01TST5FR0000000000F005 /* BotMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotMessageTests.swift; sourceTree = "<group>"; };
 		AA01TST6FR0000000000F006 /* WebSocketServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketServiceTests.swift; sourceTree = "<group>"; };
 		AA01TST7FR0000000000F007 /* APIServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIServiceTests.swift; sourceTree = "<group>"; };
-		AA01TSTPRD00000000000001 /* SYNAPTYCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SYNAPTYCTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA01TSTPRD00000000000001 /* SYNAPTYCTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SYNAPTYCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA01UIT1FR0000000000F008 /* SYNAPTYCUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SYNAPTYCUITests.swift; sourceTree = "<group>"; };
 		AA01UIT2FR0000000000F009 /* SYNAPTYCUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SYNAPTYCUITestsLaunchTests.swift; sourceTree = "<group>"; };
-		AA01UITPRD00000000000002 /* SYNAPTYCUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SYNAPTYCUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA01UITPRD00000000000002 /* SYNAPTYCUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SYNAPTYCUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA01VAC1FR0000000000E003 /* View+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "View+Accessibility.swift"; sourceTree = "<group>"; };
 		B202E1F5D7EE4CB7B5DBEC4B /* OnlineDot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnlineDot.swift; sourceTree = "<group>"; };
 		B348EF163F84408F8382F22B /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
 		B58B15AD92334D5BA2C74A45 /* EncryptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionService.swift; sourceTree = "<group>"; };
-		DR00SVCFR000000000000001 /* DoubleRatchet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleRatchet.swift; sourceTree = "<group>"; };
 		C0D1CD3607194721801043F3 /* NeonButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeonButton.swift; sourceTree = "<group>"; };
 		C29EC9456B0B47A7A826B0A9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CF2AE83A3B254D8781867FB6 /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
@@ -133,6 +135,8 @@
 		D995E5BFBBBE4DA6994889AE /* AuthViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthViewModel.swift; sourceTree = "<group>"; };
 		DBB2A8D46D1E40E0A09DCE0D /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		DF089213D0774BFFAFE765AD /* ContactsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsViewModel.swift; sourceTree = "<group>"; };
+		DR00SVCFR000000000000001 /* DoubleRatchet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleRatchet.swift; sourceTree = "<group>"; };
+		DRTST1FR000000000000ABCD /* DoubleRatchetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleRatchetTests.swift; sourceTree = "<group>"; };
 		E1612116813C4AEABB5FA765 /* SYNAPTYCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SYNAPTYCApp.swift; sourceTree = "<group>"; };
 		E9876FE55FB24BE4A808E498 /* GroupChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupChatViewModel.swift; sourceTree = "<group>"; };
 		F123673E686547D9B6D47988 /* WebSocketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketService.swift; sourceTree = "<group>"; };
@@ -165,6 +169,7 @@
 			isa = PBXGroup;
 			children = (
 				A4D4E490C2434BAEB5169C13 /* AppTheme.swift */,
+				A24B53544DCA3CBB7EA1EA23 /* ThemeManager.swift */,
 			);
 			path = Theme;
 			sourceTree = "<group>";
@@ -178,6 +183,7 @@
 				CF2AE83A3B254D8781867FB6 /* APIService.swift */,
 				F123673E686547D9B6D47988 /* WebSocketService.swift */,
 				3D1992A0F54F4C9B92951008 /* NotificationService.swift */,
+				41AE284325F97B6694AA4432 /* ContactSyncService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -240,7 +246,7 @@
 				B237FD9C8C764690A25B2E86 /* ViewModels */,
 				AA01VWSGRP0000000000E012 /* Views */,
 			);
-			path = "SYNAPTYC";
+			path = SYNAPTYC;
 			sourceTree = "<group>";
 		};
 		801BBE39C6A04A6FA3206A31 /* Bot */ = {
@@ -301,7 +307,7 @@
 				AA01TST6FR0000000000F006 /* WebSocketServiceTests.swift */,
 				AA01TST7FR0000000000F007 /* APIServiceTests.swift */,
 			);
-			path = "SYNAPTYCTests";
+			path = SYNAPTYCTests;
 			sourceTree = "<group>";
 		};
 		AA01UITGRP00000000000002 /* SYNAPTYCUITests */ = {
@@ -310,7 +316,7 @@
 				AA01UIT1FR0000000000F008 /* SYNAPTYCUITests.swift */,
 				AA01UIT2FR0000000000F009 /* SYNAPTYCUITestsLaunchTests.swift */,
 			);
-			path = "SYNAPTYCUITests";
+			path = SYNAPTYCUITests;
 			sourceTree = "<group>";
 		};
 		AA01VWSGRP0000000000E012 /* Views */ = {
@@ -392,8 +398,8 @@
 			);
 			dependencies = (
 			);
-			name = "SYNAPTYC";
-			productName = "SYNAPTYC";
+			name = SYNAPTYC;
+			productName = SYNAPTYC;
 			productReference = 72A141E5E5AF4DA4B99AF567 /* SYNAPTYC.app */;
 			productType = "com.apple.product-type.application";
 		};
@@ -409,8 +415,8 @@
 			dependencies = (
 				AA01TSTDEP00000000000001 /* PBXTargetDependency */,
 			);
-			name = "SYNAPTYCTests";
-			productName = "SYNAPTYCTests";
+			name = SYNAPTYCTests;
+			productName = SYNAPTYCTests;
 			productReference = AA01TSTPRD00000000000001 /* SYNAPTYCTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
@@ -426,8 +432,8 @@
 			dependencies = (
 				AA01UITDEP00000000000001 /* PBXTargetDependency */,
 			);
-			name = "SYNAPTYCUITests";
-			productName = "SYNAPTYCUITests";
+			name = SYNAPTYCUITests;
+			productName = SYNAPTYCUITests;
 			productReference = AA01UITPRD00000000000002 /* SYNAPTYCUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
@@ -463,6 +469,7 @@
 				Base,
 			);
 			mainGroup = A9166DC2271C4927869562AE;
+			productRefGroup = 2A510124A41B4BEC918A70CE /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -533,6 +540,8 @@
 				AA01SVC1BF0000000000E002 /* ServiceProtocols.swift in Sources */,
 				AA01VAC1BF0000000000E003 /* View+Accessibility.swift in Sources */,
 				AA01SLC1BF0000000000E004 /* String+Localized.swift in Sources */,
+				AE94FBF10197B873F21F7C83 /* ThemeManager.swift in Sources */,
+				1E68170BD87E53F72BF5D2DE /* ContactSyncService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -581,11 +590,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				DEVELOPMENT_TEAM = LF9DXU9P25;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "arm64 x86_64";
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "SYNAPTYC/Info.plist";
+				INFOPLIST_FILE = SYNAPTYC/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aievolution.nanosynapsys;
@@ -603,10 +612,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				DEVELOPMENT_TEAM = LF9DXU9P25;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "SYNAPTYC/Info.plist";
+				INFOPLIST_FILE = SYNAPTYC/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.aievolution.nanosynapsys;
@@ -628,7 +637,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -652,7 +661,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -670,7 +679,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -687,7 +696,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -696,7 +705,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "SYNAPTYC";
+				TEST_TARGET_NAME = SYNAPTYC;
 			};
 			name = Debug;
 		};
@@ -704,7 +713,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -713,7 +722,7 @@
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "SYNAPTYC";
+				TEST_TARGET_NAME = SYNAPTYC;
 			};
 			name = Release;
 		};
@@ -727,7 +736,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202603231855;
+				CURRENT_PROJECT_VERSION = 202603232307;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

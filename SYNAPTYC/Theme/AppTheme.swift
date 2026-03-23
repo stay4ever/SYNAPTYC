@@ -1,17 +1,38 @@
 import SwiftUI
 
-// MARK: - Colour palette
+// MARK: - Colour palette (theme-aware dynamic colors)
+// Colors are computed from ThemeManager.shared at call time.
+// The root view uses .id(themeManager.activeTheme) to force a full re-render on theme change.
+
 extension Color {
-    static let neonGreen    = Color(hex: "#00ff41")
-    static let deepBlack    = Color(hex: "#000e00")
-    static let surfaceGreen = Color(hex: "#0a1a0a")   // bubble bg — received
-    static let panelGreen   = Color(hex: "#0d200d")   // bubble bg — sent
-    static let darkGreen    = Color(hex: "#001a00")
-    static let matrixGreen  = Color(hex: "#00aa00")
-    static let dimGreen     = Color(hex: "#004400")
-    static let borderGreen  = Color(hex: "#1a3a1a")   // subtle border
-    static let alertRed     = Color(hex: "#ff3333")
-    static let amber        = Color(hex: "#fbbf24")
+    private static var theme: AppTheme { ThemeManager.shared.activeTheme }
+
+    static var neonGreen: Color {
+        theme == .matrixGreen ? Color(hex: "#00ff41") : Color(hex: "#E0E0E0")
+    }
+    static var deepBlack: Color {
+        theme == .matrixGreen ? Color(hex: "#000e00") : Color(hex: "#0A0A0A")
+    }
+    static var surfaceGreen: Color {
+        theme == .matrixGreen ? Color(hex: "#0a1a0a") : Color(hex: "#1C1C1C")
+    }
+    static var panelGreen: Color {
+        theme == .matrixGreen ? Color(hex: "#0d200d") : Color(hex: "#141414")
+    }
+    static var darkGreen: Color {
+        theme == .matrixGreen ? Color(hex: "#001a00") : Color(hex: "#0D0D0D")
+    }
+    static var matrixGreen: Color {
+        theme == .matrixGreen ? Color(hex: "#00aa00") : Color(hex: "#A0A0A0")
+    }
+    static var dimGreen: Color {
+        theme == .matrixGreen ? Color(hex: "#004400") : Color(hex: "#2E2E2E")
+    }
+    static var borderGreen: Color {
+        theme == .matrixGreen ? Color(hex: "#1a3a1a") : Color(hex: "#2A2A2A")
+    }
+    static let alertRed = Color(hex: "#ff3333")
+    static let amber    = Color(hex: "#fbbf24")
 
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -30,11 +51,11 @@ extension Color {
 
 // MARK: - Typography
 extension Font {
-    static let monoTitle = Font.system(.title2, design: .monospaced).weight(.bold)
+    static let monoTitle    = Font.system(.title2,   design: .monospaced).weight(.bold)
     static let monoHeadline = Font.system(.headline, design: .monospaced).weight(.semibold)
-    static let monoBody = Font.system(.body, design: .monospaced)
-    static let monoCaption = Font.system(.caption, design: .monospaced)
-    static let monoSmall = Font.system(size: 11, design: .monospaced)
+    static let monoBody     = Font.system(.body,     design: .monospaced)
+    static let monoCaption  = Font.system(.caption,  design: .monospaced)
+    static let monoSmall    = Font.system(size: 11,  design: .monospaced)
 }
 
 // MARK: - ViewModifiers

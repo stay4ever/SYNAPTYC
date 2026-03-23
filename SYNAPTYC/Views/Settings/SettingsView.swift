@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var auth: AuthViewModel
+    @EnvironmentObject var themeManager: ThemeManager
     @State private var showLogoutConfirm     = false
     @State private var showChangePassword    = false
     @State private var screenshotDetected    = false
@@ -20,6 +21,60 @@ struct SettingsView: View {
                         // Profile card
                         if let user = auth.currentUser {
                             profileCard(user)
+                        }
+
+                        // Appearance / Theme
+                        settingsSection(title: "APPEARANCE") {
+                            VStack(spacing: 10) {
+                                HStack {
+                                    Image(systemName: "paintpalette.fill")
+                                        .foregroundColor(.matrixGreen).frame(width: 22)
+                                    Text("Theme").font(.monoBody).foregroundColor(.neonGreen)
+                                    Spacer()
+                                }
+                                HStack(spacing: 8) {
+                                    ForEach(AppTheme.allCases) { skin in
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.25)) {
+                                                themeManager.activeTheme = skin
+                                            }
+                                        } label: {
+                                            HStack(spacing: 6) {
+                                                Circle()
+                                                    .fill(skin.swatchColor)
+                                                    .frame(width: 9, height: 9)
+                                                    .shadow(color: skin.swatchColor.opacity(0.7), radius: 3)
+                                                Text(skin.rawValue)
+                                                    .font(.monoCaption)
+                                                    .foregroundColor(
+                                                        themeManager.activeTheme == skin
+                                                            ? .neonGreen : .matrixGreen
+                                                    )
+                                            }
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 9)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 7)
+                                                    .fill(
+                                                        themeManager.activeTheme == skin
+                                                            ? Color.neonGreen.opacity(0.1)
+                                                            : Color.clear
+                                                    )
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 7)
+                                                            .stroke(
+                                                                themeManager.activeTheme == skin
+                                                                    ? Color.neonGreen.opacity(0.5)
+                                                                    : Color.borderGreen,
+                                                                lineWidth: 1
+                                                            )
+                                                    )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
 
                         // Security section

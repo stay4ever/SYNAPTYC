@@ -2,10 +2,11 @@ import SwiftUI
 
 @main
 struct SYNAPTYCApp: App {
-    @StateObject private var auth    = AuthViewModel.shared
+    @StateObject private var auth         = AuthViewModel.shared
+    @StateObject private var themeManager = ThemeManager.shared
     @Environment(\.scenePhase) var scenePhase
-    @State private var showSplash    = true
-    @State private var isBlurred     = false
+    @State private var showSplash = true
+    @State private var isBlurred  = false
 
     var body: some Scene {
         WindowGroup {
@@ -18,9 +19,11 @@ struct SYNAPTYCApp: App {
                         if auth.isLoggedIn {
                             MainTabView()
                                 .environmentObject(auth)
+                                .environmentObject(themeManager)
                         } else {
                             LoginView()
                                 .environmentObject(auth)
+                                .environmentObject(themeManager)
                         }
                     }
                     .transition(.opacity)
@@ -43,6 +46,8 @@ struct SYNAPTYCApp: App {
                         .transition(.opacity)
                 }
             }
+            // Force full view-tree re-render when theme changes so all Color.* computed props refresh
+            .id(themeManager.activeTheme)
             .animation(.easeInOut(duration: 0.4), value: showSplash)
             .animation(.easeInOut(duration: 0.15), value: isBlurred)
             .animation(.easeInOut(duration: 0.3), value: auth.isLoggedIn)

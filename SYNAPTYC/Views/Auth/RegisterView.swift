@@ -7,6 +7,7 @@ struct RegisterView: View {
     @State private var username    = ""
     @State private var displayName = ""
     @State private var email       = ""
+    @State private var phoneNumber = ""
     @State private var password    = ""
     @State private var confirm     = ""
     @State private var submitted   = false
@@ -30,24 +31,14 @@ struct RegisterView: View {
                             .font(.monoTitle)
                             .foregroundColor(.neonGreen)
                             .glowText()
-                        Text("Your account requires admin approval.")
+                        Text("Create your encrypted account.")
                             .font(.monoCaption)
                             .foregroundColor(.matrixGreen)
                     }
                     .padding(.top, 40)
 
-                    if submitted {
-                        VStack(spacing: 16) {
-                            Image(systemName: "clock.badge.checkmark.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.neonGreen)
-                            Text("Registration submitted.\nAwaiting administrator approval.")
-                                .font(.monoBody)
-                                .foregroundColor(.matrixGreen)
-                                .multilineTextAlignment(.center)
-                            NeonButton("BACK TO LOGIN", style: .secondary) { dismiss() }
-                        }
-                        .padding(.horizontal, 28)
+                    if false { // approval flow removed
+                        EmptyView()
                     } else {
                         VStack(spacing: 12) {
                             NeonTextField(placeholder: "Username", text: $username, icon: "at",
@@ -58,6 +49,9 @@ struct RegisterView: View {
                             NeonTextField(placeholder: "Email address", text: $email,
                                           icon: "envelope", keyboardType: .emailAddress,
                                           fieldIdentifier: "register_email_field")
+                            NeonTextField(placeholder: "Phone number (optional)", text: $phoneNumber,
+                                          icon: "phone", keyboardType: .phonePad,
+                                          fieldIdentifier: "register_phone_field")
                             NeonTextField(placeholder: "Password (min 8 chars)", text: $password,
                                           isSecure: true, icon: "key",
                                           fieldIdentifier: "register_password_field")
@@ -82,7 +76,8 @@ struct RegisterView: View {
                                 guard passwordsMatch else { return }
                                 Task {
                                     await auth.register(username: username, email: email,
-                                                         password: password, displayName: displayName)
+                                                         password: password, displayName: displayName,
+                                                         phoneNumber: phoneNumber)
                                     if auth.errorMessage == nil { submitted = true }
                                 }
                             }

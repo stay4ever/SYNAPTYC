@@ -62,12 +62,11 @@ struct MessagesResponse: Codable {
 // Disappearing message timer options
 enum DisappearTimer: String, CaseIterable, Identifiable {
     case off
-    case m1    = "1m"
-    case m5    = "5m"
-    case m10   = "10m"
-    case h24   = "24h"
-    case d7    = "7d"
-    case d30   = "30d"
+    case m1  = "1m"
+    case m5  = "5m"
+    case m15 = "15m"
+    case m30 = "30m"
+    case h24 = "24h"
 
     var id: String { rawValue }
     var label: String {
@@ -75,10 +74,9 @@ enum DisappearTimer: String, CaseIterable, Identifiable {
         case .off: return "Off"
         case .m1:  return "1 minute"
         case .m5:  return "5 minutes"
-        case .m10: return "10 minutes"
+        case .m15: return "15 minutes"
+        case .m30: return "30 minutes"
         case .h24: return "24 hours"
-        case .d7:  return "7 days"
-        case .d30: return "30 days"
         }
     }
     var interval: TimeInterval? {
@@ -86,10 +84,9 @@ enum DisappearTimer: String, CaseIterable, Identifiable {
         case .off: return nil
         case .m1:  return 60
         case .m5:  return 300
-        case .m10: return 600
+        case .m15: return 900
+        case .m30: return 1800
         case .h24: return 86400
-        case .d7:  return 604800
-        case .d30: return 2592000
         }
     }
 }

@@ -83,7 +83,7 @@ struct LoginView: View {
                         .accessibilityIdentifier("register_link")
                         .padding(.horizontal, 28)
 
-                        Text("Registration requires admin approval.")
+                        Text("Your messages are end-to-end encrypted.")
                             .font(.monoSmall)
                             .foregroundColor(.matrixGreen.opacity(0.6))
                     }

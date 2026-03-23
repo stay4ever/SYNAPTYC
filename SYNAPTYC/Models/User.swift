@@ -8,13 +8,16 @@ struct AppUser: Codable, Identifiable, Equatable {
     var isApproved: Bool
     var isOnline: Bool?
     var lastSeen: String?
+    /// Hashed phone number — never store or log the raw number
+    var phoneNumberHash: String?
 
     enum CodingKeys: String, CodingKey {
         case id, username, email
-        case displayName = "display_name"
-        case isApproved = "is_approved"
-        case isOnline = "online"
-        case lastSeen = "last_seen"
+        case displayName       = "display_name"
+        case isApproved        = "is_approved"
+        case isOnline          = "online"
+        case lastSeen          = "last_seen"
+        case phoneNumberHash   = "phone_number_hash"
     }
 
     var name: String {

@@ -143,7 +143,7 @@ function authMiddleware(req, res, next) {
 // ---------------------------------------------------------------------------
 
 app.post("/auth/register", (req, res) => {
-  const { username, email, password, display_name } = req.body;
+  const { username, email, password, display_name, phone_number_hash } = req.body;
   if (!username || !email || !password) {
     return res.status(400).json({ error: "username, email, and password are required" });
   }
@@ -156,9 +156,9 @@ app.post("/auth/register", (req, res) => {
   const hash = bcrypt.hashSync(password, BCRYPT_ROUNDS);
   const info = db
     .prepare(
-      "INSERT INTO users (username, email, password_hash, display_name, is_approved) VALUES (?, ?, ?, ?, 1)"
+      "INSERT INTO users (username, email, password_hash, display_name, is_approved, phone_number_hash) VALUES (?, ?, ?, ?, 1, ?)"
     )
-    .run(username, email, hash, display_name || null);
+    .run(username, email, hash, display_name || null, phone_number_hash || null);
 
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(info.lastInsertRowid);
   const token = signToken(user.id);
@@ -173,9 +173,6 @@ app.post("/auth/login", (req, res) => {
   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: "Invalid credentials" });
-  }
-  if (!user.is_approved) {
-    return res.status(403).json({ error: "Account pending approval" });
   }
   const token = signToken(user.id);
   res.json({ token, user: sanitizeUser(user) });
@@ -197,7 +194,7 @@ app.post("/auth/password-reset", (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.get("/api/users", authMiddleware, (req, res) => {
-  const users = db.prepare("SELECT * FROM users WHERE is_approved = 1").all();
+  const users = db.prepare("SELECT * FROM users").all();
   res.json({ users: users.map(sanitizeUser) });
 });
 
@@ -309,6 +306,23 @@ app.delete("/api/contacts/:id", authMiddleware, (req, res) => {
   }
   db.prepare("DELETE FROM contacts WHERE id = ?").run(req.params.id);
   res.json({ deleted: true });
+});
+
+// POST /api/contacts/sync — Signal-style phone number discovery
+// Accepts an array of SHA-256 hashed phone numbers; returns matched users.
+// The server never sees raw phone numbers — only hashes.
+app.post("/api/contacts/sync", authMiddleware, (req, res) => {
+  const { hashes } = req.body;
+  if (!Array.isArray(hashes) || hashes.length === 0) {
+    return res.json({ matched: [] });
+  }
+  // Limit to 500 hashes per request to prevent abuse
+  const limited = hashes.slice(0, 500);
+  const placeholders = limited.map(() => "?").join(",");
+  const rows = db
+    .prepare(`SELECT * FROM users WHERE phone_number_hash IN (${placeholders}) AND id != ?`)
+    .all(...limited, req.userId);
+  res.json({ matched: rows.map(sanitizeUser) });
 });
 
 // ---------------------------------------------------------------------------
@@ -529,7 +543,7 @@ function sendToUser(userId, payload, excludeWs = undefined) {
 /** Broadcast to all connected clients */
 function broadcastUserList() {
   const userList = [];
-  const allUsers = db.prepare("SELECT id, username, display_name, online FROM users WHERE is_approved = 1").all();
+  const allUsers = db.prepare("SELECT id, username, display_name, online FROM users").all();
   for (const u of allUsers) {
     userList.push({
       id: u.id,
@@ -810,5 +824,6 @@ function sanitizeUser(row) {
     is_approved: !!row.is_approved,
     online: !!row.online,
     last_seen: row.last_seen,
+    phone_number_hash: row.phone_number_hash || null,
   };
 }

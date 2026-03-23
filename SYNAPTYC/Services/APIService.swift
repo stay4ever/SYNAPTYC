@@ -84,18 +84,30 @@ actor APIService {
 
     // MARK: - Auth
 
-    func register(username: String, email: String, password: String, displayName: String) async throws -> AuthResponse {
+    func register(username: String, email: String, password: String,
+                  displayName: String, phoneNumberHash: String? = nil) async throws -> AuthResponse {
         struct Body: Encodable {
             let username, email, password: String
             let displayName: String
+            let phoneNumberHash: String?
             enum CodingKeys: String, CodingKey {
                 case username, email, password
-                case displayName = "display_name"
+                case displayName     = "display_name"
+                case phoneNumberHash = "phone_number_hash"
             }
         }
         return try await request(Config.API.register, method: "POST",
-                                 body: Body(username: username, email: email, password: password, displayName: displayName),
+                                 body: Body(username: username, email: email, password: password,
+                                            displayName: displayName, phoneNumberHash: phoneNumberHash),
                                  responseType: AuthResponse.self)
+    }
+
+    func syncContacts(hashes: [String]) async throws -> [AppUser] {
+        struct Body: Encodable { let hashes: [String] }
+        struct Resp: Decodable { let matched: [AppUser] }
+        let resp = try await request("\(Config.API.contacts)/sync", method: "POST",
+                                     body: Body(hashes: hashes), responseType: Resp.self)
+        return resp.matched
     }
 
     func login(email: String, password: String) async throws -> AuthResponse {

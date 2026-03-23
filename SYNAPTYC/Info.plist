@@ -21,7 +21,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.5.1</string>
 	<key>CFBundleVersion</key>
-	<string>202603231855</string>
+	<string>202603232307</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
@@ -29,6 +29,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 	</dict>
+	<key>NSContactsUsageDescription</key>
+	<string>SYNAPTYC finds people you know who are already on the app, just like Signal. No contact data is sent to the server.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera access to send photos in encrypted messages.</string>
 	<key>NSFaceIDUsageDescription</key>

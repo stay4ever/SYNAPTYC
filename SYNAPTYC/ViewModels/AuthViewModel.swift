@@ -49,6 +49,8 @@ final class AuthViewModel: ObservableObject {
             isLoggedIn  = true
             WebSocketService.shared.connect()
             _ = await NotificationService.requestPermission()
+            // Sync contacts in background (doesn't block login)
+            await ContactSyncService.shared.syncIfAuthorized()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -56,14 +58,23 @@ final class AuthViewModel: ObservableObject {
 
     // MARK: - Register
 
-    func register(username: String, email: String, password: String, displayName: String) async {
+    func register(username: String, email: String, password: String,
+                  displayName: String, phoneNumber: String = "") async {
         isLoading = true; errorMessage = nil
         defer { isLoading = false }
+        let phoneHash = phoneNumber.isEmpty ? nil : ContactSyncService.hash(phoneNumber: phoneNumber)
         do {
-            _ = try await APIService.shared.register(username: username, email: email,
-                                                      password: password, displayName: displayName)
-            errorMessage = nil
-            // Registration success — user must wait for approval
+            let resp = try await APIService.shared.register(username: username, email: email,
+                                                             password: password, displayName: displayName,
+                                                             phoneNumberHash: phoneHash)
+            KeychainService.save(resp.token, for: Config.Keychain.tokenKey)
+            persist(user: resp.user)
+            currentUser = resp.user
+            isLoggedIn  = true
+            WebSocketService.shared.connect()
+            _ = await NotificationService.requestPermission()
+            // Sync contacts in background
+            await ContactSyncService.shared.syncIfAuthorized()
         } catch {
             errorMessage = error.localizedDescription
         }
