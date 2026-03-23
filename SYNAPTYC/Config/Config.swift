@@ -4,8 +4,8 @@ enum Config {
     // MARK: - Server endpoints (SYNAPTYC dedicated infrastructure)
     // Standalone backend — no shared infrastructure with any other service.
 
-    static let baseURL = "https://www.ai-evolution.com.au"
-    static let wsURL   = "wss://www.ai-evolution.com.au/chat"
+    static let baseURL = "https://nano-synapsys-server.fly.dev"
+    static let wsURL   = "wss://nano-synapsys-server.fly.dev/chat"
 
     enum API {
         static let register      = "\(baseURL)/auth/register"
@@ -33,6 +33,6 @@ enum Config {
         static let version          = "1.5.1"
         static let build            = "83"
         static let encryptionLabel  = "Signal Double Ratchet · AES-256-GCM · ECDH-P384"
-        static let backendHost      = "ai-evolution.com.au"
+        static let backendHost      = "nano-synapsys-server.fly.dev"
     }
 }

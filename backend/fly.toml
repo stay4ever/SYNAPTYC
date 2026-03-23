@@ -1,4 +1,4 @@
-app = "nano-synapsys"
+app = "nano-synapsys-server"
 primary_region = "syd"
 
 [build]
@@ -8,7 +8,7 @@ primary_region = "syd"
   PORT = "3000"
   NODE_ENV = "production"
   DB_PATH = "/data/nano-synapsys.db"
-  BASE_URL = "https://www.api.nanosynapsys.com"
+  BASE_URL = "https://nano-synapsys-server.fly.dev"
 
 [http_service]
   internal_port = 3000
