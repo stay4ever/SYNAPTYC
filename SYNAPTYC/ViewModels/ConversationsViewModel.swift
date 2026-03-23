@@ -11,12 +11,9 @@ final class ConversationsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        // React to incoming WebSocket messages
-        WebSocketService.shared.$incomingMessage
-            .compactMap { $0 }
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in Task { await self?.loadUsers() } }
-            .store(in: &cancellables)
+        // Update online status from user_list events; avoid full reload on every message.
+        // A full users reload is only needed when a new user appears (rare) — handled by pull-to-refresh.
+        // No auto-reload on every chat message (would hammer the API).
 
         WebSocketService.shared.$onlineUserIds
             .receive(on: RunLoop.main)

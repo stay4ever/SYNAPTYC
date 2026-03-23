@@ -6,14 +6,16 @@ enum APIError: LocalizedError {
     case serverError(String)
     case unauthorized
     case decodingError(Error)
+    case timeout
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "Invalid URL"
-        case .noData: return "No data received"
-        case .serverError(let m): return m
-        case .unauthorized: return "Session expired. Please log in again."
+        case .invalidURL:          return "Invalid URL"
+        case .noData:              return "No data received"
+        case .serverError(let m):  return m
+        case .unauthorized:        return "Session expired. Please log in again."
         case .decodingError(let e): return "Data error: \(e.localizedDescription)"
+        case .timeout:             return "Request timed out. Check your connection."
         }
     }
 }
@@ -21,6 +23,14 @@ enum APIError: LocalizedError {
 actor APIService {
     static let shared = APIService()
     private init() {}
+
+    // Shared URLSession with a 20-second timeout
+    private let session: URLSession = {
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest  = 20
+        cfg.timeoutIntervalForResource = 60
+        return URLSession(configuration: cfg)
+    }()
 
     private func token() -> String? {
         KeychainService.load(Config.Keychain.tokenKey)
@@ -44,19 +54,29 @@ actor APIService {
         if let body = body {
             req.httpBody = try JSONEncoder().encode(body)
         }
-        let (data, resp) = try await URLSession.shared.data(for: req)
+
+        let (data, resp): (Data, URLResponse)
+        do {
+            (data, resp) = try await session.data(for: req)
+        } catch let err as URLError where err.code == .timedOut {
+            throw APIError.timeout
+        }
+
         if let http = resp as? HTTPURLResponse {
             if http.statusCode == 401 { throw APIError.unauthorized }
             if http.statusCode >= 400 {
-                let msg = (try? JSONDecoder().decode([String: String].self, from: data))?["error"]
-                    ?? (try? JSONDecoder().decode([String: String].self, from: data))?["detail"]
-                    ?? "Server error \(http.statusCode)"
+                // Extract error message from JSON body (try "error" then "detail" keys)
+                let msg: String
+                if let json = try? JSONDecoder().decode([String: String].self, from: data) {
+                    msg = json["error"] ?? json["detail"] ?? "Server error \(http.statusCode)"
+                } else {
+                    msg = "Server error \(http.statusCode)"
+                }
                 throw APIError.serverError(msg)
             }
         }
         do {
-            let decoder = JSONDecoder()
-            return try decoder.decode(T.self, from: data)
+            return try JSONDecoder().decode(T.self, from: data)
         } catch {
             throw APIError.decodingError(error)
         }
@@ -138,6 +158,35 @@ actor APIService {
         let body = ContactPatch(status: status)
         return try await request("\(Config.API.contacts)/\(id)", method: "PATCH",
                                  body: body, responseType: Resp.self).contact
+    }
+
+    func deleteContact(id: Int) async throws {
+        struct Resp: Decodable { let deleted: Bool }
+        _ = try await request("\(Config.API.contacts)/\(id)", method: "DELETE",
+                              responseType: Resp.self)
+    }
+
+    // MARK: - Profile
+
+    func updateProfile(displayName: String? = nil) async throws -> AppUser {
+        struct Body: Encodable {
+            let displayName: String?
+            enum CodingKeys: String, CodingKey { case displayName = "display_name" }
+        }
+        struct Resp: Decodable { let user: AppUser }
+        return try await request(Config.API.profile, method: "PUT",
+                                 body: Body(displayName: displayName),
+                                 responseType: Resp.self).user
+    }
+
+    // MARK: - Push Token
+
+    func registerPushToken(_ token: String) async throws {
+        struct Body: Encodable { let token, platform: String }
+        struct Resp: Decodable { let registered: Bool }
+        _ = try await request(Config.API.pushToken, method: "POST",
+                              body: Body(token: token, platform: "ios"),
+                              responseType: Resp.self)
     }
 
     // MARK: - Bot

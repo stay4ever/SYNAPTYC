@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ConversationsListView: View {
-    @StateObject private var vm  = ConversationsViewModel()
+    @StateObject private var vm = ConversationsViewModel()
     @State private var searchText = ""
 
     var filtered: [AppUser] {
@@ -30,14 +30,21 @@ struct ConversationsListView: View {
                             .tint(.neonGreen)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
+                        if !searchText.isEmpty {
+                            Button { searchText = "" } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.matrixGreen.opacity(0.6))
+                                    .font(.system(size: 14))
+                            }
+                        }
                     }
                     .padding(12)
                     .background(Color.darkGreen.opacity(0.3))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 10)
                             .stroke(Color.neonGreen.opacity(0.15), lineWidth: 1)
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
 
@@ -48,7 +55,7 @@ struct ConversationsListView: View {
                     } else {
                         ScrollView {
                             LazyVStack(spacing: 0) {
-                                // Banner bot entry
+                                // Banner AI entry (always first)
                                 NavigationLink(destination: BotChatView()) {
                                     BotRowView()
                                 }
@@ -56,12 +63,25 @@ struct ConversationsListView: View {
 
                                 Divider().background(Color.neonGreen.opacity(0.08))
 
-                                ForEach(filtered) { user in
-                                    NavigationLink(destination: ChatView(peer: user)) {
-                                        ConversationRow(user: user)
+                                if filtered.isEmpty && !searchText.isEmpty {
+                                    VStack(spacing: 10) {
+                                        Image(systemName: "magnifyingglass")
+                                            .font(.system(size: 28))
+                                            .foregroundColor(.matrixGreen.opacity(0.3))
+                                        Text("No users match \"\(searchText)\"")
+                                            .font(.monoCaption)
+                                            .foregroundColor(.matrixGreen.opacity(0.5))
                                     }
-                                    .buttonStyle(.plain)
-                                    Divider().background(Color.neonGreen.opacity(0.08))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 40)
+                                } else {
+                                    ForEach(filtered) { user in
+                                        NavigationLink(destination: ChatView(peer: user)) {
+                                            ConversationRow(user: user)
+                                        }
+                                        .buttonStyle(.plain)
+                                        Divider().background(Color.neonGreen.opacity(0.08))
+                                    }
                                 }
                             }
                         }
@@ -73,10 +93,16 @@ struct ConversationsListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("SYNAPTYC")
-                        .font(.monoHeadline)
-                        .foregroundColor(.neonGreen)
-                        .glowText()
+                    VStack(spacing: 1) {
+                        Text("SYNAPTYC")
+                            .font(.monoHeadline)
+                            .foregroundColor(.neonGreen)
+                            .glowText()
+                        Text("E2E ENCRYPTED")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.matrixGreen.opacity(0.7))
+                            .tracking(2)
+                    }
                 }
             }
         }
@@ -84,40 +110,70 @@ struct ConversationsListView: View {
     }
 }
 
+// MARK: - Conversation Row
+
 struct ConversationRow: View {
     let user: AppUser
+
     var body: some View {
         HStack(spacing: 14) {
+            // Avatar with online indicator
             ZStack(alignment: .bottomTrailing) {
                 Circle()
                     .fill(Color.darkGreen)
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.25), lineWidth: 1))
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Circle().stroke(
+                            user.isOnline == true
+                                ? Color.neonGreen.opacity(0.5)
+                                : Color.neonGreen.opacity(0.2),
+                            lineWidth: 1.5
+                        )
+                    )
                 Text(user.initials)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .font(.system(size: 17, weight: .bold, design: .monospaced))
                     .foregroundColor(.neonGreen)
                 OnlineDot(isOnline: user.isOnline ?? false)
                     .offset(x: 2, y: 2)
             }
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
+
+            // Name + status line
+            VStack(alignment: .leading, spacing: 4) {
                 Text(user.name)
                     .font(.monoBody).fontWeight(.semibold)
                     .foregroundColor(.neonGreen)
-                Text("@\(user.username)")
-                    .font(.monoCaption)
-                    .foregroundColor(.matrixGreen)
+                HStack(spacing: 5) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 9))
+                        .foregroundColor(.matrixGreen.opacity(0.6))
+                    Text(user.isOnline == true ? "online" : "@\(user.username)")
+                        .font(.monoCaption)
+                        .foregroundColor(.matrixGreen)
+                }
             }
+
             Spacer()
-            EncryptionBadge(compact: true)
+
+            // Online/offline timestamp column
+            VStack(alignment: .trailing, spacing: 4) {
+                EncryptionBadge(compact: true)
+                if user.isOnline == true {
+                    Text("now")
+                        .font(.monoSmall)
+                        .foregroundColor(.neonGreen.opacity(0.6))
+                }
+            }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 13)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(user.name), @\(user.username), \(user.isOnline == true ? "Online" : "Offline"), Encrypted")
     }
 }
+
+// MARK: - Bot Row
 
 struct BotRowView: View {
     var body: some View {
@@ -125,23 +181,30 @@ struct BotRowView: View {
             ZStack {
                 Circle()
                     .fill(Color.darkGreen)
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1))
+                    .frame(width: 50, height: 50)
+                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.5), lineWidth: 1.5))
                 Image(systemName: "cpu.fill")
-                    .font(.system(size: 18))
+                    .font(.system(size: 20))
                     .foregroundColor(.neonGreen)
             }
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Banner AI").font(.monoBody).fontWeight(.semibold).foregroundColor(.neonGreen)
-                Text("AI assistant — always online").font(.monoCaption).foregroundColor(.matrixGreen)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Banner AI")
+                    .font(.monoBody).fontWeight(.semibold)
+                    .foregroundColor(.neonGreen)
+                Text("AI assistant · Claude-powered")
+                    .font(.monoCaption)
+                    .foregroundColor(.matrixGreen)
             }
+
             Spacer()
+
             PulsatingDot(color: .neonGreen, size: 7)
                 .accessibilityHidden(true)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 13)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Banner AI, AI assistant, always online")

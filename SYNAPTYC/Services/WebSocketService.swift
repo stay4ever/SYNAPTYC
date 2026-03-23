@@ -24,13 +24,13 @@ struct WSMessage: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case type, id, content, from, to, users, read
-        case createdAt = "created_at"
-        case messageId = "message_id"
-        case publicKey = "public_key"
-        case groupId = "group_id"
-        case fromUsername = "from_username"
-        case fromDisplay = "from_display"
-        case encryptedKey = "encrypted_key"
+        case createdAt     = "created_at"
+        case messageId     = "message_id"
+        case publicKey     = "public_key"
+        case groupId       = "group_id"
+        case fromUsername  = "from_username"
+        case fromDisplay   = "from_display"
+        case encryptedKey  = "encrypted_key"
     }
 }
 
@@ -56,81 +56,85 @@ struct KeyExchangeEvent {
 final class WebSocketService: ObservableObject {
     static let shared = WebSocketService()
 
-    @Published var onlineUserIds: Set<Int>                = []
+    @Published var onlineUserIds: Set<Int>          = []
     @Published var incomingMessage: Message?
     @Published var incomingGroupMessage: GroupMessage?
     @Published var incomingKeyExchange: KeyExchangeEvent?
-    @Published var typingUsers: Set<Int>                   = []
-    @Published var isConnected                             = false
+    @Published var typingUsers: Set<Int>            = []
+    @Published var isConnected                      = false
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var pingTimer: Timer?
+    private var reconnectTask: Task<Void, Never>?
     private var reconnectAttempt = 0
-    private static let maxReconnectDelay: UInt64 = 30_000_000_000 // 30s cap
+    private static let maxReconnectDelay: UInt64 = 30_000_000_000 // 30 s cap
+    private static let maxReconnectAttempts = 10
 
     private init() {}
 
     // MARK: - Connection
 
     func connect() {
+        // Don't double-connect
+        guard webSocketTask == nil || !(webSocketTask?.state == .running) else { return }
         guard let token = KeychainService.load(Config.Keychain.tokenKey) else { return }
         guard let url = URL(string: "\(Config.wsURL)?token=\(token)") else { return }
+
         let session = URLSession(configuration: .default)
-        webSocketTask = session.webSocketTask(with: url)
-        webSocketTask?.resume()
-        isConnected = true
-        reconnectAttempt = 0
+        let task = session.webSocketTask(with: url)
+        webSocketTask = task
+        task.resume()
+        // isConnected set to true only after first successful message or ping ACK
         receive()
         startPing()
     }
 
     func disconnect() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         pingTimer?.invalidate()
+        pingTimer = nil
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
-        isConnected   = false
-        onlineUserIds = []
+        isConnected      = false
+        onlineUserIds    = []
         reconnectAttempt = 0
     }
 
     // MARK: - Outgoing messages
 
     func sendTyping(to userId: Int) {
-        let payload: [String: Any] = ["type": "typing", "to": userId]
-        send(payload)
+        send(["type": "typing", "to": userId])
     }
 
     func markRead(from userId: Int) {
-        let payload: [String: Any] = ["type": "mark_read", "from": userId]
-        send(payload)
+        send(["type": "mark_read", "from": userId])
     }
 
     func markRead(messageId: Int) {
-        let payload: [String: Any] = ["type": "mark_read", "message_id": messageId]
-        send(payload)
+        send(["type": "mark_read", "message_id": messageId])
     }
 
     func sendGroupMessage(groupId: Int, content: String) {
-        let payload: [String: Any] = ["type": "group_message", "group_id": groupId, "content": content]
-        send(payload)
+        send(["type": "group_message", "group_id": groupId, "content": content])
     }
 
     /// Send ECDH public key to a peer for key exchange
     func sendKeyExchange(to userId: Int, publicKey: String) {
-        let payload: [String: Any] = [
-            "type": "key_exchange",
-            "to": userId,
+        send([
+            "type":       "key_exchange",
+            "to":         userId,
             "public_key": publicKey
-        ]
-        send(payload)
+        ])
     }
 
     // MARK: - Internal send
 
     private func send(_ dict: [String: Any]) {
+        guard let task = webSocketTask, task.state == .running else { return }
         guard let data = try? JSONSerialization.data(withJSONObject: dict),
               let str  = String(data: data, encoding: .utf8) else { return }
-        webSocketTask?.send(.string(str)) { _ in }
+        task.send(.string(str)) { _ in }
     }
 
     // MARK: - Receive loop
@@ -140,23 +144,40 @@ final class WebSocketService: ObservableObject {
             guard let self else { return }
             switch result {
             case .success(let msg):
-                if case .string(let text) = msg {
-                    Task { @MainActor in self.handle(text) }
+                Task { @MainActor in
+                    self.isConnected = true   // first message confirms connection
+                    if case .string(let text) = msg {
+                        self.handle(text)
+                    }
+                    self.receive()          // re-arm on main actor
                 }
-                self.receive()
             case .failure:
                 Task { @MainActor in
                     self.isConnected = false
-                    // Exponential backoff reconnect: 2s, 4s, 8s, 16s, capped at 30s
-                    let delay = min(
-                        UInt64(pow(2.0, Double(self.reconnectAttempt + 1))) * 1_000_000_000,
-                        Self.maxReconnectDelay
-                    )
-                    self.reconnectAttempt += 1
-                    try? await Task.sleep(nanoseconds: delay)
-                    self.connect()
+                    self.scheduleReconnect()
                 }
             }
+        }
+    }
+
+    private func scheduleReconnect() {
+        guard reconnectAttempt < Self.maxReconnectAttempts else { return }
+        reconnectTask?.cancel()
+        let delay = min(
+            UInt64(pow(2.0, Double(reconnectAttempt + 1))) * 1_000_000_000,
+            Self.maxReconnectDelay
+        )
+        reconnectAttempt += 1
+        reconnectTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled else { return }
+            // Tear down old socket cleanly before creating a new one
+            self.pingTimer?.invalidate()
+            self.pingTimer = nil
+            self.webSocketTask?.cancel(with: .normalClosure, reason: nil)
+            self.webSocketTask = nil
+            self.connect()
         }
     }
 
@@ -185,12 +206,12 @@ final class WebSocketService: ObservableObject {
             }
 
         case "group_message":
-            if let id = msg.id,
-               let gid = msg.groupId,
-               let from = msg.from,
-               let content = msg.content,
+            if let id       = msg.id,
+               let gid      = msg.groupId,
+               let from     = msg.from,
+               let content  = msg.content,
                let username = msg.fromUsername,
-               let display = msg.fromDisplay {
+               let display  = msg.fromDisplay {
                 let gm = GroupMessage(
                     id: id, groupId: gid,
                     fromUser: from, fromUsername: username, fromDisplay: display,
@@ -214,6 +235,7 @@ final class WebSocketService: ObservableObject {
         case "user_list":
             if let users = msg.users {
                 onlineUserIds = Set(users.filter { $0.online }.map { $0.id })
+                isConnected = true
             }
 
         case "typing":
@@ -234,7 +256,20 @@ final class WebSocketService: ObservableObject {
     private func startPing() {
         pingTimer?.invalidate()
         pingTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: true) { [weak self] _ in
-            self?.webSocketTask?.sendPing { _ in }
+            guard let self else { return }
+            Task { @MainActor in
+                guard let task = self.webSocketTask, task.state == .running else { return }
+                task.sendPing { [weak self] error in
+                    if error != nil {
+                        Task { @MainActor in
+                            self?.isConnected = false
+                            self?.scheduleReconnect()
+                        }
+                    } else {
+                        Task { @MainActor in self?.isConnected = true }
+                    }
+                }
+            }
         }
     }
 }

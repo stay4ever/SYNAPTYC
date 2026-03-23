@@ -27,7 +27,7 @@ struct ChatView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "timer")
                                 .font(.system(size: 11))
-                            Text(vm.disappearTimer == .off ? "No timer" : vm.disappearTimer.rawValue)
+                            Text(vm.disappearTimer == .off ? "No timer" : vm.disappearTimer.label)
                                 .font(.monoSmall)
                         }
                         .foregroundColor(vm.disappearTimer == .off ? .matrixGreen.opacity(0.5) : .amber)

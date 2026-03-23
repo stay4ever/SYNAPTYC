@@ -222,6 +222,12 @@ app.post("/api/messages", authMiddleware, (req, res) => {
   if (!to_user || content === undefined) {
     return res.status(400).json({ error: "to_user and content are required" });
   }
+  if (typeof content !== "string" || content.length === 0) {
+    return res.status(400).json({ error: "content must be a non-empty string" });
+  }
+  if (content.length > 65536) {
+    return res.status(400).json({ error: "content too large (max 64 KB)" });
+  }
   const info = db
     .prepare("INSERT INTO messages (from_user, to_user, content) VALUES (?, ?, ?)")
     .run(req.userId, to_user, content);
@@ -276,13 +282,33 @@ app.post("/api/contacts", authMiddleware, (req, res) => {
 
 app.patch("/api/contacts/:id", authMiddleware, (req, res) => {
   const { status } = req.body;
-  if (!["accepted", "blocked", "pending"].includes(status)) {
+  if (!["accepted", "blocked", "pending", "rejected"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
+  }
+  // "rejected" maps to a hard delete — no need to keep the row
+  if (status === "rejected") {
+    const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
+    if (!contact) return res.status(404).json({ error: "Contact not found" });
+    if (contact.requester_id !== req.userId && contact.receiver_id !== req.userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    db.prepare("DELETE FROM contacts WHERE id = ?").run(req.params.id);
+    return res.json({ deleted: true });
   }
   db.prepare("UPDATE contacts SET status = ? WHERE id = ?").run(status, req.params.id);
   const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
   if (!contact) return res.status(404).json({ error: "Contact not found" });
   res.json({ contact });
+});
+
+app.delete("/api/contacts/:id", authMiddleware, (req, res) => {
+  const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
+  if (!contact) return res.status(404).json({ error: "Contact not found" });
+  if (contact.requester_id !== req.userId && contact.receiver_id !== req.userId) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  db.prepare("DELETE FROM contacts WHERE id = ?").run(req.params.id);
+  res.json({ deleted: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -361,6 +387,89 @@ app.delete("/api/groups/:groupId", authMiddleware, (req, res) => {
     req.userId
   );
   res.json({ deleted: true });
+});
+
+// ---------------------------------------------------------------------------
+// PROFILE
+// ---------------------------------------------------------------------------
+
+app.get("/api/profile", authMiddleware, (req, res) => {
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
+  if (!user) return res.status(404).json({ error: "User not found" });
+  res.json({ user: sanitizeUser(user) });
+});
+
+app.put("/api/profile", authMiddleware, (req, res) => {
+  const { display_name, bio } = req.body;
+  if (display_name !== undefined && typeof display_name !== "string") {
+    return res.status(400).json({ error: "display_name must be a string" });
+  }
+  if (bio !== undefined && typeof bio !== "string") {
+    return res.status(400).json({ error: "bio must be a string" });
+  }
+
+  // Only update columns that were provided
+  const updates = [];
+  const values = [];
+  if (display_name !== undefined) { updates.push("display_name = ?"); values.push(display_name.slice(0, 100)); }
+  if (bio !== undefined)          { updates.push("bio = ?");          values.push(bio.slice(0, 500)); }
+
+  if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
+
+  values.push(req.userId);
+  // Ignore "bio" column gracefully if it doesn't exist yet (migration may not have added it)
+  try {
+    db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
+  } catch {
+    // bio column missing — retry without it
+    const safeUpdates = updates.filter((u) => !u.startsWith("bio"));
+    const safeValues = safeUpdates.map((u) => {
+      if (u.startsWith("display_name")) return display_name.slice(0, 100);
+      return undefined;
+    }).filter(Boolean);
+    if (safeUpdates.length === 0) return res.status(400).json({ error: "Nothing to update" });
+    safeValues.push(req.userId);
+    db.prepare(`UPDATE users SET ${safeUpdates.join(", ")} WHERE id = ?`).run(...safeValues);
+  }
+
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
+  res.json({ user: sanitizeUser(user) });
+});
+
+// ---------------------------------------------------------------------------
+// PUSH TOKENS
+// ---------------------------------------------------------------------------
+
+app.post("/api/push-token", authMiddleware, (req, res) => {
+  const { token, platform } = req.body;
+  if (!token) return res.status(400).json({ error: "token is required" });
+
+  // Upsert push token for this user (one token per user for simplicity)
+  try {
+    db.prepare(
+      `INSERT INTO push_tokens (user_id, token, platform, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET token = excluded.token,
+         platform = excluded.platform, updated_at = excluded.updated_at`
+    ).run(req.userId, token, platform || "ios", new Date().toISOString());
+  } catch {
+    // push_tokens table may not exist in older migrations — create it now
+    db.prepare(
+      `CREATE TABLE IF NOT EXISTS push_tokens (
+         user_id INTEGER PRIMARY KEY,
+         token TEXT NOT NULL,
+         platform TEXT DEFAULT 'ios',
+         updated_at TEXT NOT NULL,
+         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+       )`
+    ).run();
+    db.prepare(
+      `INSERT OR REPLACE INTO push_tokens (user_id, token, platform, updated_at)
+       VALUES (?, ?, ?, ?)`
+    ).run(req.userId, token, platform || "ios", new Date().toISOString());
+  }
+
+  res.json({ registered: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -529,7 +638,8 @@ wss.on("connection", (ws) => {
       // -----------------------------------------------------------------
       case "group_message": {
         const groupId = msg.group_id;
-        if (!groupId || msg.content === undefined) break;
+        if (!groupId || typeof msg.content !== "string" || msg.content.length === 0) break;
+        if (msg.content.length > 65536) break;
 
         const sender = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
         const info = db
@@ -640,7 +750,7 @@ wss.on("connection", (ws) => {
 // ---------------------------------------------------------------------------
 
 app.get("/health", (_, res) => {
-  res.json({ status: "ok", service: "nano-SYNAPSYS", version: "1.0.0" });
+  res.json({ status: "ok", service: "nano-SYNAPSYS", version: "1.5.1" });
 });
 
 // ---------------------------------------------------------------------------

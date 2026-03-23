@@ -103,31 +103,52 @@ struct BotChatView: View {
 struct BotBubble: View {
     let msg: BotMessage
 
+    var isUser: Bool { msg.role == .user }
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            if msg.role == .assistant {
+            if isUser {
+                Spacer(minLength: 60)
+            } else {
+                // Assistant avatar
                 ZStack {
                     Circle().fill(Color.darkGreen).frame(width: 28, height: 28)
                         .overlay(Circle().stroke(Color.neonGreen.opacity(0.3), lineWidth: 1))
                     Image(systemName: "cpu").font(.system(size: 12)).foregroundColor(.neonGreen)
                 }
                 .alignmentGuide(.bottom) { d in d[.bottom] }
-            } else {
-                Spacer(minLength: 50)
             }
 
             Text(msg.content)
                 .font(.monoBody)
-                .foregroundColor(msg.role == .user ? .deepBlack : .neonGreen)
-                .padding(.horizontal, 12).padding(.vertical, 8)
-                .background(msg.role == .user ? Color.neonGreen : Color.darkGreen)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .shadow(color: msg.role == .assistant ? Color.neonGreen.opacity(0.08) : .clear, radius: 4)
+                .foregroundColor(isUser ? .deepBlack : .neonGreen)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 9)
+                .background(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius:     isUser ? 18 : 4,
+                        bottomLeadingRadius:  18,
+                        bottomTrailingRadius: 18,
+                        topTrailingRadius:    isUser ? 4 : 18
+                    )
+                    .fill(isUser ? Color.neonGreen : Color.darkGreen)
+                    .overlay(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius:     isUser ? 18 : 4,
+                            bottomLeadingRadius:  18,
+                            bottomTrailingRadius: 18,
+                            topTrailingRadius:    isUser ? 4 : 18
+                        )
+                        .stroke(
+                            isUser ? Color.neonGreen : Color.neonGreen.opacity(0.2),
+                            lineWidth: 1
+                        )
+                    )
+                )
+                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
 
-            if msg.role == .user {
-                Spacer(minLength: 50)
-            } else {
-                Spacer(minLength: 50)
+            if !isUser {
+                Spacer(minLength: 60)
             }
         }
         .padding(.horizontal, 14)

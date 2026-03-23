@@ -22,9 +22,14 @@ struct Message: Codable, Identifiable, Equatable {
     }
 
     var timestamp: Date {
-        let fmt = ISO8601DateFormatter()
-        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fmt.date(from: createdAt) ?? Date()
+        // Try with fractional seconds first (e.g., "2024-01-01T12:00:00.000Z")
+        let withFrac = ISO8601DateFormatter()
+        withFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = withFrac.date(from: createdAt) { return d }
+        // Fall back to without fractional seconds (e.g., "2024-01-01T12:00:00Z")
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: createdAt) ?? Date()
     }
 
     var timeString: String {
@@ -57,6 +62,9 @@ struct MessagesResponse: Codable {
 // Disappearing message timer options
 enum DisappearTimer: String, CaseIterable, Identifiable {
     case off
+    case m1    = "1m"
+    case m5    = "5m"
+    case m10   = "10m"
     case h24   = "24h"
     case d7    = "7d"
     case d30   = "30d"
@@ -65,16 +73,22 @@ enum DisappearTimer: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .off: return "Off"
+        case .m1:  return "1 minute"
+        case .m5:  return "5 minutes"
+        case .m10: return "10 minutes"
         case .h24: return "24 hours"
-        case .d7: return "7 days"
+        case .d7:  return "7 days"
         case .d30: return "30 days"
         }
     }
     var interval: TimeInterval? {
         switch self {
         case .off: return nil
+        case .m1:  return 60
+        case .m5:  return 300
+        case .m10: return 600
         case .h24: return 86400
-        case .d7: return 604800
+        case .d7:  return 604800
         case .d30: return 2592000
         }
     }

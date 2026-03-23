@@ -60,8 +60,8 @@ final class ContactsViewModel: ObservableObject {
 
     func reject(contact: Contact) async {
         do {
-            let updated = try await APIService.shared.updateContact(id: contact.id, status: "rejected")
-            contacts.removeAll { $0.id == updated.id }
+            try await APIService.shared.deleteContact(id: contact.id)
+            contacts.removeAll { $0.id == contact.id }
         } catch {
             errorMessage = error.localizedDescription
         }

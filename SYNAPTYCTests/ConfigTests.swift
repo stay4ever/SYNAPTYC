@@ -24,7 +24,9 @@ final class ConfigTests: XCTestCase {
             Config.API.botChat,
             Config.API.passwordReset,
             Config.API.groups,
-            Config.API.invites
+            Config.API.invites,
+            Config.API.profile,
+            Config.API.pushToken
         ]
         for endpoint in endpoints {
             XCTAssertTrue(endpoint.hasPrefix("https://"),

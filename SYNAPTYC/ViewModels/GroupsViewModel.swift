@@ -12,12 +12,13 @@ final class GroupsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
 
     init() {
-        // Refresh groups when notified of a group_invite event
+        // Only reload groups when we receive a structural group event (GKEX = key distribution,
+        // not a chat message). Regular chat messages do NOT need a full groups reload.
         WebSocketService.shared.$incomingGroupMessage
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                Task { await self?.load() }
-            }
+            .compactMap { $0 }
+            .filter { $0.content.hasPrefix("GKEX:") }
+            .debounce(for: .seconds(1), scheduler: RunLoop.main)
+            .sink { [weak self] _ in Task { await self?.load() } }
             .store(in: &cancellables)
     }
 

@@ -8,6 +8,7 @@ final class APIServiceTests: XCTestCase {
         XCTAssertEqual(APIError.noData.localizedDescription, "No data received")
         XCTAssertEqual(APIError.serverError("Something went wrong").localizedDescription, "Something went wrong")
         XCTAssertEqual(APIError.unauthorized.localizedDescription, "Session expired. Please log in again.")
+        XCTAssertEqual(APIError.timeout.localizedDescription, "Request timed out. Check your connection.")
     }
 
     func test_apiError_decodingError() {

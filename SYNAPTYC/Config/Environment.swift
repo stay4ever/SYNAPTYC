@@ -21,16 +21,16 @@ enum AppEnvironment: String {
     var baseURL: String {
         switch self {
         case .development: return "http://localhost:3000"
-        case .staging: return "https://staging-api.nanosynapsys.com"
-        case .production: return "https://api.nanosynapsys.com"
+        case .staging:     return "https://staging.ai-evolution.com.au"
+        case .production:  return "https://www.ai-evolution.com.au"
         }
     }
 
     var wsURL: String {
         switch self {
         case .development: return "ws://localhost:3000/chat"
-        case .staging: return "wss://staging-api.nanosynapsys.com/chat"
-        case .production: return "wss://api.nanosynapsys.com/chat"
+        case .staging:     return "wss://staging.ai-evolution.com.au/chat"
+        case .production:  return "wss://www.ai-evolution.com.au/chat"
         }
     }
 

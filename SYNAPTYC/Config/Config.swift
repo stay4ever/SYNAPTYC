@@ -8,23 +8,18 @@ enum Config {
     static let wsURL   = "wss://www.ai-evolution.com.au/chat"
 
     enum API {
-        static let register         = "\(baseURL)/auth/register"
-        static let login            = "\(baseURL)/auth/login"
-        static let me               = "\(baseURL)/auth/me"
-        static let users            = "\(baseURL)/api/users"
-        static let contacts         = "\(baseURL)/api/contacts"
-        static let contactsPending  = "\(baseURL)/api/contacts/pending"
-        static let contactsRequest  = "\(baseURL)/api/contacts/request"
-        static let contactsAccept   = "\(baseURL)/api/contacts/accept"
-        static let contactsDecline  = "\(baseURL)/api/contacts/decline"
-        static let contactsBlock    = "\(baseURL)/api/contacts/block"
-        static let messages         = "\(baseURL)/api/messages"
-        static let botChat          = "\(baseURL)/api/bot/chat"
-        static let groups           = "\(baseURL)/api/groups"
-        static let invites          = "\(baseURL)/api/invites"
-        static let profile          = "\(baseURL)/api/profile"
-        static let pushToken        = "\(baseURL)/api/push-token"
-        static let passwordReset    = "\(baseURL)/auth/password-reset"
+        static let register      = "\(baseURL)/auth/register"
+        static let login         = "\(baseURL)/auth/login"
+        static let me            = "\(baseURL)/auth/me"
+        static let passwordReset = "\(baseURL)/auth/password-reset"
+        static let users         = "\(baseURL)/api/users"
+        static let contacts      = "\(baseURL)/api/contacts"
+        static let messages      = "\(baseURL)/api/messages"
+        static let botChat       = "\(baseURL)/api/bot/chat"
+        static let groups        = "\(baseURL)/api/groups"
+        static let invites       = "\(baseURL)/api/invites"
+        static let profile       = "\(baseURL)/api/profile"
+        static let pushToken     = "\(baseURL)/api/push-token"
     }
 
     enum Keychain {
@@ -34,8 +29,10 @@ enum Config {
     }
 
     enum App {
-        static let name          = "SYNAPTYC"
-        static let version       = "1.1.0"
-        static let encryptionLabel = "AES-256-GCM · ECDH-P384 · E2E Encrypted"
+        static let name             = "SYNAPTYC"
+        static let version          = "1.5.1"
+        static let build            = "83"
+        static let encryptionLabel  = "Signal Double Ratchet · AES-256-GCM · ECDH-P384"
+        static let backendHost      = "ai-evolution.com.au"
     }
 }

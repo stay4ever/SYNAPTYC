@@ -24,7 +24,7 @@ struct SettingsView: View {
 
                         // Security section
                         settingsSection(title: "SECURITY") {
-                            settingsRow(icon: "lock.shield.fill", label: "Encryption", value: "AES-256-GCM + ECDH-P384")
+                            settingsRow(icon: "lock.shield.fill", label: "Encryption", value: "Signal Double Ratchet")
                             Divider().background(Color.neonGreen.opacity(0.08))
                             settingsRow(icon: "key.fill", label: "Keys", value: "Stored in Keychain")
                             Divider().background(Color.neonGreen.opacity(0.08))
@@ -70,9 +70,9 @@ struct SettingsView: View {
 
                         // About
                         settingsSection(title: "ABOUT") {
-                            settingsRow(icon: "info.circle", label: "Version", value: Config.App.version)
+                            settingsRow(icon: "info.circle", label: "Version", value: "\(Config.App.version) (\(Config.App.build))")
                             Divider().background(Color.neonGreen.opacity(0.08))
-                            settingsRow(icon: "server.rack", label: "Backend", value: "api.nanosynapsys.com")
+                            settingsRow(icon: "server.rack", label: "Backend", value: Config.App.backendHost)
                         }
 
                         // Logout
