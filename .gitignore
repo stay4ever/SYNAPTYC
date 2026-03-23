@@ -27,6 +27,9 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 fastlane/asc_api_key.json
 fastlane/Gemfile.lock
+fastlane/vendor/
+fastlane/.bundle/
+fastlane/README.md
 
 # OS
 .DS_Store
