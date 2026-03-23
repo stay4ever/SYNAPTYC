@@ -32,7 +32,7 @@ platform :ios do
       in_house: false
     )
 
-    # Build and archive — API key enables automatic provisioning in CI
+    # Build and archive — pass ASC auth flags so xcodebuild can auto-provision
     build_app(
       project: "SYNAPTYC.xcodeproj",
       scheme: "SYNAPTYC",
@@ -46,8 +46,7 @@ platform :ios do
       output_directory: "build",
       output_name: "SYNAPTYC.ipa",
       destination: "generic/platform=iOS",
-      xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=LF9DXU9P25 CODE_SIGN_STYLE=Automatic",
-      api_key: api_key
+      xcargs: "-allowProvisioningUpdates -authenticationKeyPath #{ENV['ASC_KEY_PATH']} -authenticationKeyID #{ENV['ASC_KEY_ID']} -authenticationKeyIssuerID #{ENV['ASC_ISSUER_ID']} DEVELOPMENT_TEAM=LF9DXU9P25 CODE_SIGN_STYLE=Automatic"
     )
 
     # Upload to TestFlight
