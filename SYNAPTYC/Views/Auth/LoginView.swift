@@ -35,8 +35,6 @@ struct LoginView: View {
                             .foregroundColor(.matrixGreen)
                             .tracking(2)
 
-                        EncryptionBadge()
-                            .padding(.top, 4)
                     }
                     .padding(.top, 60)
 

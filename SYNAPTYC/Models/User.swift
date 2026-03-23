@@ -10,6 +10,7 @@ struct AppUser: Codable, Identifiable, Equatable {
     var lastSeen: String?
     /// Hashed phone number — never store or log the raw number
     var phoneNumberHash: String?
+    var avatarURL: String?
 
     enum CodingKeys: String, CodingKey {
         case id, username, email
@@ -18,6 +19,7 @@ struct AppUser: Codable, Identifiable, Equatable {
         case isOnline          = "online"
         case lastSeen          = "last_seen"
         case phoneNumberHash   = "phone_number_hash"
+        case avatarURL         = "avatar_url"
     }
 
     var name: String {

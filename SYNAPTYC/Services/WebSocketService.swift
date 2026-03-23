@@ -60,6 +60,7 @@ final class WebSocketService: ObservableObject {
     @Published var incomingMessage: Message?
     @Published var incomingGroupMessage: GroupMessage?
     @Published var incomingKeyExchange: KeyExchangeEvent?
+    @Published var deletedMessageId: Int?
     @Published var typingUsers: Set<Int>            = []
     @Published var isConnected                      = false
 
@@ -236,6 +237,11 @@ final class WebSocketService: ObservableObject {
             if let users = msg.users {
                 onlineUserIds = Set(users.filter { $0.online }.map { $0.id })
                 isConnected = true
+            }
+
+        case "message_deleted":
+            if let id = msg.id {
+                deletedMessageId = id
             }
 
         case "typing":

@@ -56,6 +56,15 @@ final class ChatViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .map { [weak self] ids in ids.contains(self?.peer.id ?? -1) }
             .assign(to: &$isTyping)
+
+        // MARK: Real-time message deletion
+        WebSocketService.shared.$deletedMessageId
+            .compactMap { $0 }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] deletedId in
+                self?.messages.removeAll { $0.id == deletedId }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Load
@@ -66,15 +75,11 @@ final class ChatViewModel: ObservableObject {
         do {
             let fetched = try await APIService.shared.messages(with: peer.id)
 
-            // Scan history for peer's ECDH public key if we don't have a ratchet yet
-            if ratchetState == nil {
-                for msg in fetched where msg.content.hasPrefix("KEX:") && msg.fromUser == peer.id {
-                    let base64 = String(msg.content.dropFirst(4))
-                    if let pubKeyData = Data(base64Encoded: base64) {
-                        completeKeyExchange(theirPublicKeyData: pubKeyData)
-                        break
-                    }
-                }
+            // Use the MOST RECENT KEX from peer (handles reinstall / re-key scenarios)
+            let latestPeerKex = fetched.last { $0.content.hasPrefix("KEX:") && $0.fromUser == peer.id }
+            if let kexMsg = latestPeerKex,
+               let pubKeyData = Data(base64Encoded: String(kexMsg.content.dropFirst(4))) {
+                completeKeyExchange(theirPublicKeyData: pubKeyData)
             }
 
             // If still no ratchet, kick off ECDH exchange
@@ -103,8 +108,9 @@ final class ChatViewModel: ObservableObject {
         guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
         guard ratchetState?.cks != nil else {
+            // Encryption not ready yet — queue and ensure key exchange is running
             pendingOutgoing.append(text)
-            if !keyExchangeInFlight && ratchetState == nil {
+            if !keyExchangeInFlight {
                 await initiateKeyExchange()
             }
             return
@@ -169,24 +175,12 @@ final class ChatViewModel: ObservableObject {
                 }
                 return plain
             }
-            // Decryption failed — show a clean placeholder
-            return isMine ? "📤 Sent (encrypted)" : "🔒 Encrypted"
+            // Decryption failed — should not happen with correct key exchange
+            return isMine ? "·· ··" : "·· ··"
         } else if content.hasPrefix("ENC:"), let key = legacyKey {
-            return (try? EncryptionService.decrypt(content, using: key)) ?? "🔒 Encrypted"
+            return (try? EncryptionService.decrypt(content, using: key)) ?? "·· ··"
         }
         return content
-    }
-
-    /// Re-run decryption on all loaded messages (called after key exchange completes).
-    private func redecryptMessages() {
-        let myId = AuthViewModel.shared.currentUser?.id ?? 0
-        for i in messages.indices {
-            let raw = messages[i].content
-            // Only attempt re-decryption on messages that show a placeholder
-            guard raw == "🔒 Encrypted" || raw == "📤 Sent (encrypted)" else { continue }
-            // We don't have the original ciphertext anymore at this point; skip.
-            // Future messages received after key exchange will decrypt correctly.
-        }
     }
 
     // MARK: - ECDH Key Exchange
@@ -212,7 +206,9 @@ final class ChatViewModel: ObservableObject {
     /// Called when we receive the peer's ECDH public key.
     /// Derives the shared secret and bootstraps the Double Ratchet.
     private func completeKeyExchange(theirPublicKeyData: Data) {
-        guard ratchetState == nil else { return }
+        // Skip only if we already have a ratchet established with this exact peer key
+        // (prevents redundant re-init, but allows re-key after reinstall)
+        if let existing = ratchetState, existing.dhr == theirPublicKeyData { return }
 
         var privateKey: P384.KeyAgreement.PrivateKey
         if let existing = EncryptionService.loadPrivateKey(conversationId: peer.id) {
@@ -234,31 +230,23 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        let sk   = sharedSymKey.withUnsafeBytes { Data($0) }
-        let myId = AuthViewModel.shared.currentUser?.id ?? 0
+        let sk = sharedSymKey.withUnsafeBytes { Data($0) }
 
-        // Lower user ID = "Alice" (initiator — gets CKs immediately).
-        // Higher user ID = "Bob"  (responder — gets CKs after Alice's first message).
-        let state: RatchetState
-        if myId < peer.id {
-            guard let s = try? DoubleRatchet.initAlice(
-                sharedSecret: sk,
-                theirPublicKeyData: theirPublicKeyData
-            ) else {
-                errorMessage = "Double Ratchet initialisation failed"
-                return
-            }
-            state = s
-        } else {
-            state = DoubleRatchet.initBob(
-                sharedSecret: sk,
-                ourPrivateKeyData: privateKey.rawRepresentation
-            )
+        // Both parties call initAlice with the peer's ECDH public key as the initial
+        // ratchet target. This gives both sides a sending chain (cks) immediately,
+        // so either party can send first without waiting. The DH ratchet steps on
+        // first receive maintain forward secrecy for all subsequent messages.
+        guard let state = try? DoubleRatchet.initAlice(
+            sharedSecret: sk,
+            theirPublicKeyData: theirPublicKeyData
+        ) else {
+            errorMessage = "Encryption setup failed"
+            return
         }
 
         ratchetState    = state
         DoubleRatchet.save(state, for: peer.id)
-        encryptionReady = state.cks != nil      // true for Alice, false for Bob until first recv
+        encryptionReady = state.cks != nil      // always true — both parties now get cks immediately
 
         flushPending()
     }
@@ -294,7 +282,7 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Flush pending messages
+    // MARK: - Flush pending messages (queued while encryption was being established)
 
     private func flushPending() {
         guard encryptionReady else { return }
@@ -313,5 +301,12 @@ final class ChatViewModel: ObservableObject {
     func purgeExpired() {
         let now = Date()
         messages.removeAll { $0.disappearsAt.map { $0 < now } ?? false }
+    }
+
+    // MARK: - Delete message
+
+    func deleteMessage(id: Int) {
+        messages.removeAll { $0.id == id }
+        Task { try? await APIService.shared.deleteMessage(id: id) }
     }
 }

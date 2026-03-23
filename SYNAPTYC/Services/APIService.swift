@@ -85,20 +85,25 @@ actor APIService {
     // MARK: - Auth
 
     func register(username: String, email: String, password: String,
-                  displayName: String, phoneNumberHash: String? = nil) async throws -> AuthResponse {
+                  displayName: String, phoneNumberHash: String? = nil,
+                  phoneNumberHashes: [String]? = nil) async throws -> AuthResponse {
         struct Body: Encodable {
             let username, email, password: String
             let displayName: String
             let phoneNumberHash: String?
+            let phoneNumberHashes: [String]?
             enum CodingKeys: String, CodingKey {
                 case username, email, password
-                case displayName     = "display_name"
-                case phoneNumberHash = "phone_number_hash"
+                case displayName       = "display_name"
+                case phoneNumberHash   = "phone_number_hash"
+                case phoneNumberHashes = "phone_number_hashes"
             }
         }
         return try await request(Config.API.register, method: "POST",
                                  body: Body(username: username, email: email, password: password,
-                                            displayName: displayName, phoneNumberHash: phoneNumberHash),
+                                            displayName: displayName,
+                                            phoneNumberHash: phoneNumberHash,
+                                            phoneNumberHashes: phoneNumberHashes),
                                  responseType: AuthResponse.self)
     }
 
@@ -151,6 +156,12 @@ actor APIService {
                                  body: body, responseType: Resp.self).message
     }
 
+    func deleteMessage(id: Int) async throws {
+        struct Resp: Decodable { let deleted: Bool }
+        _ = try await request("\(Config.API.messages)/\(id)", method: "DELETE",
+                              responseType: Resp.self)
+    }
+
     // MARK: - Contacts
 
     func contacts() async throws -> [Contact] {
@@ -188,6 +199,17 @@ actor APIService {
         struct Resp: Decodable { let user: AppUser }
         return try await request(Config.API.profile, method: "PUT",
                                  body: Body(displayName: displayName),
+                                 responseType: Resp.self).user
+    }
+
+    // MARK: - Avatar upload
+
+    func uploadAvatar(jpegData: Data) async throws -> AppUser {
+        struct Body: Encodable { let image: String }
+        struct Resp: Decodable { let user: AppUser }
+        let base64 = jpegData.base64EncodedString()
+        return try await request(Config.API.avatar, method: "POST",
+                                 body: Body(image: base64),
                                  responseType: Resp.self).user
     }
 

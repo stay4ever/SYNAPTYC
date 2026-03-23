@@ -5,24 +5,38 @@ struct ContactRow: View {
     let status: ContactRowStatus
     let onAction: (ContactRowAction) -> Void
 
+    private var isOnline: Bool { user.isOnline ?? false }
+
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar
+            // Avatar with clear online/offline ring colour
             ZStack(alignment: .bottomTrailing) {
                 Circle()
-                    .fill(Color.darkGreen)
+                    .fill(isOnline ? Color.darkGreen : Color.darkGreen.opacity(0.5))
                     .frame(width: 42, height: 42)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.2), lineWidth: 1))
+                    .overlay(Circle().stroke(
+                        isOnline ? Color.neonGreen.opacity(0.7) : Color.gray.opacity(0.25),
+                        lineWidth: isOnline ? 2 : 1
+                    ))
                 Text(user.initials)
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(.neonGreen)
-                OnlineDot(isOnline: user.isOnline ?? false, size: 8)
+                    .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.5))
+                OnlineDot(isOnline: isOnline, size: 8)
                     .offset(x: 2, y: 2)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(user.name).font(.monoBody).foregroundColor(.neonGreen)
-                Text("@\(user.username)").font(.monoCaption).foregroundColor(.matrixGreen)
+                Text(user.name)
+                    .font(.monoBody)
+                    .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.7))
+                HStack(spacing: 4) {
+                    Text("@\(user.username)").font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
+                    if isOnline {
+                        Text("· online")
+                            .font(.monoCaption)
+                            .foregroundColor(.neonGreen.opacity(0.7))
+                    }
+                }
             }
 
             Spacer()

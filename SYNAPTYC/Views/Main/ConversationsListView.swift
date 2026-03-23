@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct ConversationsListView: View {
-    @StateObject private var vm = ConversationsViewModel()
-    @State private var searchText    = ""
-    @State private var selectedUser: AppUser?
-    @State private var showBotChat   = false
+    @StateObject private var vm         = ConversationsViewModel()
+    @StateObject private var groupsVM   = GroupsViewModel()
+    @State private var searchText       = ""
+    @State private var showCreateGroup  = false
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -12,16 +12,18 @@ struct ConversationsListView: View {
     ]
 
     var filtered: [AppUser] {
-        if searchText.isEmpty { return vm.users }
-        return vm.users.filter {
+        let visible = vm.users.filter { !vm.hiddenUserIds.contains($0.id) }
+        if searchText.isEmpty { return visible }
+        return visible.filter {
             $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.username.localizedCaseInsensitiveContains(searchText)
+            $0.username.localizedCaseInsensitiveContains(searchText) ||
+            $0.displayName?.localizedCaseInsensitiveContains(searchText) == true
         }
     }
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottomTrailing) {
                 // Metallic background
                 MetallicBackground()
 
@@ -31,12 +33,13 @@ struct ConversationsListView: View {
                         Image(systemName: "magnifyingglass")
                             .foregroundColor(.matrixGreen)
                             .font(.system(size: 14))
-                        TextField("Search users…", text: $searchText)
+                        TextField("Search conversations…", text: $searchText)
                             .font(.monoBody)
                             .foregroundColor(.neonGreen)
                             .tint(.neonGreen)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
+                            .submitLabel(.search)
                         if !searchText.isEmpty {
                             Button { searchText = "" } label: {
                                 Image(systemName: "xmark.circle.fill")
@@ -60,7 +63,7 @@ struct ConversationsListView: View {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 12) {
                                 // Banner AI card (always first)
-                                Button { showBotChat = true } label: {
+                                NavigationLink(destination: BotChatView()) {
                                     BotCard()
                                 }
                                 .buttonStyle(.plain)
@@ -80,16 +83,23 @@ struct ConversationsListView: View {
                                     .padding(.top, 20)
                                 } else {
                                     ForEach(filtered) { user in
-                                        Button {
-                                            vm.clearUnread(for: user.id)
-                                            selectedUser = user
-                                        } label: {
+                                        NavigationLink(destination: ChatView(peer: user)) {
                                             ConversationCard(
                                                 user: user,
                                                 unread: vm.unreadCounts[user.id] ?? 0
                                             )
                                         }
                                         .buttonStyle(.plain)
+                                        .simultaneousGesture(TapGesture().onEnded {
+                                            vm.clearUnread(for: user.id)
+                                        })
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                vm.hideConversation(userId: user.id)
+                                            } label: {
+                                                Label("Delete Conversation", systemImage: "trash")
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -99,31 +109,44 @@ struct ConversationsListView: View {
                         .refreshable { await vm.loadUsers() }
                     }
                 }
+
+                // Floating + button to create a group
+                Button { showCreateGroup = true } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color.darkGreen.opacity(0.75))
+                            .frame(width: 46, height: 46)
+                            .overlay(
+                                Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1)
+                            )
+                            .shadow(color: Color.neonGreen.opacity(0.25), radius: 8)
+                        Image(systemName: "plus")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.neonGreen)
+                    }
+                }
+                .padding(.trailing, 82)
+                .padding(.bottom, 16)
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text("SYNAPTYC")
-                            .font(.monoHeadline)
-                            .foregroundColor(.neonGreen)
-                            .glowText()
-                        Text("E2E ENCRYPTED")
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.matrixGreen.opacity(0.7))
-                            .tracking(2)
-                    }
+                    Text("SYNAPTYC")
+                        .font(.monoHeadline)
+                        .foregroundColor(.neonGreen)
+                        .glowText()
                 }
             }
         }
         .task { await vm.loadUsers() }
-        // Slide-up chat sheet
-        .sheet(item: $selectedUser) { user in
-            ChatView(peer: user)
-        }
-        .sheet(isPresented: $showBotChat) {
-            BotChatView()
+        .sheet(isPresented: $showCreateGroup) {
+            CreateGroupSheet { name, desc in
+                Task {
+                    _ = try? await groupsVM.createGroup(name: name, description: desc)
+                    showCreateGroup = false
+                }
+            }
         }
     }
 }
@@ -167,38 +190,47 @@ struct ConversationCard: View {
     let user: AppUser
     let unread: Int
 
+    private var isOnline: Bool { user.isOnline ?? false }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 10) {
                 // Avatar
                 ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color.darkGreen, Color(white: 0.05)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 52, height: 52)
-                        .overlay(
-                            Circle().stroke(
-                                user.isOnline == true
-                                    ? Color.neonGreen.opacity(0.6)
-                                    : Color.neonGreen.opacity(0.2),
-                                lineWidth: 1.5
-                            )
-                        )
+                    if let urlStr = user.avatarURL, let url = URL(string: urlStr) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable().scaledToFill()
+                                    .frame(width: 52, height: 52).clipShape(Circle())
+                                    .overlay(Circle().stroke(
+                                        isOnline ? Color.neonGreen.opacity(0.8) : Color.gray.opacity(0.25),
+                                        lineWidth: isOnline ? 2 : 1))
+                            default:
+                                initialsCircle(user: user)
+                            }
+                        }
+                    } else {
+                        initialsCircle(user: user)
+                    }
                     Text(user.initials)
                         .font(.system(size: 18, weight: .bold, design: .monospaced))
-                        .foregroundColor(.neonGreen)
+                        .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.5))
+                        .opacity(user.avatarURL == nil ? 1 : 0)
 
-                    // Online pulse
-                    if user.isOnline == true {
+                    // Online indicator dot
+                    if isOnline {
                         Circle()
                             .fill(Color.neonGreen)
+                            .frame(width: 10, height: 10)
+                            .overlay(Circle().stroke(Color(white: 0.08), lineWidth: 1.5))
+                            .shadow(color: .neonGreen.opacity(0.8), radius: 3)
+                            .offset(x: 18, y: 18)
+                    } else {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
                             .frame(width: 9, height: 9)
-                            .overlay(Circle().stroke(Color(white: 0.1), lineWidth: 1.5))
+                            .overlay(Circle().stroke(Color(white: 0.08), lineWidth: 1))
                             .offset(x: 18, y: 18)
                     }
                 }
@@ -206,20 +238,19 @@ struct ConversationCard: View {
                 // Name
                 Text(user.name)
                     .font(.monoCaption).fontWeight(.semibold)
-                    .foregroundColor(.neonGreen)
+                    .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.7))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
-                // Username / status
-                Text(user.isOnline == true ? "online" : "@\(user.username)")
+                // Status
+                Text(isOnline ? "online" : "@\(user.username)")
                     .font(.monoSmall)
-                    .foregroundColor(.matrixGreen)
+                    .foregroundColor(isOnline ? .neonGreen.opacity(0.6) : .matrixGreen.opacity(0.4))
                     .lineLimit(1)
             }
             .padding(.vertical, 16)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
-            // Glossy metallic card background
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 20)
@@ -230,7 +261,6 @@ struct ConversationCard: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                    // Top gloss highlight
                     RoundedRectangle(cornerRadius: 20)
                         .fill(
                             LinearGradient(
@@ -239,11 +269,18 @@ struct ConversationCard: View {
                                 endPoint: .center
                             )
                         )
+                    // Green border glow for online, muted for offline
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.neonGreen.opacity(0.15), lineWidth: 1)
+                        .stroke(
+                            isOnline ? Color.neonGreen.opacity(0.35) : Color.neonGreen.opacity(0.08),
+                            lineWidth: isOnline ? 1.5 : 1
+                        )
                 }
             )
-            .shadow(color: Color.black.opacity(0.5), radius: 6, x: 0, y: 3)
+            .shadow(
+                color: isOnline ? Color.neonGreen.opacity(0.12) : Color.black.opacity(0.4),
+                radius: isOnline ? 8 : 5, x: 0, y: 3
+            )
 
             // Red notification bubble
             if unread > 0 {
@@ -261,6 +298,17 @@ struct ConversationCard: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: unread)
+    }
+
+    private func initialsCircle(user: AppUser) -> some View {
+        Circle()
+            .fill(LinearGradient(
+                colors: [Color.darkGreen, Color(white: 0.05)],
+                startPoint: .topLeading, endPoint: .bottomTrailing))
+            .frame(width: 52, height: 52)
+            .overlay(Circle().stroke(
+                isOnline ? Color.neonGreen.opacity(0.8) : Color.gray.opacity(0.25),
+                lineWidth: isOnline ? 2 : 1))
     }
 }
 

@@ -44,7 +44,6 @@ struct SplashView: View {
                         .tracking(3)
                 }
 
-                EncryptionBadge()
             }
             .scaleEffect(scale)
             .opacity(opacity)

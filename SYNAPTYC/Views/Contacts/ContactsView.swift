@@ -3,6 +3,8 @@ import SwiftUI
 struct ContactsView: View {
     @StateObject private var vm = ContactsViewModel()
     @State private var searchText = ""
+    // Tab 0 = All Users (default, shows everyone with online/offline status)
+    // Tab 1 = Requests
     @State private var selectedTab = 0
 
     var filteredUsers: [AppUser] {
@@ -15,6 +17,16 @@ struct ContactsView: View {
         }
     }
 
+    // Online users first, then alphabetical within each group
+    var sortedUsers: [AppUser] {
+        filteredUsers.sorted {
+            if ($0.isOnline ?? false) != ($1.isOnline ?? false) {
+                return ($0.isOnline ?? false)
+            }
+            return $0.name < $1.name
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -24,28 +36,34 @@ struct ContactsView: View {
                 VStack(spacing: 0) {
                     // Tab picker
                     Picker("", selection: $selectedTab) {
-                        Text("Contacts").tag(0)
+                        Text("All Users").tag(0)
                         Text("Requests \(vm.pendingIncoming.isEmpty ? "" : "(\(vm.pendingIncoming.count))")").tag(1)
-                        Text("All Users").tag(2)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .tint(.neonGreen)
 
-                    if selectedTab == 2 {
+                    // Search bar (always visible on All Users tab)
+                    if selectedTab == 0 {
                         HStack(spacing: 10) {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(.matrixGreen).font(.system(size: 13))
                             TextField("Search users…", text: $searchText)
                                 .font(.monoBody).foregroundColor(.neonGreen).tint(.neonGreen)
                                 .autocorrectionDisabled().textInputAutocapitalization(.never)
+                            if !searchText.isEmpty {
+                                Button { searchText = "" } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.matrixGreen.opacity(0.6))
+                                }
+                            }
                         }
                         .padding(10)
                         .background(Color.darkGreen.opacity(0.3))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
+                        .padding(.bottom, 4)
                     }
 
                     if let success = vm.successMessage {
@@ -59,60 +77,59 @@ struct ContactsView: View {
                             .padding(.horizontal, 16).padding(.vertical, 4)
                     }
 
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            switch selectedTab {
-                            case 0:
-                                if vm.acceptedContacts.isEmpty {
-                                    emptyState(icon: "person.2", text: "No contacts yet.\nSearch All Users to add someone.")
-                                } else {
-                                    ForEach(vm.acceptedContacts) { contact in
-                                        if let user = contact.otherUser {
-                                            ContactRow(user: user, status: .accepted) { _ in }
-                                            Divider().background(Color.neonGreen.opacity(0.07))
-                                        }
-                                    }
-                                }
-                            case 1:
-                                if vm.pendingIncoming.isEmpty && vm.pendingOutgoing.isEmpty {
-                                    emptyState(icon: "tray", text: "No pending requests.")
-                                } else {
-                                    ForEach(vm.pendingIncoming) { contact in
-                                        if let user = contact.otherUser {
-                                            ContactRow(user: user, status: .pendingIncoming) { action in
-                                                Task {
-                                                    if action == .accept {
-                                                        await vm.accept(contact: contact)
-                                                    } else {
-                                                        await vm.reject(contact: contact)
-                                                    }
+                    if vm.isLoading && vm.allUsers.isEmpty {
+                        Spacer()
+                        ProgressView().tint(.neonGreen)
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                switch selectedTab {
+                                case 0:
+                                    if sortedUsers.isEmpty {
+                                        emptyState(icon: "person.2", text: "No users found.")
+                                    } else {
+                                        ForEach(sortedUsers) { user in
+                                            let status: ContactRowStatus = vm.isContact(user.id) ? .accepted
+                                                : vm.hasPendingRequest(to: user.id) ? .pendingOutgoing : .none
+                                            ContactRow(user: user, status: status) { action in
+                                                if action == .sendRequest {
+                                                    Task { await vm.sendRequest(to: user) }
                                                 }
                                             }
                                             Divider().background(Color.neonGreen.opacity(0.07))
                                         }
                                     }
-                                    ForEach(vm.pendingOutgoing) { contact in
-                                        if let user = contact.otherUser {
-                                            ContactRow(user: user, status: .pendingOutgoing) { _ in }
-                                            Divider().background(Color.neonGreen.opacity(0.07))
+                                default:
+                                    if vm.pendingIncoming.isEmpty && vm.pendingOutgoing.isEmpty {
+                                        emptyState(icon: "tray", text: "No pending requests.")
+                                    } else {
+                                        ForEach(vm.pendingIncoming) { contact in
+                                            if let user = contact.otherUser {
+                                                ContactRow(user: user, status: .pendingIncoming) { action in
+                                                    Task {
+                                                        if action == .accept {
+                                                            await vm.accept(contact: contact)
+                                                        } else {
+                                                            await vm.reject(contact: contact)
+                                                        }
+                                                    }
+                                                }
+                                                Divider().background(Color.neonGreen.opacity(0.07))
+                                            }
+                                        }
+                                        ForEach(vm.pendingOutgoing) { contact in
+                                            if let user = contact.otherUser {
+                                                ContactRow(user: user, status: .pendingOutgoing) { _ in }
+                                                Divider().background(Color.neonGreen.opacity(0.07))
+                                            }
                                         }
                                     }
-                                }
-                            default:
-                                ForEach(filteredUsers) { user in
-                                    let status: ContactRowStatus = vm.isContact(user.id) ? .accepted
-                                        : vm.hasPendingRequest(to: user.id) ? .pendingOutgoing : .none
-                                    ContactRow(user: user, status: status) { action in
-                                        if action == .sendRequest {
-                                            Task { await vm.sendRequest(to: user) }
-                                        }
-                                    }
-                                    Divider().background(Color.neonGreen.opacity(0.07))
                                 }
                             }
                         }
+                        .refreshable { await vm.load() }
                     }
-                    .refreshable { await vm.load() }
                 }
             }
             .navigationTitle("")

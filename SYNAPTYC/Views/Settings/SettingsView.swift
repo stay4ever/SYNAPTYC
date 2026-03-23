@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject var auth: AuthViewModel
@@ -10,6 +12,8 @@ struct SettingsView: View {
     @State private var notificationsEnabled  = true
     @State private var showInviteSheet       = false
     @StateObject private var groupsVM        = GroupsViewModel()
+    @State private var avatarItem: PhotosPickerItem?
+    @State private var avatarUploading       = false
 
     var body: some View {
         NavigationStack {
@@ -94,7 +98,7 @@ struct SettingsView: View {
 
                         // Security section
                         settingsSection(title: "SECURITY") {
-                            settingsRow(icon: "lock.shield.fill", label: "Encryption", value: "Signal Double Ratchet")
+                            settingsRow(icon: "lock.shield.fill", label: "Encryption", value: "End-to-end")
                             Divider().background(Color.neonGreen.opacity(0.08))
                             settingsRow(icon: "key.fill", label: "Keys", value: "Stored in Keychain")
                             Divider().background(Color.neonGreen.opacity(0.08))
@@ -184,18 +188,40 @@ struct SettingsView: View {
 
     private func profileCard(_ user: AppUser) -> some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle().fill(Color.darkGreen).frame(width: 72, height: 72)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1.5))
-                Text(user.initials)
-                    .font(.system(size: 26, weight: .bold, design: .monospaced))
-                    .foregroundColor(.neonGreen)
+            PhotosPicker(selection: $avatarItem, matching: .images, photoLibrary: .shared()) {
+                ZStack(alignment: .bottomTrailing) {
+                    if let urlStr = user.avatarURL, let url = URL(string: urlStr) {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable().scaledToFill()
+                                    .frame(width: 72, height: 72).clipShape(Circle())
+                                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1.5))
+                            default:
+                                initialsCircle(user)
+                            }
+                        }
+                    } else {
+                        initialsCircle(user)
+                    }
+                    // Edit badge
+                    ZStack {
+                        Circle().fill(Color.neonGreen).frame(width: 20, height: 20)
+                        Image(systemName: avatarUploading ? "arrow.triangle.2.circlepath" : "camera.fill")
+                            .font(.system(size: 10)).foregroundColor(.deepBlack)
+                    }
+                    .offset(x: 2, y: 2)
+                }
             }
-            .accessibilityLabel("\(user.name)'s avatar")
+            .accessibilityLabel("Tap to change avatar")
+            .onChange(of: avatarItem) { _, item in
+                guard let item else { return }
+                Task { await uploadAvatar(item) }
+            }
+
             Text(user.name).font(.monoHeadline).foregroundColor(.neonGreen).glowText()
             Text("@\(user.username)").font(.monoCaption).foregroundColor(.matrixGreen)
             Text(user.email).font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
-            EncryptionBadge()
         }
         .frame(maxWidth: .infinity)
         .padding(20)
@@ -203,6 +229,29 @@ struct SettingsView: View {
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Profile: \(user.name), @\(user.username), \(user.email)")
+    }
+
+    private func initialsCircle(_ user: AppUser) -> some View {
+        ZStack {
+            Circle().fill(Color.darkGreen).frame(width: 72, height: 72)
+                .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1.5))
+            Text(user.initials)
+                .font(.system(size: 26, weight: .bold, design: .monospaced))
+                .foregroundColor(.neonGreen)
+        }
+    }
+
+    private func uploadAvatar(_ item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        // Resize and compress to JPEG for efficient upload
+        guard let uiImage = UIImage(data: data),
+              let resized = uiImage.resized(to: CGSize(width: 200, height: 200)),
+              let jpeg = resized.jpegData(compressionQuality: 0.7) else { return }
+        avatarUploading = true
+        defer { avatarUploading = false; avatarItem = nil }
+        if let updatedUser = try? await APIService.shared.uploadAvatar(jpegData: jpeg) {
+            auth.updateCurrentUser(updatedUser)
+        }
     }
 
     private func settingsSection<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {

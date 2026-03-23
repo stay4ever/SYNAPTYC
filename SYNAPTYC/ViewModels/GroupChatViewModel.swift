@@ -13,13 +13,15 @@ final class GroupChatViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var groupKey: SymmetricKey?
     private var pendingOutgoing: [String] = []
-    private var isGeneratingKey = false     // guard against duplicate key generation
+    private var isGeneratingKey = false
+    /// Counter for temporary local IDs — always negative so they never clash with server IDs
+    private var tempIdCounter = -1
 
     init(group: Group) {
         self.group = group
 
         // Load persisted group key
-        self.groupKey      = EncryptionService.loadSymmetricKey(conversationId: Self.groupConversationId(group.id))
+        self.groupKey        = EncryptionService.loadSymmetricKey(conversationId: Self.groupConversationId(group.id))
         self.encryptionReady = groupKey != nil
 
         // MARK: Incoming group messages
@@ -36,6 +38,14 @@ final class GroupChatViewModel: ObservableObject {
                 var m = gm
                 if let key = self.groupKey {
                     m.content = (try? EncryptionService.decrypt(m.content, using: key)) ?? m.content
+                }
+                let myId = AuthViewModel.shared.currentUser?.id ?? 0
+                // If this echo is from us, replace the optimistic temp message (negative ID)
+                // rather than appending a duplicate.
+                if m.fromUser == myId,
+                   let tempIdx = self.messages.firstIndex(where: { $0.id < 0 && $0.content == m.content }) {
+                    self.messages[tempIdx] = m
+                    return
                 }
                 guard !self.messages.contains(where: { $0.id == m.id }) else { return }
                 self.messages.append(m)
@@ -81,11 +91,20 @@ final class GroupChatViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         guard let key = groupKey else {
+            // Queue and generate key — 100% encrypted, no plaintext fallback
             pendingOutgoing.append(trimmed)
             generateAndDistributeGroupKey()
             return
         }
         sendEncrypted(trimmed, using: key)
+    }
+
+    func addMember(userId: Int) async {
+        do {
+            _ = try await APIService.shared.addGroupMember(groupId: group.id, userId: userId)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     // MARK: - Group key management
@@ -135,6 +154,21 @@ final class GroupChatViewModel: ObservableObject {
             return
         }
         WebSocketService.shared.sendGroupMessage(groupId: group.id, content: encrypted)
+
+        // Optimistic local append — show message immediately without waiting for WS echo.
+        // Negative ID ensures no collision with server-assigned positive IDs.
+        let me = AuthViewModel.shared.currentUser
+        let local = GroupMessage(
+            id: tempIdCounter,
+            groupId: group.id,
+            fromUser: me?.id ?? 0,
+            fromUsername: me?.username ?? "",
+            fromDisplay: me?.name ?? "",
+            content: text,
+            createdAt: ISO8601DateFormatter().string(from: Date())
+        )
+        tempIdCounter -= 1
+        messages.append(local)
     }
 
     private func flushPending(using key: SymmetricKey) {

@@ -7,6 +7,7 @@ struct ChatView: View {
     @State private var showTimerPicker = false
     @FocusState private var inputFocused: Bool
     @State private var scrollToBottom  = false
+    @Environment(\.dismiss) private var dismiss
 
     init(peer: AppUser) {
         self.peer = peer
@@ -16,41 +17,19 @@ struct ChatView: View {
     var body: some View {
         ZStack {
             Color.deepBlack.ignoresSafeArea()
-            ScanlineOverlay()
 
             VStack(spacing: 0) {
-                // Encryption status bar
-                HStack {
-                    EncryptionBadge(isActive: vm.encryptionReady)
-                    Spacer()
-                    Button { showTimerPicker = true } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "timer")
-                                .font(.system(size: 11))
-                            Text(vm.disappearTimer == .off ? "No timer" : vm.disappearTimer.label)
-                                .font(.monoSmall)
-                        }
-                        .foregroundColor(vm.disappearTimer == .off ? .matrixGreen.opacity(0.5) : .amber)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.darkGreen.opacity(0.4))
-                        .overlay(Capsule().stroke(Color.matrixGreen.opacity(0.2), lineWidth: 1))
-                        .clipShape(Capsule())
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.darkGreen.opacity(0.3))
-
                 // Messages
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(vm.messages) { msg in
                                 let isMine = msg.fromUser == AuthViewModel.shared.currentUser?.id
-                                MessageBubble(message: msg, isMine: isMine)
-                                    .id(msg.id)
-                                    .transition(.opacity.combined(with: .move(edge: isMine ? .trailing : .leading)))
+                                MessageBubble(message: msg, isMine: isMine) {
+                                    vm.deleteMessage(id: msg.id)
+                                }
+                                .id(msg.id)
+                                .transition(.opacity.combined(with: .move(edge: isMine ? .trailing : .leading)))
                             }
                             if vm.isTyping {
                                 HStack {
@@ -82,11 +61,12 @@ struct ChatView: View {
 
                 // Input bar
                 HStack(spacing: 10) {
-                    TextField("Encrypted message…", text: $inputText, axis: .vertical)
+                    TextField("Message…", text: $inputText, axis: .vertical)
                         .font(.monoBody)
                         .foregroundColor(.neonGreen)
                         .tint(.neonGreen)
                         .lineLimit(1...5)
+                        .autocorrectionDisabled(false)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background(Color.darkGreen.opacity(0.35))
@@ -122,7 +102,19 @@ struct ChatView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button { dismiss() } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Back")
+                            .font(.system(.subheadline))
+                    }
+                    .foregroundColor(.neonGreen)
+                }
+            }
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     OnlineDot(isOnline: peer.isOnline ?? false)
@@ -135,6 +127,13 @@ struct ChatView: View {
                         }
                     }
                 }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showTimerPicker = true } label: {
+                    Image(systemName: vm.disappearTimer == .off ? "timer" : "timer.circle.fill")
+                        .foregroundColor(vm.disappearTimer == .off ? .matrixGreen.opacity(0.6) : .amber)
+                }
+                .accessibilityLabel("Disappearing messages timer")
             }
         }
         .task { await vm.load() }

@@ -102,11 +102,13 @@ final class AuthViewModel: ObservableObject {
                   displayName: String, phoneNumber: String = "") async {
         isLoading = true; errorMessage = nil
         defer { isLoading = false }
-        let phoneHash = phoneNumber.isEmpty ? nil : ContactSyncService.hash(phoneNumber: phoneNumber)
+        let phoneHashes = phoneNumber.isEmpty ? nil : ContactSyncService.hashVariants(phoneNumber: phoneNumber)
+        let phoneHash   = phoneHashes?.first
         do {
             let resp = try await APIService.shared.register(username: username, email: email,
                                                              password: password, displayName: displayName,
-                                                             phoneNumberHash: phoneHash)
+                                                             phoneNumberHash: phoneHash,
+                                                             phoneNumberHashes: phoneHashes)
             KeychainService.save(resp.token, for: Config.Keychain.tokenKey)
             persist(user: resp.user)
             currentUser = resp.user
@@ -142,9 +144,15 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    /// Update the in-memory and keychain copy of the current user (e.g. after avatar upload).
+    func updateCurrentUser(_ user: AppUser) {
+        currentUser = user
+        persist(user: user)
+    }
+
     // MARK: - Private
 
-    private func persist(user: AppUser) {
+    func persist(user: AppUser) {
         guard let data = try? JSONEncoder().encode(user) else { return }
         KeychainService.saveData(data, for: Config.Keychain.userKey)
     }

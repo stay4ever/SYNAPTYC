@@ -9,6 +9,11 @@ final class ConversationsViewModel: ObservableObject {
     @Published var errorMessage: String?
     /// Unread message counts per sender user ID — drives red notification bubbles
     @Published var unreadCounts: [Int: Int]  = [:]
+    /// Locally hidden conversation user IDs (persisted across launches)
+    @Published var hiddenUserIds: Set<Int>   = {
+        let arr = UserDefaults.standard.array(forKey: "hidden_conversations") as? [Int] ?? []
+        return Set(arr)
+    }()
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -52,5 +57,15 @@ final class ConversationsViewModel: ObservableObject {
 
     func clearUnread(for userId: Int) {
         unreadCounts[userId] = nil
+    }
+
+    func hideConversation(userId: Int) {
+        hiddenUserIds.insert(userId)
+        UserDefaults.standard.set(Array(hiddenUserIds), forKey: "hidden_conversations")
+    }
+
+    func unhideConversation(userId: Int) {
+        hiddenUserIds.remove(userId)
+        UserDefaults.standard.set(Array(hiddenUserIds), forKey: "hidden_conversations")
     }
 }

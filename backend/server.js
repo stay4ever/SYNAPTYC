@@ -15,6 +15,7 @@ const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 const Database = require("better-sqlite3");
 const path = require("path");
+const fs = require("fs");
 const Anthropic = require("@anthropic-ai/sdk");
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,22 @@ if (!tableCheck) {
   console.log("Running initial migration...");
   require("./migrate");
 }
+
+// Add phone_number_hashes column if it doesn't exist (multi-format matching)
+try {
+  db.prepare("ALTER TABLE users ADD COLUMN phone_number_hashes TEXT DEFAULT NULL").run();
+  console.log("Migrated: added phone_number_hashes column");
+} catch (_) { /* column already exists */ }
+
+// Add avatar_url column if it doesn't exist
+try {
+  db.prepare("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT NULL").run();
+  console.log("Migrated: added avatar_url column");
+} catch (_) { /* column already exists */ }
+
+// Ensure uploads directory exists
+const UPLOADS_DIR = path.join(__dirname, "uploads", "avatars");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // ---------------------------------------------------------------------------
 // Express app
@@ -107,7 +124,8 @@ setInterval(() => {
   }
 }, 300_000);
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "5mb" })); // allow base64 avatar payloads
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const server = http.createServer(app);
 
@@ -144,7 +162,7 @@ function authMiddleware(req, res, next) {
 // ---------------------------------------------------------------------------
 
 app.post("/auth/register", (req, res) => {
-  const { username, email, password, display_name, phone_number_hash } = req.body;
+  const { username, email, password, display_name, phone_number_hash, phone_number_hashes } = req.body;
   if (!username || !email || !password) {
     return res.status(400).json({ error: "username, email, and password are required" });
   }
@@ -155,11 +173,17 @@ app.post("/auth/register", (req, res) => {
     return res.status(409).json({ error: "Username or email already taken" });
   }
   const hash = bcrypt.hashSync(password, BCRYPT_ROUNDS);
+  // Store all phone hash variants (JSON array) for multi-format contact matching
+  const allHashes = Array.isArray(phone_number_hashes) && phone_number_hashes.length
+    ? phone_number_hashes
+    : phone_number_hash ? [phone_number_hash] : [];
+  const primaryHash = allHashes[0] || null;
+  const hashesJson = allHashes.length > 1 ? JSON.stringify(allHashes) : null;
   const info = db
     .prepare(
-      "INSERT INTO users (username, email, password_hash, display_name, is_approved, phone_number_hash) VALUES (?, ?, ?, ?, 1, ?)"
+      "INSERT INTO users (username, email, password_hash, display_name, is_approved, phone_number_hash, phone_number_hashes) VALUES (?, ?, ?, ?, 1, ?, ?)"
     )
-    .run(username, email, hash, display_name || null, phone_number_hash || null);
+    .run(username, email, hash, display_name || null, primaryHash, hashesJson);
 
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(info.lastInsertRowid);
   const token = signToken(user.id);
@@ -248,6 +272,19 @@ app.post("/api/messages", authMiddleware, (req, res) => {
   res.status(201).json({ message });
 });
 
+app.delete("/api/messages/:id", authMiddleware, (req, res) => {
+  const messageId = parseInt(req.params.id, 10);
+  const message = db.prepare("SELECT * FROM messages WHERE id = ?").get(messageId);
+  if (!message) return res.status(404).json({ error: "Message not found" });
+  if (message.from_user !== req.userId) return res.status(403).json({ error: "Cannot delete another user's message" });
+  db.prepare("DELETE FROM messages WHERE id = ?").run(messageId);
+  // Notify both parties so they can remove it from their UI
+  const payload = { type: "message_deleted", id: messageId };
+  sendToUser(message.from_user, payload, null);
+  sendToUser(message.to_user, payload, null);
+  res.json({ deleted: true });
+});
+
 // ---------------------------------------------------------------------------
 // CONTACTS
 // ---------------------------------------------------------------------------
@@ -320,10 +357,28 @@ app.post("/api/contacts/sync", authMiddleware, (req, res) => {
   // Limit to 500 hashes per request to prevent abuse
   const limited = hashes.slice(0, 500);
   const placeholders = limited.map(() => "?").join(",");
-  const rows = db
+
+  // Match against primary hash column
+  const primaryRows = db
     .prepare(`SELECT * FROM users WHERE phone_number_hash IN (${placeholders}) AND id != ?`)
     .all(...limited, req.userId);
-  res.json({ matched: rows.map(sanitizeUser) });
+
+  // Also match against secondary hashes JSON column (any variant stored at registration)
+  const allUsers = db
+    .prepare(`SELECT * FROM users WHERE phone_number_hashes IS NOT NULL AND id != ?`)
+    .all(req.userId);
+  const limitedSet = new Set(limited);
+  const secondaryRows = allUsers.filter(u => {
+    try {
+      const stored = JSON.parse(u.phone_number_hashes);
+      return Array.isArray(stored) && stored.some(h => limitedSet.has(h));
+    } catch { return false; }
+  });
+
+  // Merge, deduplicate by id
+  const seen = new Set(primaryRows.map(r => r.id));
+  const merged = [...primaryRows, ...secondaryRows.filter(r => !seen.has(r.id))];
+  res.json({ matched: merged.map(sanitizeUser) });
 });
 
 // ---------------------------------------------------------------------------
@@ -447,6 +502,27 @@ app.put("/api/profile", authMiddleware, (req, res) => {
     db.prepare(`UPDATE users SET ${safeUpdates.join(", ")} WHERE id = ?`).run(...safeValues);
   }
 
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
+  res.json({ user: sanitizeUser(user) });
+});
+
+// POST /api/profile/avatar — accept base64-encoded JPEG, store to disk, return URL
+app.post("/api/profile/avatar", authMiddleware, (req, res) => {
+  const { image } = req.body; // base64 data URI or raw base64 string
+  if (!image || typeof image !== "string") {
+    return res.status(400).json({ error: "image is required" });
+  }
+  // Strip data URI prefix if present ("data:image/jpeg;base64,...")
+  const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+  if (base64Data.length > 500_000) { // ~375KB raw limit
+    return res.status(400).json({ error: "Image too large (max 375KB compressed)" });
+  }
+  const buffer = Buffer.from(base64Data, "base64");
+  const filename = `${req.userId}.jpg`;
+  const filepath = path.join(UPLOADS_DIR, filename);
+  fs.writeFileSync(filepath, buffer);
+  const avatarUrl = `${BASE_URL}/uploads/avatars/${filename}`;
+  db.prepare("UPDATE users SET avatar_url = ? WHERE id = ?").run(avatarUrl, req.userId);
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
   res.json({ user: sanitizeUser(user) });
 });
@@ -962,5 +1038,6 @@ function sanitizeUser(row) {
     online: !!row.online,
     last_seen: row.last_seen,
     phone_number_hash: row.phone_number_hash || null,
+    avatar_url: row.avatar_url || null,
   };
 }

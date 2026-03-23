@@ -19,6 +19,7 @@ enum Config {
         static let groups        = "\(baseURL)/api/groups"
         static let invites       = "\(baseURL)/api/invites"
         static let profile       = "\(baseURL)/api/profile"
+        static let avatar        = "\(baseURL)/api/profile/avatar"
         static let pushToken     = "\(baseURL)/api/push-token"
     }
 
