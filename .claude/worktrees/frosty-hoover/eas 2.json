@@ -1,0 +1,40 @@
+{
+  "cli": {
+    "version": ">= 18.0.4",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "simulator": {
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EAS_BUILD_NO_EXPO_GO_WARNING": "true"
+      },
+      "ios": {
+        "credentialsSource": "remote"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "jmarti21@gmail.com",
+        "ascAppId": "6759710350"
+      }
+    }
+  }
+}

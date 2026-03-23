@@ -26,6 +26,7 @@
 		65C0CC61AA0D48E187404C6E /* EncryptionBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E15081408C4DBF87A64CA7 /* EncryptionBadge.swift */; };
 		6A8B3D7C81094F768DBD4F12 /* ConversationsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF6BBB0A568841268135A65D /* ConversationsViewModel.swift */; };
 		7936ECE0D8C04B1783F17328 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6662E259B6438A929C0820 /* Config.swift */; };
+		7A17230F27CFEC7BACBA5EB1 /* BannerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7060643B8FBE9D1270A8B298 /* BannerService.swift */; };
 		7E0924581D704A3DAC5B3480 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1439888075443F78D6DDB11 /* LoginView.swift */; };
 		806AB287CAB84C54B5821A3C /* BotChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D76F8A330F49528BCFE3ED /* BotChatView.swift */; };
 		81ACE69A41384010B4FD2737 /* User.swift in Sources */ = {isa = PBXBuildFile; fileRef = 266927B19E8F4C16B6E807AD /* User.swift */; };
@@ -101,6 +102,7 @@
 		48C647F3E11144EB97AC714A /* BotViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotViewModel.swift; sourceTree = "<group>"; };
 		5E7D1FA59BCC4256849650F8 /* BotMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotMessage.swift; sourceTree = "<group>"; };
 		675F9BD7833D409284ED3B85 /* Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Group.swift; sourceTree = "<group>"; };
+		7060643B8FBE9D1270A8B298 /* BannerService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BannerService.swift; sourceTree = "<group>"; };
 		72A141E5E5AF4DA4B99AF567 /* SYNAPTYC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SYNAPTYC.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		801B8683DD03482BB706BE50 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
 		8449711ABA9F4CF8BD5425CB /* ContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsView.swift; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 				F123673E686547D9B6D47988 /* WebSocketService.swift */,
 				3D1992A0F54F4C9B92951008 /* NotificationService.swift */,
 				41AE284325F97B6694AA4432 /* ContactSyncService.swift */,
+				7060643B8FBE9D1270A8B298 /* BannerService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -542,6 +545,7 @@
 				AA01SLC1BF0000000000E004 /* String+Localized.swift in Sources */,
 				AE94FBF10197B873F21F7C83 /* ThemeManager.swift in Sources */,
 				1E68170BD87E53F72BF5D2DE /* ContactSyncService.swift in Sources */,
+				7A17230F27CFEC7BACBA5EB1 /* BannerService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -590,7 +594,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				DEVELOPMENT_TEAM = LF9DXU9P25;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "arm64 x86_64";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -612,7 +616,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				DEVELOPMENT_TEAM = LF9DXU9P25;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SYNAPTYC/Info.plist;
@@ -637,7 +641,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -661,7 +665,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -679,7 +683,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -696,7 +700,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -713,7 +717,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.0;
@@ -736,7 +740,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202603232307;
+				CURRENT_PROJECT_VERSION = 202603232343;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

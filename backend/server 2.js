@@ -15,7 +15,6 @@ const bcrypt = require("bcryptjs");
 const { v4: uuidv4 } = require("uuid");
 const Database = require("better-sqlite3");
 const path = require("path");
-const Anthropic = require("@anthropic-ai/sdk");
 
 // ---------------------------------------------------------------------------
 // Config
@@ -144,7 +143,7 @@ function authMiddleware(req, res, next) {
 // ---------------------------------------------------------------------------
 
 app.post("/auth/register", (req, res) => {
-  const { username, email, password, display_name, phone_number_hash } = req.body;
+  const { username, email, password, display_name } = req.body;
   if (!username || !email || !password) {
     return res.status(400).json({ error: "username, email, and password are required" });
   }
@@ -157,9 +156,9 @@ app.post("/auth/register", (req, res) => {
   const hash = bcrypt.hashSync(password, BCRYPT_ROUNDS);
   const info = db
     .prepare(
-      "INSERT INTO users (username, email, password_hash, display_name, is_approved, phone_number_hash) VALUES (?, ?, ?, ?, 1, ?)"
+      "INSERT INTO users (username, email, password_hash, display_name, is_approved) VALUES (?, ?, ?, ?, 1)"
     )
-    .run(username, email, hash, display_name || null, phone_number_hash || null);
+    .run(username, email, hash, display_name || null);
 
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(info.lastInsertRowid);
   const token = signToken(user.id);
@@ -174,6 +173,9 @@ app.post("/auth/login", (req, res) => {
   const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
     return res.status(401).json({ error: "Invalid credentials" });
+  }
+  if (!user.is_approved) {
+    return res.status(403).json({ error: "Account pending approval" });
   }
   const token = signToken(user.id);
   res.json({ token, user: sanitizeUser(user) });
@@ -195,7 +197,7 @@ app.post("/auth/password-reset", (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.get("/api/users", authMiddleware, (req, res) => {
-  const users = db.prepare("SELECT * FROM users").all();
+  const users = db.prepare("SELECT * FROM users WHERE is_approved = 1").all();
   res.json({ users: users.map(sanitizeUser) });
 });
 
@@ -212,19 +214,13 @@ app.get("/api/messages/:userId", authMiddleware, (req, res) => {
        ORDER BY created_at ASC`
     )
     .all(req.userId, otherId, otherId, req.userId);
-  res.json({ messages: messages.map(sanitizeMessage) });
+  res.json({ messages });
 });
 
 app.post("/api/messages", authMiddleware, (req, res) => {
   const { to_user, content } = req.body;
   if (!to_user || content === undefined) {
     return res.status(400).json({ error: "to_user and content are required" });
-  }
-  if (typeof content !== "string" || content.length === 0) {
-    return res.status(400).json({ error: "content must be a non-empty string" });
-  }
-  if (content.length > 65536) {
-    return res.status(400).json({ error: "content too large (max 64 KB)" });
   }
   const info = db
     .prepare("INSERT INTO messages (from_user, to_user, content) VALUES (?, ?, ?)")
@@ -280,50 +276,13 @@ app.post("/api/contacts", authMiddleware, (req, res) => {
 
 app.patch("/api/contacts/:id", authMiddleware, (req, res) => {
   const { status } = req.body;
-  if (!["accepted", "blocked", "pending", "rejected"].includes(status)) {
+  if (!["accepted", "blocked", "pending"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
-  }
-  // "rejected" maps to a hard delete — no need to keep the row
-  if (status === "rejected") {
-    const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
-    if (!contact) return res.status(404).json({ error: "Contact not found" });
-    if (contact.requester_id !== req.userId && contact.receiver_id !== req.userId) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-    db.prepare("DELETE FROM contacts WHERE id = ?").run(req.params.id);
-    return res.json({ deleted: true });
   }
   db.prepare("UPDATE contacts SET status = ? WHERE id = ?").run(status, req.params.id);
   const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
   if (!contact) return res.status(404).json({ error: "Contact not found" });
   res.json({ contact });
-});
-
-app.delete("/api/contacts/:id", authMiddleware, (req, res) => {
-  const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
-  if (!contact) return res.status(404).json({ error: "Contact not found" });
-  if (contact.requester_id !== req.userId && contact.receiver_id !== req.userId) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-  db.prepare("DELETE FROM contacts WHERE id = ?").run(req.params.id);
-  res.json({ deleted: true });
-});
-
-// POST /api/contacts/sync — Signal-style phone number discovery
-// Accepts an array of SHA-256 hashed phone numbers; returns matched users.
-// The server never sees raw phone numbers — only hashes.
-app.post("/api/contacts/sync", authMiddleware, (req, res) => {
-  const { hashes } = req.body;
-  if (!Array.isArray(hashes) || hashes.length === 0) {
-    return res.json({ matched: [] });
-  }
-  // Limit to 500 hashes per request to prevent abuse
-  const limited = hashes.slice(0, 500);
-  const placeholders = limited.map(() => "?").join(",");
-  const rows = db
-    .prepare(`SELECT * FROM users WHERE phone_number_hash IN (${placeholders}) AND id != ?`)
-    .all(...limited, req.userId);
-  res.json({ matched: rows.map(sanitizeUser) });
 });
 
 // ---------------------------------------------------------------------------
@@ -405,225 +364,17 @@ app.delete("/api/groups/:groupId", authMiddleware, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// PROFILE
+// BOT (stub — proxies to external AI or returns a canned response)
 // ---------------------------------------------------------------------------
 
-app.get("/api/profile", authMiddleware, (req, res) => {
-  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
-  if (!user) return res.status(404).json({ error: "User not found" });
-  res.json({ user: sanitizeUser(user) });
-});
-
-app.put("/api/profile", authMiddleware, (req, res) => {
-  const { display_name, bio } = req.body;
-  if (display_name !== undefined && typeof display_name !== "string") {
-    return res.status(400).json({ error: "display_name must be a string" });
-  }
-  if (bio !== undefined && typeof bio !== "string") {
-    return res.status(400).json({ error: "bio must be a string" });
-  }
-
-  // Only update columns that were provided
-  const updates = [];
-  const values = [];
-  if (display_name !== undefined) { updates.push("display_name = ?"); values.push(display_name.slice(0, 100)); }
-  if (bio !== undefined)          { updates.push("bio = ?");          values.push(bio.slice(0, 500)); }
-
-  if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
-
-  values.push(req.userId);
-  // Ignore "bio" column gracefully if it doesn't exist yet (migration may not have added it)
-  try {
-    db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
-  } catch {
-    // bio column missing — retry without it
-    const safeUpdates = updates.filter((u) => !u.startsWith("bio"));
-    const safeValues = safeUpdates.map((u) => {
-      if (u.startsWith("display_name")) return display_name.slice(0, 100);
-      return undefined;
-    }).filter(Boolean);
-    if (safeUpdates.length === 0) return res.status(400).json({ error: "Nothing to update" });
-    safeValues.push(req.userId);
-    db.prepare(`UPDATE users SET ${safeUpdates.join(", ")} WHERE id = ?`).run(...safeValues);
-  }
-
-  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
-  res.json({ user: sanitizeUser(user) });
-});
-
-// ---------------------------------------------------------------------------
-// PUSH TOKENS
-// ---------------------------------------------------------------------------
-
-app.post("/api/push-token", authMiddleware, (req, res) => {
-  const { token, platform } = req.body;
-  if (!token) return res.status(400).json({ error: "token is required" });
-
-  // Upsert push token for this user (one token per user for simplicity)
-  try {
-    db.prepare(
-      `INSERT INTO push_tokens (user_id, token, platform, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET token = excluded.token,
-         platform = excluded.platform, updated_at = excluded.updated_at`
-    ).run(req.userId, token, platform || "ios", new Date().toISOString());
-  } catch {
-    // push_tokens table may not exist in older migrations — create it now
-    db.prepare(
-      `CREATE TABLE IF NOT EXISTS push_tokens (
-         user_id INTEGER PRIMARY KEY,
-         token TEXT NOT NULL,
-         platform TEXT DEFAULT 'ios',
-         updated_at TEXT NOT NULL,
-         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-       )`
-    ).run();
-    db.prepare(
-      `INSERT OR REPLACE INTO push_tokens (user_id, token, platform, updated_at)
-       VALUES (?, ?, ?, ?)`
-    ).run(req.userId, token, platform || "ios", new Date().toISOString());
-  }
-
-  res.json({ registered: true });
-});
-
-// ---------------------------------------------------------------------------
-// BANNER AI — Claude-powered agent with device context + tool use
-// ---------------------------------------------------------------------------
-
-const anthropic = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  : null;
-
-const BANNER_TOOLS = [
-  {
-    name: "get_platform_users",
-    description: "Get users registered on the SYNAPTYC platform (excludes current user)",
-    input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "create_task",
-    description: "Create a tracked agent task visible to the user",
-    input_schema: {
-      type: "object",
-      properties: {
-        title: { type: "string", description: "Short task title" },
-        description: { type: "string", description: "What the task does" },
-      },
-      required: ["title"],
-    },
-  },
-  {
-    name: "navigate_to",
-    description: "Navigate the iOS app to a screen: conversations | groups | contacts | settings",
-    input_schema: {
-      type: "object",
-      properties: {
-        screen: { type: "string", enum: ["conversations", "groups", "contacts", "settings"] },
-      },
-      required: ["screen"],
-    },
-  },
-];
-
-app.post("/api/bot/chat", authMiddleware, async (req, res) => {
-  const { message = "", conversation = [], device_context = {}, tool_results = [] } = req.body;
-
-  if (!anthropic) {
-    return res.json({
-      reply:
-        "⚠ ANTHROPIC_API_KEY not set on server.\n\nTo enable Banner AI:\n  fly secrets set ANTHROPIC_API_KEY=sk-ant-...\n\nThen redeploy.",
-      tool_calls: [],
-    });
-  }
-
-  try {
-    const dc = device_context;
-    const deviceSummary = dc.battery_level != null
-      ? `Battery ${Math.round(dc.battery_level * 100)}% (${dc.battery_state}) · ${dc.network_type} · ${(dc.storage_free_gb || 0).toFixed(1)} GB free / ${(dc.storage_total_gb || 0).toFixed(1)} GB · iOS ${dc.ios_version} · App v${dc.app_version}`
-      : "Device context unavailable";
-
-    const systemPrompt = `You are Banner, an AI agent embedded in SYNAPTYC — a private, end-to-end encrypted messaging app. You run directly on the user's device and have real-time access to device stats, app state, and platform data.
-
-CONNECTED DEVICE:
-${deviceSummary}
-Unread messages: ${dc.unread_count ?? 0}
-
-CAPABILITIES:
-• Read live device stats (battery, storage, network, iOS version)
-• Create and track tasks shown in the agents panel
-• Navigate the app to any screen
-• Query SYNAPTYC platform users
-• Write and explain code (Swift, JavaScript, Python, shell)
-
-STYLE: Concise, technical, cyberpunk terminal aesthetic. Use actual device data in responses. Be action-oriented — when asked to do something, do it, don't just describe it.`;
-
-    // Build message array from conversation history
-    const messages = conversation.map((m) => ({ role: m.role, content: m.content }));
-
-    // Append tool results if this is a continuation
-    if (tool_results.length > 0) {
-      messages.push({
-        role: "user",
-        content: tool_results.map((tr) => ({
-          type: "tool_result",
-          tool_use_id: tr.tool_use_id,
-          content: tr.result,
-        })),
-      });
-    } else if (message.trim()) {
-      messages.push({ role: "user", content: message });
-    }
-
-    // Agentic loop — process server-side tools automatically (max 4 iterations)
-    let finalReply = "";
-    const clientToolCalls = [];
-    for (let i = 0; i < 4; i++) {
-      const response = await anthropic.messages.create({
-        model: "claude-opus-4-6",
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages,
-        tools: BANNER_TOOLS,
-      });
-
-      const texts = response.content.filter((b) => b.type === "text");
-      const uses  = response.content.filter((b) => b.type === "tool_use");
-      if (texts.length) finalReply = texts.map((b) => b.text).join("\n");
-
-      if (response.stop_reason === "end_turn" || uses.length === 0) break;
-
-      messages.push({ role: "assistant", content: response.content });
-
-      const toolResults = [];
-      for (const use of uses) {
-        let result = "";
-        if (use.name === "get_platform_users") {
-          const rows = db
-            .prepare("SELECT id, username, display_name FROM users WHERE id != ? LIMIT 50")
-            .all(req.userId);
-          result = JSON.stringify(rows);
-        } else if (use.name === "create_task") {
-          // Task is also created client-side for immediate display; here we just confirm
-          result = JSON.stringify({ created: true, title: use.input.title });
-        } else {
-          // Client-side tool — return to app
-          clientToolCalls.push({ id: use.id, name: use.name, input: use.input });
-          result = "Sent to client device for execution";
-        }
-        toolResults.push({ type: "tool_result", tool_use_id: use.id, content: result });
-      }
-
-      // If any client tools were queued, return now and let app handle them
-      if (clientToolCalls.length > 0) break;
-      messages.push({ role: "user", content: toolResults });
-    }
-
-    res.json({ reply: finalReply, tool_calls: clientToolCalls });
-  } catch (err) {
-    console.error("Banner error:", err.message);
-    res.status(500).json({ error: `Banner error: ${err.message}` });
-  }
+app.post("/api/bot/chat", authMiddleware, (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: "message is required" });
+  // Stub response — replace with actual AI integration
+  res.json({
+    reply:
+      "SYSTEM ONLINE — nano-SYNAPSYS AI relay operational. Backend bot integration pending.",
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -669,7 +420,7 @@ function sendToUser(userId, payload, excludeWs = undefined) {
 /** Broadcast to all connected clients */
 function broadcastUserList() {
   const userList = [];
-  const allUsers = db.prepare("SELECT id, username, display_name, online FROM users").all();
+  const allUsers = db.prepare("SELECT id, username, display_name, online FROM users WHERE is_approved = 1").all();
   for (const u of allUsers) {
     userList.push({
       id: u.id,
@@ -778,8 +529,7 @@ wss.on("connection", (ws) => {
       // -----------------------------------------------------------------
       case "group_message": {
         const groupId = msg.group_id;
-        if (!groupId || typeof msg.content !== "string" || msg.content.length === 0) break;
-        if (msg.content.length > 65536) break;
+        if (!groupId || msg.content === undefined) break;
 
         const sender = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
         const info = db
@@ -890,7 +640,7 @@ wss.on("connection", (ws) => {
 // ---------------------------------------------------------------------------
 
 app.get("/health", (_, res) => {
-  res.json({ status: "ok", service: "nano-SYNAPSYS", version: "1.5.1" });
+  res.json({ status: "ok", service: "nano-SYNAPSYS", version: "1.0.0" });
 });
 
 // ---------------------------------------------------------------------------
@@ -941,17 +691,6 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // Helpers
 // ---------------------------------------------------------------------------
 
-function sanitizeMessage(m) {
-  return {
-    id: m.id,
-    from_user: m.from_user,
-    to_user: m.to_user,
-    content: m.content,
-    read: m.read === 1 || m.read === true,
-    created_at: m.created_at,
-  };
-}
-
 function sanitizeUser(row) {
   return {
     id: row.id,
@@ -961,6 +700,5 @@ function sanitizeUser(row) {
     is_approved: !!row.is_approved,
     online: !!row.online,
     last_seen: row.last_seen,
-    phone_number_hash: row.phone_number_hash || null,
   };
 }

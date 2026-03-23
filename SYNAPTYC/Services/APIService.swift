@@ -210,6 +210,18 @@ actor APIService {
         return resp.reply
     }
 
+    func bannerChat(
+        message: String,
+        conversation: [BannerConvMessage],
+        deviceContext: BannerDeviceContext,
+        toolResults: [BannerToolResult] = []
+    ) async throws -> BannerChatResponse {
+        let body = BannerChatRequest(message: message, conversation: conversation,
+                                     deviceContext: deviceContext, toolResults: toolResults)
+        return try await request(Config.API.botChat, method: "POST",
+                                 body: body, responseType: BannerChatResponse.self)
+    }
+
     // MARK: - Groups
 
     func groups() async throws -> [Group] {
