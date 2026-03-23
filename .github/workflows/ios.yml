@@ -68,6 +68,7 @@ jobs:
             -sdk iphonesimulator \
             -configuration Release \
             -derivedDataPath build-release \
+            EXCLUDED_ARCHS="" \
             build
 
   lint:
