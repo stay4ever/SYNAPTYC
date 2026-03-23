@@ -5,8 +5,8 @@ platform :ios do
   desc "Run unit tests"
   lane :test do
     xcodebuild(
-      project: "nano-SYNAPSYS.xcodeproj",
-      scheme: "nano-SYNAPSYS",
+      project: "SYNAPTYC.xcodeproj",
+      scheme: "SYNAPTYC",
       configuration: "Debug",
       sdk: "iphonesimulator",
       destination: "generic/platform=iOS Simulator",
@@ -20,13 +20,13 @@ platform :ios do
     # Auto-increment build number using timestamp
     increment_build_number(
       build_number: Time.now.strftime("%Y%m%d%H%M"),
-      xcodeproj: "nano-SYNAPSYS.xcodeproj"
+      xcodeproj: "SYNAPTYC.xcodeproj"
     )
 
     # Build the app — let Xcode handle signing via ASC API key
     build_app(
-      project: "nano-SYNAPSYS.xcodeproj",
-      scheme: "nano-SYNAPSYS",
+      project: "SYNAPTYC.xcodeproj",
+      scheme: "SYNAPTYC",
       configuration: "Release",
       export_method: "app-store",
       export_options: {
@@ -35,7 +35,7 @@ platform :ios do
         teamID: ENV["TEAM_ID"]
       },
       output_directory: "build",
-      output_name: "nano-SYNAPSYS.ipa",
+      output_name: "SYNAPTYC.ipa",
       destination: "generic/platform=iOS",
       xcargs: "DEVELOPMENT_TEAM='#{ENV["TEAM_ID"]}' CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='Apple Distribution' PROVISIONING_PROFILE_SPECIFIER='#{ENV["PP_NAME"]}'"
     )
@@ -50,27 +50,27 @@ platform :ios do
     # Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
-      ipa: "build/nano-SYNAPSYS.ipa",
+      ipa: "build/SYNAPTYC.ipa",
       skip_waiting_for_build_processing: true,
       skip_submission: true
     )
 
     # Tag the release
-    version = get_version_number(xcodeproj: "nano-SYNAPSYS.xcodeproj")
-    build = get_build_number(xcodeproj: "nano-SYNAPSYS.xcodeproj")
+    version = get_version_number(xcodeproj: "SYNAPTYC.xcodeproj")
+    build = get_build_number(xcodeproj: "SYNAPTYC.xcodeproj")
     add_git_tag(tag: "v#{version}-#{build}")
   end
 
   desc "Build and run UI tests"
   lane :ui_tests do
     scan(
-      project: "nano-SYNAPSYS.xcodeproj",
-      scheme: "nano-SYNAPSYS",
+      project: "SYNAPTYC.xcodeproj",
+      scheme: "SYNAPTYC",
       devices: ["iPhone 15"],
       configuration: "Debug",
       clean: true,
       build_for_testing: true,
-      only_testing: "nano_SYNAPSYSUITests"
+      only_testing: "SYNAPTYCUITests"
     )
   end
 

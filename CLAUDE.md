@@ -1,8 +1,8 @@
-# CLAUDE.md — nano-SYNAPSYS
+# CLAUDE.md — SYNAPTYC
 
 ## Project Overview
 
-nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app. Fully standalone — no shared infrastructure with any other service. No phone number required. No metadata harvested. It uses ECDH P-384 key exchange with AES-256-GCM encryption, real-time WebSocket communication, and a cyberpunk neon-green Matrix aesthetic.
+SYNAPTYC is a privacy-first, end-to-end encrypted iOS messaging app. Fully standalone — no shared infrastructure with any other service. No phone number required. No metadata harvested. It uses ECDH P-384 key exchange with AES-256-GCM encryption, real-time WebSocket communication, and a cyberpunk neon-green Matrix aesthetic.
 
 - **Platform:** iOS 17.0+ (iPhone only, portrait)
 - **Language:** Swift 5.0 / SwiftUI
@@ -18,7 +18,7 @@ nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app. Fully 
 **MVVM + Services layer** with singleton services and Combine-based reactivity.
 
 ```
-nano-SYNAPSYS/
+SYNAPTYC/
 ├── Config/           # API endpoints, environment config, app constants
 ├── Models/           # Data structures: User, Message, Contact, Group, BotMessage
 ├── Services/         # Singletons: API, WebSocket, Encryption, Keychain, Notifications
@@ -44,13 +44,13 @@ nano-SYNAPSYS/
 ### Native Xcode Build
 ```bash
 # Open in Xcode
-open nano-SYNAPSYS.xcodeproj
+open SYNAPTYC.xcodeproj
 
 # Build from command line (requires Xcode 15+)
-xcodebuild -project nano-SYNAPSYS.xcodeproj -scheme nano-SYNAPSYS -sdk iphonesimulator build
+xcodebuild -project SYNAPTYC.xcodeproj -scheme SYNAPTYC -sdk iphonesimulator build
 
 # Run tests
-xcodebuild -project nano-SYNAPSYS.xcodeproj -scheme nano-SYNAPSYS -sdk iphonesimulator test
+xcodebuild -project SYNAPTYC.xcodeproj -scheme SYNAPTYC -sdk iphonesimulator test
 ```
 
 ### EAS / Expo Build
@@ -76,7 +76,7 @@ Configured in `fastlane/` for automated builds and distribution.
 
 ## Testing
 
-Tests are split across separate files in `nano-SYNAPSYSTests/` (unit) and `nano-SYNAPSYSUITests/` (UI).
+Tests are split across separate files in `SYNAPTYCTests/` (unit) and `SYNAPTYCUITests/` (UI).
 
 **Unit test files:**
 - **EncryptionServiceTests.swift** (12) — Round-trip encryption, ECDH key exchange, public key serialization, nonce uniqueness
@@ -88,8 +88,8 @@ Tests are split across separate files in `nano-SYNAPSYSTests/` (unit) and `nano-
 - **APIServiceTests.swift** (3) — Error descriptions, error types
 
 **UI test files:**
-- **nano_SYNAPSYSUITests.swift** — Splash screen, login screen, registration flow, accessibility
-- **nano_SYNAPSYSUITestsLaunchTests.swift** — Launch screenshot capture
+- **SYNAPTYCUITests.swift** — Splash screen, login screen, registration flow, accessibility
+- **SYNAPTYCUITestsLaunchTests.swift** — Launch screenshot capture
 
 **Test naming convention:** `test_<function>_<scenario>()` (e.g., `test_encryptDecrypt_roundTrip()`)
 
@@ -161,7 +161,7 @@ Semantic format: `<type>: <description>`
 ## Known Issues & Recovery
 
 ### Git Repository Recovery (2026-03-21)
-The git repository has corrupted tree objects (the `backend/` subtree). The working tree is missing the `nano-SYNAPSYS/` Swift source directory, `nano-SYNAPSYSTests/`, `nano-SYNAPSYSUITests/`, `.github/`, `fastlane/`, and `backend/` — all of which exist in the HEAD commit. To recover:
+The git repository has corrupted tree objects (the `backend/` subtree). The working tree is missing the `SYNAPTYC/` Swift source directory, `SYNAPTYCTests/`, `SYNAPTYCUITests/`, `.github/`, `fastlane/`, and `backend/` — all of which exist in the HEAD commit. To recover:
 
 ```bash
 # 1. Back up the current working directory
@@ -176,7 +176,7 @@ cd nanoSYNAPSYS-fresh
 #    (App.js, src/, app.json, eas.json, package.json, ios/, maestro/, etc.)
 
 # 4. Verify the Swift sources are restored
-ls nano-SYNAPSYS/
+ls SYNAPTYC/
 ```
 
 ### Working Tree State

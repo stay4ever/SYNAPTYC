@@ -1,8 +1,8 @@
-# Test & CI/CD Files Manifest — nano-SYNAPSYS
+# Test & CI/CD Files Manifest — SYNAPTYC
 
 Generated: 2026-03-21
 
-## Unit Tests (nano-SYNAPSYSTests/)
+## Unit Tests (SYNAPTYCTests/)
 
 ### 1. EncryptionServiceTests.swift — 12 tests
 - `test_generateKeyPair_createsValidKeys`
@@ -83,15 +83,15 @@ Generated: 2026-03-21
 
 **Unit Test Total: 63 tests**
 
-## UI Tests (nano-SYNAPSYSUITests/)
+## UI Tests (SYNAPTYCUITests/)
 
-### 8. nano_SYNAPSYSUITests.swift — 4 tests
+### 8. SYNAPTYCUITests.swift — 4 tests
 - `testSplashScreenAppears` — Launch screen verification
 - `testLoginScreenElements` — Login form element presence
 - `testRegistrationFlow` — Registration form validation
 - `testAccessibilityLabels` — a11y compliance
 
-### 9. nano_SYNAPSYSUITestsLaunchTests.swift — 1 test
+### 9. SYNAPTYCUITestsLaunchTests.swift — 1 test
 - `testLaunchScreenshot` — Launch screenshot capture
 
 **UI Test Total: 5 tests**
@@ -199,16 +199,16 @@ Examples:
 
 ```bash
 # Run all unit tests
-xcodebuild -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
-  -scheme nano-SYNAPSYS \
+xcodebuild -project SYNAPTYC/SYNAPTYC.xcodeproj \
+  -scheme SYNAPTYC \
   -sdk iphonesimulator \
   test
 
 # Run UI tests
-xcodebuild -project nano-SYNAPSYS/nano-SYNAPSYS.xcodeproj \
-  -scheme nano-SYNAPSYS \
+xcodebuild -project SYNAPTYC/SYNAPTYC.xcodeproj \
+  -scheme SYNAPTYC \
   -sdk iphonesimulator \
-  -only-testing nano_SYNAPSYSUITests \
+  -only-testing SYNAPTYCUITests \
   test
 
 # Build with Fastlane
@@ -220,4 +220,4 @@ fastlane ios ui_tests    # Run UI tests
 
 ---
 
-**All files follow nano-SYNAPSYS architecture, security model, and coding conventions.**
+**All files follow SYNAPTYC architecture, security model, and coding conventions.**

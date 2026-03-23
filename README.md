@@ -57,4 +57,4 @@ Follows the AI Evolution design language:
 
 ---
 
-*nano-SYNAPSYS — encrypted by default, private by design.*
+*SYNAPTYC — encrypted by default, private by design.*

@@ -95,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SYNAPTYC-ipa
-          path: build/nano-SYNAPSYS.ipa
+          path: build/SYNAPTYC.ipa
 
       - name: Clean up
         if: always()

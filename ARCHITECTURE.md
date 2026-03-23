@@ -1,8 +1,8 @@
-# Architecture — nano-SYNAPSYS
+# Architecture — SYNAPTYC
 
 ## Overview
 
-nano-SYNAPSYS is a privacy-first, end-to-end encrypted iOS messaging app with a standalone Node.js backend.
+SYNAPTYC is a privacy-first, end-to-end encrypted iOS messaging app with a standalone Node.js backend.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -137,8 +137,8 @@ The server is a **transparent relay** — it never sees plaintext message conten
 ## Directory Structure
 
 ```
-nano-SYNAPSYS/
-├── nano-SYNAPSYS/               # iOS app source
+SYNAPTYC/
+├── SYNAPTYC/               # iOS app source
 │   ├── Config/                  #   API endpoints, environment config
 │   ├── Models/                  #   Data structures (Codable)
 │   ├── Services/                #   Singletons: API, WS, Crypto, Keychain
@@ -156,8 +156,8 @@ nano-SYNAPSYS/
 │   │   └── Components/          #     Reusable UI components
 │   ├── Resources/               #   Localization strings
 │   └── Assets.xcassets/         #   Images and app icons
-├── nano-SYNAPSYSTests/          # Unit tests (XCTest)
-├── nano-SYNAPSYSUITests/        # UI automation tests (XCUITest)
+├── SYNAPTYCTests/          # Unit tests (XCTest)
+├── SYNAPTYCUITests/        # UI automation tests (XCUITest)
 ├── backend/                     # Node.js backend server
 │   ├── server.js                #   Express + WebSocket
 │   ├── migrate.js               #   SQLite schema

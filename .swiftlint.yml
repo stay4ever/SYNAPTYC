@@ -1,11 +1,11 @@
-# SwiftLint configuration for nano-SYNAPSYS
+# SwiftLint configuration for SYNAPTYC
 
 included:
-  - nano-SYNAPSYS
-  - nano-SYNAPSYSTests
+  - SYNAPTYC
+  - SYNAPTYCTests
 
 excluded:
-  - nano-SYNAPSYS.xcodeproj
+  - SYNAPTYC.xcodeproj
   - backend
   - DerivedData
   - Pods

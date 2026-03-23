@@ -1,6 +1,6 @@
-# Contributing to nano-SYNAPSYS
+# Contributing to SYNAPTYC
 
-Thank you for your interest in contributing to nano-SYNAPSYS.
+Thank you for your interest in contributing to SYNAPTYC.
 
 ## Getting Started
 
@@ -15,11 +15,11 @@ Thank you for your interest in contributing to nano-SYNAPSYS.
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR_ORG/nano-SYNAPSYS.git
-cd nano-SYNAPSYS
+git clone https://github.com/YOUR_ORG/SYNAPTYC.git
+cd SYNAPTYC
 
 # Open in Xcode
-open nano-SYNAPSYS.xcodeproj
+open SYNAPTYC.xcodeproj
 
 # Build and run
 # Select an iPhone 15 simulator, then Cmd+R
@@ -46,7 +46,7 @@ node server.js
 
 3. Run all tests:
    ```bash
-   xcodebuild test -project nano-SYNAPSYS.xcodeproj -scheme nano-SYNAPSYS -sdk iphonesimulator
+   xcodebuild test -project SYNAPTYC.xcodeproj -scheme SYNAPTYC -sdk iphonesimulator
    ```
 
 4. Commit using semantic commit messages (see below)
@@ -84,7 +84,7 @@ Semantic format: `<type>: <description>`
 
 ### UI/Design
 
-All new UI must follow the nano-SYNAPSYS design language:
+All new UI must follow the SYNAPTYC design language:
 
 - Background: `#000e00` (deep black)
 - Accent: `#00ff41` (neon green)
@@ -110,8 +110,8 @@ All new UI must follow the nano-SYNAPSYS design language:
 
 We aim for comprehensive test coverage:
 
-- **Unit tests** in `nano-SYNAPSYSTests/` — one file per service/model
-- **UI tests** in `nano-SYNAPSYSUITests/` — screen-level automation
+- **Unit tests** in `SYNAPTYCTests/` — one file per service/model
+- **UI tests** in `SYNAPTYCUITests/` — screen-level automation
 - **Backend integration tests** in `backend/test-integration.js`
 
 Run tests before every PR submission.

@@ -35,8 +35,8 @@ jobs:
       - name: Build for testing
         run: |
           xcodebuild \
-            -project nano-SYNAPSYS.xcodeproj \
-            -scheme nano-SYNAPSYS \
+            -project SYNAPTYC.xcodeproj \
+            -scheme SYNAPTYC \
             -sdk iphonesimulator \
             -configuration Debug \
             -derivedDataPath build \
@@ -45,8 +45,8 @@ jobs:
       - name: Run unit tests
         run: |
           xcodebuild \
-            -project nano-SYNAPSYS.xcodeproj \
-            -scheme nano-SYNAPSYS \
+            -project SYNAPTYC.xcodeproj \
+            -scheme SYNAPTYC \
             -sdk iphonesimulator \
             -configuration Debug \
             -derivedDataPath build \
@@ -63,8 +63,8 @@ jobs:
       - name: Build for release
         run: |
           xcodebuild \
-            -project nano-SYNAPSYS.xcodeproj \
-            -scheme nano-SYNAPSYS \
+            -project SYNAPTYC.xcodeproj \
+            -scheme SYNAPTYC \
             -sdk iphonesimulator \
             -configuration Release \
             -derivedDataPath build \
@@ -81,4 +81,4 @@ jobs:
           if ! which swiftlint >/dev/null; then
             brew install swiftlint
           fi
-          swiftlint lint nano-SYNAPSYS --reporter github-actions-logging || true
+          swiftlint lint SYNAPTYC --reporter github-actions-logging || true
