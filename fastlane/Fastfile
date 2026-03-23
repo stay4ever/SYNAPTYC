@@ -37,7 +37,7 @@ platform :ios do
       output_directory: "build",
       output_name: "SYNAPTYC.ipa",
       destination: "generic/platform=iOS",
-      xcargs: "DEVELOPMENT_TEAM=LF9DXU9P25 CODE_SIGN_STYLE=Automatic"
+      xcargs: "-allowProvisioningUpdates DEVELOPMENT_TEAM=LF9DXU9P25 CODE_SIGN_STYLE=Automatic"
     )
 
     # Set up API key for upload
