@@ -69,3 +69,7 @@ ngrok_recovery_codes.txt
 *.p12
 *.mobileprovision
 *.dmg
+
+# Claude Code internal files
+.claude/worktrees/
+.claude/projects/
