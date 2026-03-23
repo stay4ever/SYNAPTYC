@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var themeManager: ThemeManager
+    @AppStorage("biometrics_enabled") private var biometricsEnabled = false
     @State private var showLogoutConfirm     = false
     @State private var showChangePassword    = false
     @State private var screenshotDetected    = false
@@ -73,6 +74,20 @@ struct SettingsView: View {
                                         }
                                     }
                                 }
+                            }
+                            .padding(.vertical, 4)
+                        }
+
+                        // Biometrics
+                        settingsSection(title: "BIOMETRICS") {
+                            HStack {
+                                Image(systemName: "faceid")
+                                    .foregroundColor(.matrixGreen).frame(width: 22)
+                                Text("Face ID / Touch ID").font(.monoBody).foregroundColor(.neonGreen)
+                                Spacer()
+                                Toggle("", isOn: $biometricsEnabled)
+                                    .tint(.neonGreen)
+                                    .labelsHidden()
                             }
                             .padding(.vertical, 4)
                         }

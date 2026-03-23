@@ -16,7 +16,11 @@ struct SYNAPTYCApp: App {
                         .transition(.opacity)
                 } else {
                     SwiftUI.Group {
-                        if auth.isLoggedIn {
+                        if auth.requiresBiometric {
+                            BiometricLockView()
+                                .environmentObject(auth)
+                                .environmentObject(themeManager)
+                        } else if auth.isLoggedIn {
                             MainTabView()
                                 .environmentObject(auth)
                                 .environmentObject(themeManager)
@@ -81,5 +85,67 @@ struct SYNAPTYCApp: App {
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
         UINavigationBar.appearance().compactAppearance    = appearance
         UINavigationBar.appearance().tintColor            = UIColor(Color.neonGreen)
+    }
+}
+
+// MARK: - Biometric Lock Screen
+
+struct BiometricLockView: View {
+    @EnvironmentObject var auth: AuthViewModel
+    @State private var failed = false
+
+    var body: some View {
+        ZStack {
+            Color.deepBlack.ignoresSafeArea()
+            ScanlineOverlay()
+
+            VStack(spacing: 28) {
+                Spacer()
+
+                VStack(spacing: 12) {
+                    Image(systemName: "faceid")
+                        .font(.system(size: 64))
+                        .foregroundColor(.neonGreen)
+                        .shadow(color: .neonGreen, radius: 18)
+                    Text("SYNAPTYC")
+                        .font(.monoTitle)
+                        .foregroundColor(.neonGreen)
+                        .glowText()
+                    Text("AUTHENTICATION REQUIRED")
+                        .font(.monoCaption)
+                        .foregroundColor(.matrixGreen)
+                        .tracking(3)
+                }
+
+                Spacer()
+
+                VStack(spacing: 14) {
+                    if failed {
+                        Text("⚠ Authentication failed")
+                            .font(.monoCaption)
+                            .foregroundColor(.alertRed)
+                    }
+
+                    NeonButton("AUTHENTICATE", icon: "faceid") {
+                        failed = false
+                        Task {
+                            await auth.authenticateWithBiometrics()
+                            if auth.requiresBiometric { failed = true }
+                        }
+                    }
+                    .padding(.horizontal, 40)
+
+                    Button("Use Password Instead") {
+                        auth.usePasswordInstead()
+                    }
+                    .font(.monoCaption)
+                    .foregroundColor(.matrixGreen.opacity(0.7))
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+        .task {
+            await auth.authenticateWithBiometrics()
+        }
     }
 }

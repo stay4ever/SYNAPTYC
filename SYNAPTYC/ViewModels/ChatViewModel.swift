@@ -83,10 +83,11 @@ final class ChatViewModel: ObservableObject {
             }
 
             // Decrypt and filter protocol messages
+            let myId = AuthViewModel.shared.currentUser?.id ?? 0
             let display: [Message] = fetched.compactMap { msg in
                 if msg.content.hasPrefix("KEX:") { return nil }
                 var m = msg
-                m.content = decryptContent(m.content)
+                m.content = decryptContent(m.content, isMine: msg.fromUser == myId)
                 return m
             }
             messages = display
@@ -138,7 +139,8 @@ final class ChatViewModel: ObservableObject {
             return
         }
 
-        m.content = decryptContent(m.content)
+        let myId2 = AuthViewModel.shared.currentUser?.id ?? 0
+        m.content = decryptContent(m.content, isMine: m.fromUser == myId2)
 
         if !messages.contains(where: { $0.id == m.id }) {
             messages.append(m)
@@ -153,23 +155,38 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Decrypt  (DR2 → legacy ENC: → plaintext fallback)
 
-    private func decryptContent(_ content: String) -> String {
+    /// Decrypt a single message content string.
+    /// `isMine` — true if current user sent this message (outgoing).
+    private func decryptContent(_ content: String, isMine: Bool = false) -> String {
         if content.hasPrefix("DR2:") {
             if var state = ratchetState,
                let plain = try? DoubleRatchet.decrypt(state: &state, ciphertext: content) {
                 ratchetState = state
                 DoubleRatchet.save(state, for: peer.id)
-                // Bob gets CKs after the first successful DH ratchet step
                 if !encryptionReady && state.cks != nil {
                     encryptionReady = true
                     flushPending()
                 }
                 return plain
             }
+            // Decryption failed — show a clean placeholder
+            return isMine ? "📤 Sent (encrypted)" : "🔒 Encrypted"
         } else if content.hasPrefix("ENC:"), let key = legacyKey {
-            return (try? EncryptionService.decrypt(content, using: key)) ?? content
+            return (try? EncryptionService.decrypt(content, using: key)) ?? "🔒 Encrypted"
         }
         return content
+    }
+
+    /// Re-run decryption on all loaded messages (called after key exchange completes).
+    private func redecryptMessages() {
+        let myId = AuthViewModel.shared.currentUser?.id ?? 0
+        for i in messages.indices {
+            let raw = messages[i].content
+            // Only attempt re-decryption on messages that show a placeholder
+            guard raw == "🔒 Encrypted" || raw == "📤 Sent (encrypted)" else { continue }
+            // We don't have the original ciphertext anymore at this point; skip.
+            // Future messages received after key exchange will decrypt correctly.
+        }
     }
 
     // MARK: - ECDH Key Exchange

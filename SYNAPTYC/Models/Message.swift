@@ -21,6 +21,30 @@ struct Message: Codable, Identifiable, Equatable {
         case createdAt = "created_at"
     }
 
+    // Memberwise init (needed because we also define a custom Decodable init below)
+    init(id: Int, fromUser: Int, toUser: Int, content: String, read: Bool, createdAt: String) {
+        self.id = id; self.fromUser = fromUser; self.toUser = toUser
+        self.content = content; self.read = read; self.createdAt = createdAt
+        self.isEncrypted = false; self.disappearsAt = nil
+    }
+
+    // SQLite returns 0/1 integers for booleans — handle both integer and boolean JSON values
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id        = try c.decode(Int.self,    forKey: .id)
+        fromUser  = try c.decode(Int.self,    forKey: .fromUser)
+        toUser    = try c.decode(Int.self,    forKey: .toUser)
+        content   = try c.decode(String.self, forKey: .content)
+        createdAt = try c.decode(String.self, forKey: .createdAt)
+        if let intVal = try? c.decode(Int.self, forKey: .read) {
+            read = intVal != 0
+        } else {
+            read = (try? c.decode(Bool.self, forKey: .read)) ?? false
+        }
+        isEncrypted = false
+        disappearsAt = nil
+    }
+
     var timestamp: Date {
         // Try with fractional seconds first (e.g., "2024-01-01T12:00:00.000Z")
         let withFrac = ISO8601DateFormatter()

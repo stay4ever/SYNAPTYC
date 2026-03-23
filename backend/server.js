@@ -211,7 +211,7 @@ app.get("/api/messages/:userId", authMiddleware, (req, res) => {
        ORDER BY created_at ASC`
     )
     .all(req.userId, otherId, otherId, req.userId);
-  res.json({ messages });
+  res.json({ messages: messages.map(sanitizeMessage) });
 });
 
 app.post("/api/messages", authMiddleware, (req, res) => {
@@ -814,6 +814,17 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+function sanitizeMessage(m) {
+  return {
+    id: m.id,
+    from_user: m.from_user,
+    to_user: m.to_user,
+    content: m.content,
+    read: m.read === 1 || m.read === true,
+    created_at: m.created_at,
+  };
+}
 
 function sanitizeUser(row) {
   return {

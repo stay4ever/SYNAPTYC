@@ -1,12 +1,15 @@
 import Foundation
 import SwiftUI
+import LocalAuthentication
 
 @MainActor
 final class AuthViewModel: ObservableObject {
-    @Published var isLoggedIn  = false
+    @Published var isLoggedIn       = false
+    @Published var requiresBiometric = false
     @Published var currentUser: AppUser?
-    @Published var isLoading   = false
+    @Published var isLoading        = false
     @Published var errorMessage: String?
+    private var biometricsEnabled: Bool { UserDefaults.standard.bool(forKey: "biometrics_enabled") }
 
     static let shared = AuthViewModel()
     private init() { tryRestore() }
@@ -19,10 +22,47 @@ final class AuthViewModel: ObservableObject {
         if let data = KeychainService.loadData(Config.Keychain.userKey),
            let user = try? JSONDecoder().decode(AppUser.self, from: data) {
             currentUser = user
-            isLoggedIn  = true
-            WebSocketService.shared.connect()
+            if biometricsEnabled {
+                requiresBiometric = true   // gate behind biometrics
+            } else {
+                isLoggedIn = true
+                WebSocketService.shared.connect()
+            }
         }
         Task { await refreshUser() }
+    }
+
+    // MARK: - Biometric authentication
+
+    func authenticateWithBiometrics() async {
+        let context = LAContext()
+        var nsError: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &nsError) else {
+            // Hardware not available — skip biometric gate
+            requiresBiometric = false
+            isLoggedIn = currentUser != nil
+            if isLoggedIn { WebSocketService.shared.connect() }
+            return
+        }
+        do {
+            let ok = try await context.evaluatePolicy(
+                .deviceOwnerAuthenticationWithBiometrics,
+                localizedReason: "Authenticate to access SYNAPTYC"
+            )
+            if ok {
+                requiresBiometric = false
+                isLoggedIn        = true
+                WebSocketService.shared.connect()
+            }
+        } catch {
+            // User cancelled or failed — stay on biometric screen
+        }
+    }
+
+    func usePasswordInstead() {
+        requiresBiometric = false
+        currentUser = nil
+        isLoggedIn  = false
     }
 
     private func refreshUser() async {
