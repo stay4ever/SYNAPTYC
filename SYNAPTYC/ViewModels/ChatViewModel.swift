@@ -21,6 +21,8 @@ final class ChatViewModel: ObservableObject {
     private var pendingOutgoing: [String]     = []
     private var keyExchangeInFlight           = false
     private static let maxRetries             = 3
+    /// Zero-width space — silent bootstrap message sent by Alice after initAlice so Bob gets his cks
+    private static let kBootstrapSentinel     = "\u{200B}"
 
     init(peer: AppUser) {
         self.peer = peer
@@ -87,12 +89,13 @@ final class ChatViewModel: ObservableObject {
                 await initiateKeyExchange()
             }
 
-            // Decrypt and filter protocol messages
+            // Decrypt and filter protocol messages (nil = sentinel or undecryptable outgoing)
             let myId = AuthViewModel.shared.currentUser?.id ?? 0
             let display: [Message] = fetched.compactMap { msg in
                 if msg.content.hasPrefix("KEX:") { return nil }
                 var m = msg
-                m.content = decryptContent(m.content, isMine: msg.fromUser == myId)
+                guard let plain = decryptContent(m.content, isMine: msg.fromUser == myId) else { return nil }
+                m.content = plain
                 return m
             }
             messages = display
@@ -146,7 +149,8 @@ final class ChatViewModel: ObservableObject {
         }
 
         let myId2 = AuthViewModel.shared.currentUser?.id ?? 0
-        m.content = decryptContent(m.content, isMine: m.fromUser == myId2)
+        guard let plain = decryptContent(m.content, isMine: m.fromUser == myId2) else { return }
+        m.content = plain
 
         if !messages.contains(where: { $0.id == m.id }) {
             messages.append(m)
@@ -161,9 +165,8 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Decrypt  (DR2 → legacy ENC: → plaintext fallback)
 
-    /// Decrypt a single message content string.
-    /// `isMine` — true if current user sent this message (outgoing).
-    private func decryptContent(_ content: String, isMine: Bool = false) -> String {
+    /// Returns nil for bootstrap sentinel or failed outgoing decryption (filter from UI).
+    private func decryptContent(_ content: String, isMine: Bool = false) -> String? {
         if content.hasPrefix("DR2:") {
             if var state = ratchetState,
                let plain = try? DoubleRatchet.decrypt(state: &state, ciphertext: content) {
@@ -173,10 +176,9 @@ final class ChatViewModel: ObservableObject {
                     encryptionReady = true
                     flushPending()
                 }
-                return plain
+                return plain == Self.kBootstrapSentinel ? nil : plain
             }
-            // Decryption failed — should not happen with correct key exchange
-            return isMine ? "·· ··" : "·· ··"
+            return isMine ? nil : "·· ··"
         } else if content.hasPrefix("ENC:"), let key = legacyKey {
             return (try? EncryptionService.decrypt(content, using: key)) ?? "·· ··"
         }
@@ -204,11 +206,15 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// Called when we receive the peer's ECDH public key.
-    /// Derives the shared secret and bootstraps the Double Ratchet.
+    /// Derives the shared secret and bootstraps the Double Ratchet with correct Alice/Bob roles.
     private func completeKeyExchange(theirPublicKeyData: Data) {
-        // Skip only if we already have a ratchet established with this exact peer key
-        // (prevents redundant re-init, but allows re-key after reinstall)
-        if let existing = ratchetState, existing.dhr == theirPublicKeyData { return }
+        // Skip if this is the same ECDH key we already used to set up the current ratchet.
+        // (Alice uses dhr == theirPublicKeyData; Bob stores the key separately in Keychain
+        //  because Bob's dhr becomes the DR key after the bootstrap step, not the ECDH key.)
+        let ecdhKeyTag = "\(Config.Keychain.privateKeyTag).ecdh.peer.\(peer.id)"
+        if ratchetState != nil {
+            if let stored = KeychainService.loadData(ecdhKeyTag), stored == theirPublicKeyData { return }
+        }
 
         var privateKey: P384.KeyAgreement.PrivateKey
         if let existing = EncryptionService.loadPrivateKey(conversationId: peer.id) {
@@ -231,24 +237,46 @@ final class ChatViewModel: ObservableObject {
         }
 
         let sk = sharedSymKey.withUnsafeBytes { Data($0) }
+        let myId = AuthViewModel.shared.currentUser?.id ?? 0
 
-        // Both parties call initAlice with the peer's ECDH public key as the initial
-        // ratchet target. This gives both sides a sending chain (cks) immediately,
-        // so either party can send first without waiting. The DH ratchet steps on
-        // first receive maintain forward secrecy for all subsequent messages.
-        guard let state = try? DoubleRatchet.initAlice(
-            sharedSecret: sk,
-            theirPublicKeyData: theirPublicKeyData
-        ) else {
-            errorMessage = "Encryption setup failed"
-            return
+        // Role assignment: lower user ID is Alice (has cks immediately and sends bootstrap);
+        // higher user ID is Bob (waits for Alice's bootstrap to derive his cks via DH ratchet step).
+        if myId < peer.id {
+            // Alice role
+            guard let state = try? DoubleRatchet.initAlice(
+                sharedSecret: sk,
+                theirPublicKeyData: theirPublicKeyData
+            ) else {
+                errorMessage = "Encryption setup failed"
+                return
+            }
+            ratchetState    = state
+            DoubleRatchet.save(state, for: peer.id)
+            _ = KeychainService.saveData(theirPublicKeyData, for: ecdhKeyTag)
+            encryptionReady = true
+            Task { await sendBootstrap() }
+            flushPending()
+        } else {
+            // Bob role — cks comes after receiving Alice's bootstrap DH ratchet message
+            let state = DoubleRatchet.initBob(
+                sharedSecret: sk,
+                ourPrivateKeyData: privateKey.rawRepresentation
+            )
+            ratchetState    = state
+            DoubleRatchet.save(state, for: peer.id)
+            _ = KeychainService.saveData(theirPublicKeyData, for: ecdhKeyTag)
+            encryptionReady = false  // Bob waits for Alice's bootstrap to unlock sending
         }
+    }
 
-        ratchetState    = state
+    /// Alice sends a silent zero-width-space message so Bob's DH ratchet step fires,
+    /// giving Bob his sending chain key (cks) immediately.
+    private func sendBootstrap() async {
+        guard var state = ratchetState, state.cks != nil else { return }
+        guard let encrypted = try? DoubleRatchet.encrypt(state: &state, plaintext: Self.kBootstrapSentinel) else { return }
+        ratchetState = state
         DoubleRatchet.save(state, for: peer.id)
-        encryptionReady = state.cks != nil      // always true — both parties now get cks immediately
-
-        flushPending()
+        _ = try? await APIService.shared.sendMessage(toUser: peer.id, content: encrypted)
     }
 
     // MARK: - Encrypted send with retry

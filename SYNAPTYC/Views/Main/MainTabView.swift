@@ -4,54 +4,13 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject var auth: AuthViewModel
-    @State private var selectedTab   = 0
-    @State private var showBanner    = false
-    @StateObject private var banner  = BannerService.shared
+    @State private var selectedTab = 0
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            currentTab
-                .safeAreaInset(edge: .bottom) {
-                    FloatingTabBar(selectedTab: $selectedTab)
-                }
-
-            // Floating Banner toggle button
-            Button { showBanner = true } label: {
-                ZStack(alignment: .topTrailing) {
-                    VStack(spacing: 3) {
-                        Image(systemName: "cpu.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.deepBlack)
-                        Text("BANNER")
-                            .font(.system(size: 7, weight: .bold, design: .monospaced))
-                            .foregroundColor(.deepBlack)
-                    }
-                    .frame(width: 52, height: 52)
-                    .background(
-                        Circle()
-                            .fill(Color.neonGreen)
-                            .shadow(color: .neonGreen.opacity(0.6), radius: 10)
-                    )
-
-                    // Active tasks badge
-                    let running = banner.tasks.filter { $0.status == .running }.count
-                    if running > 0 {
-                        ZStack {
-                            Circle().fill(Color.alertRed).frame(width: 16, height: 16)
-                            Text("\(running)").font(.system(size: 8, weight: .bold)).foregroundColor(.white)
-                        }
-                        .offset(x: 2, y: -2)
-                    }
-                }
+        currentTab
+            .safeAreaInset(edge: .bottom) {
+                FloatingTabBar(selectedTab: $selectedTab)
             }
-            .padding(.trailing, 18)
-            .padding(.bottom, 90)
-        }
-        .sheet(isPresented: $showBanner) {
-            BotChatView()
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
         .onReceive(NotificationCenter.default.publisher(for: .bannerTabSwitch)) { note in
             guard let screen = note.object as? String else { return }
             switch screen {

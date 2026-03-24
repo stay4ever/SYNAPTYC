@@ -6,11 +6,13 @@ struct SettingsView: View {
     @EnvironmentObject var auth: AuthViewModel
     @EnvironmentObject var themeManager: ThemeManager
     @AppStorage("biometrics_enabled") private var biometricsEnabled = false
+    @AppStorage("banner_enabled")    private var bannerEnabled     = false
     @State private var showLogoutConfirm     = false
     @State private var showChangePassword    = false
     @State private var screenshotDetected    = false
     @State private var notificationsEnabled  = true
     @State private var showInviteSheet       = false
+    @State private var showBannerChat        = false
     @StateObject private var groupsVM        = GroupsViewModel()
     @State private var avatarItem: PhotosPickerItem?
     @State private var avatarUploading       = false
@@ -96,6 +98,38 @@ struct SettingsView: View {
                             .padding(.vertical, 4)
                         }
 
+                        // Banner AI
+                        settingsSection(title: "BANNER AI") {
+                            VStack(spacing: 10) {
+                                HStack {
+                                    Image(systemName: "cpu.fill")
+                                        .foregroundColor(.matrixGreen).frame(width: 22)
+                                    Text("Enable Banner").font(.monoBody).foregroundColor(.neonGreen)
+                                    Spacer()
+                                    Toggle("", isOn: $bannerEnabled)
+                                        .tint(.neonGreen)
+                                        .labelsHidden()
+                                }
+                                .padding(.vertical, 4)
+
+                                if bannerEnabled {
+                                    Divider().background(Color.neonGreen.opacity(0.08))
+                                    Button { showBannerChat = true } label: {
+                                        HStack {
+                                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                                .foregroundColor(.matrixGreen).frame(width: 22)
+                                            Text("Open Banner").font(.monoBody).foregroundColor(.neonGreen)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .foregroundColor(.matrixGreen.opacity(0.5))
+                                                .font(.system(size: 12))
+                                        }
+                                        .padding(.vertical, 4)
+                                    }
+                                }
+                            }
+                        }
+
                         // Security section
                         settingsSection(title: "SECURITY") {
                             settingsRow(icon: "lock.shield.fill", label: "Encryption", value: "End-to-end")
@@ -176,6 +210,11 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showInviteSheet) {
             InviteSheet(vm: groupsVM)
+        }
+        .sheet(isPresented: $showBannerChat) {
+            BotChatView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .alert("Sign Out?", isPresented: $showLogoutConfirm) {
             Button("Sign Out", role: .destructive) { auth.logout() }
