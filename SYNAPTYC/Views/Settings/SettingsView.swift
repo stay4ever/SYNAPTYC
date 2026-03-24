@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var avatarUploading       = false
     @State private var localAvatarImage: UIImage?
     @State private var avatarError: String?
+    @State private var showPhoneSheet        = false
 
     var body: some View {
         NavigationStack {
@@ -157,6 +158,21 @@ struct SettingsView: View {
 
                         // Account
                         settingsSection(title: "ACCOUNT") {
+                            Button { showPhoneSheet = true } label: {
+                                HStack {
+                                    Image(systemName: "phone.fill").foregroundColor(.matrixGreen).frame(width: 22)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Phone Number").font(.monoBody).foregroundColor(.neonGreen)
+                                        Text(auth.currentUser?.phoneNumberHash != nil ? "Registered ✓" : "Add for contact discovery")
+                                            .font(.monoCaption)
+                                            .foregroundColor(auth.currentUser?.phoneNumberHash != nil ? .neonGreen.opacity(0.5) : .matrixGreen.opacity(0.5))
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right").foregroundColor(.matrixGreen.opacity(0.5)).font(.system(size: 12))
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            Divider().background(Color.neonGreen.opacity(0.08))
                             Button { showChangePassword = true } label: {
                                 HStack {
                                     Image(systemName: "key.horizontal.fill").foregroundColor(.matrixGreen).frame(width: 22)
@@ -225,6 +241,16 @@ struct SettingsView: View {
             Text("Your encryption keys remain stored on this device.")
         }
         .sheet(isPresented: $showChangePassword) { ChangePasswordSheet() }
+        .sheet(isPresented: $showPhoneSheet) {
+            PhoneNumberSheet { phone in
+                Task {
+                    if let updated = try? await APIService.shared.updateProfile(phoneNumber: phone) {
+                        auth.updateCurrentUser(updated)
+                        await ContactSyncService.shared.syncIfAuthorized()
+                    }
+                }
+            }
+        }
     }
 
     private func profileCard(_ user: AppUser) -> some View {
@@ -372,6 +398,41 @@ struct ChangePasswordSheet: View {
                     message = "Password change requires re-authentication via the web portal."
                 }
                 NeonButton("CANCEL", style: .secondary) { dismiss() }
+            }
+            .padding(24)
+        }
+        .presentationDetents([.medium])
+    }
+}
+
+// MARK: - Phone Number Sheet
+
+struct PhoneNumberSheet: View {
+    var onSave: (String) -> Void
+    @Environment(\.dismiss) var dismiss
+    @State private var phone = ""
+    @State private var isLoading = false
+
+    var body: some View {
+        ZStack {
+            Color.deepBlack.ignoresSafeArea()
+            VStack(spacing: 20) {
+                Text("PHONE NUMBER").font(.monoHeadline).foregroundColor(.neonGreen).glowText()
+                Text("Used only for contact discovery.\nYour number is never shared — only a hash is stored.")
+                    .font(.monoCaption).foregroundColor(.matrixGreen)
+                    .multilineTextAlignment(.center)
+                NeonTextField(placeholder: "e.g. +61 412 345 678", text: $phone,
+                              icon: "phone", keyboardType: .phonePad)
+                NeonButton("SAVE", icon: "checkmark.circle.fill", isLoading: isLoading) {
+                    guard !phone.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                    isLoading = true
+                    onSave(phone.trimmingCharacters(in: .whitespaces))
+                    dismiss()
+                }
+                .padding(.horizontal, 16)
+                .disabled(phone.trimmingCharacters(in: .whitespaces).isEmpty)
+                NeonButton("CANCEL", style: .secondary) { dismiss() }
+                    .padding(.horizontal, 16)
             }
             .padding(24)
         }

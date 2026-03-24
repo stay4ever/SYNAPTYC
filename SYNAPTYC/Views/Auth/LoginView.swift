@@ -18,7 +18,7 @@ struct LoginView: View {
                 VStack(spacing: 32) {
                     // Header
                     VStack(spacing: 10) {
-                        Image(systemName: "lock.shield.fill")
+                        Image(systemName: "vault.fill")
                             .font(.system(size: 48))
                             .foregroundColor(.neonGreen)
                             .shadow(color: .neonGreen, radius: 12)

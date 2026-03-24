@@ -191,14 +191,18 @@ actor APIService {
 
     // MARK: - Profile
 
-    func updateProfile(displayName: String? = nil) async throws -> AppUser {
+    func updateProfile(displayName: String? = nil, phoneNumber: String? = nil) async throws -> AppUser {
         struct Body: Encodable {
             let displayName: String?
-            enum CodingKeys: String, CodingKey { case displayName = "display_name" }
+            let phoneNumber: String?
+            enum CodingKeys: String, CodingKey {
+                case displayName = "display_name"
+                case phoneNumber = "phone_number"
+            }
         }
         struct Resp: Decodable { let user: AppUser }
         return try await request(Config.API.profile, method: "PUT",
-                                 body: Body(displayName: displayName),
+                                 body: Body(displayName: displayName, phoneNumber: phoneNumber),
                                  responseType: Resp.self).user
     }
 

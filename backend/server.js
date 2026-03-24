@@ -470,12 +470,34 @@ app.get("/api/profile", authMiddleware, (req, res) => {
 });
 
 app.put("/api/profile", authMiddleware, (req, res) => {
-  const { display_name, bio } = req.body;
+  const { display_name, bio, phone_number } = req.body;
   if (display_name !== undefined && typeof display_name !== "string") {
     return res.status(400).json({ error: "display_name must be a string" });
   }
   if (bio !== undefined && typeof bio !== "string") {
     return res.status(400).json({ error: "bio must be a string" });
+  }
+  if (phone_number !== undefined && typeof phone_number !== "string") {
+    return res.status(400).json({ error: "phone_number must be a string" });
+  }
+
+  // Compute phone number hashes if provided
+  let primaryHash = undefined;
+  let allHashes = undefined;
+  if (phone_number !== undefined && phone_number.trim().length > 0) {
+    const crypto = require("crypto");
+    const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
+    const digits = phone_number.replace(/\D/g, "");
+    if (digits.length >= 7) {
+      const variants = new Set([digits]);
+      if (digits.startsWith("0") && digits.length === 10) variants.add("61" + digits.slice(1));
+      if (digits.startsWith("61") && digits.length === 11) variants.add("0" + digits.slice(2));
+      if (digits.length === 10 && !digits.startsWith("0")) variants.add("1" + digits);
+      if (digits.startsWith("1") && digits.length === 11) variants.add(digits.slice(1));
+      const hashed = Array.from(variants).map(sha256);
+      primaryHash = hashed[0];
+      allHashes = JSON.stringify(hashed);
+    }
   }
 
   // Only update columns that were provided
@@ -483,6 +505,8 @@ app.put("/api/profile", authMiddleware, (req, res) => {
   const values = [];
   if (display_name !== undefined) { updates.push("display_name = ?"); values.push(display_name.slice(0, 100)); }
   if (bio !== undefined)          { updates.push("bio = ?");          values.push(bio.slice(0, 500)); }
+  if (primaryHash !== undefined)  { updates.push("phone_number_hash = ?"); values.push(primaryHash); }
+  if (allHashes !== undefined)    { updates.push("phone_number_hashes = ?"); values.push(allHashes); }
 
   if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
 
