@@ -6,6 +6,8 @@ private struct PhoneContact: Identifiable {
     let id = UUID()
     let name: String
     let phone: String
+    /// Non-nil when this device contact is matched to a SYNAPTYC user
+    var matchedUser: AppUser? = nil
 }
 
 struct ContactsView: View {
@@ -184,95 +186,127 @@ struct ContactsView: View {
             .frame(maxWidth: .infinity).padding(.top, 60)
 
         default:
-            if syncService.matchedUsers.isEmpty && phoneContacts.isEmpty {
+            if phoneContacts.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "person.crop.circle.badge.questionmark")
                         .font(.system(size: 36)).foregroundColor(.matrixGreen.opacity(0.4))
                     Text("No phone contacts synced yet.")
                         .font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
                     Button {
-                        Task { await syncService.syncIfAuthorized() }
+                        Task { await loadPhoneContacts() }
                     } label: {
                         Text("Sync Contacts")
-                            .font(.monoBody)
-                            .foregroundColor(.neonGreen)
+                            .font(.monoBody).foregroundColor(.neonGreen)
                             .padding(.horizontal, 20).padding(.vertical, 10)
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.neonGreen.opacity(0.5)))
                     }
                 }
                 .frame(maxWidth: .infinity).padding(.top, 60)
             } else {
-                // On SYNAPTYC section
-                if !syncService.matchedUsers.isEmpty {
-                    phoneSection(header: "ON SYNAPTYC") {
-                        ForEach(syncService.matchedUsers) { user in
-                            let status: ContactRowStatus = vm.isContact(user.id) ? .accepted
-                                : vm.hasPendingRequest(to: user.id) ? .pendingOutgoing : .none
-                            ContactRow(user: user, status: status) { action in
-                                if action == .sendRequest {
-                                    Task { await vm.sendRequest(to: user) }
-                                }
-                            }
-                            Divider().background(Color.neonGreen.opacity(0.07))
-                        }
-                    }
+                // Single unified list — matched contacts float to the top,
+                // each showing a green SYNAPTYC badge so the user can see at a glance
+                // who already has the app installed.
+                let sorted = phoneContacts.sorted {
+                    if ($0.matchedUser != nil) != ($1.matchedUser != nil) { return $0.matchedUser != nil }
+                    return $0.name < $1.name
                 }
-
-                // Invite section
-                if !phoneContacts.isEmpty {
-                    phoneSection(header: "INVITE TO SYNAPTYC") {
-                        ForEach(phoneContacts) { contact in
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    Circle().fill(Color.darkGreen).frame(width: 40, height: 40)
-                                    Text(String(contact.name.prefix(1)).uppercased())
-                                        .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                                        .foregroundColor(.neonGreen)
-                                }
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(contact.name).font(.monoBody).foregroundColor(.neonGreen)
-                                    Text(contact.phone).font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
-                                }
-                                Spacer()
-                                Button {
-                                    inviteContact = contact
-                                } label: {
-                                    Text("Invite")
-                                        .font(.monoCaption)
-                                        .foregroundColor(.neonGreen)
-                                        .padding(.horizontal, 12).padding(.vertical, 6)
-                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.neonGreen.opacity(0.4)))
-                                }
-                            }
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            Divider().background(Color.neonGreen.opacity(0.07))
-                        }
-                    }
+                ForEach(sorted) { contact in
+                    phoneContactRow(contact)
+                    Divider().background(Color.neonGreen.opacity(0.07))
                 }
             }
         }
     }
 
-    private func phoneSection<Content: View>(header: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(header)
-                .font(.monoSmall).foregroundColor(.matrixGreen).tracking(2)
-                .padding(.horizontal, 16).padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.darkGreen.opacity(0.2))
-            content()
+    @ViewBuilder
+    private func phoneContactRow(_ contact: PhoneContact) -> some View {
+        HStack(spacing: 12) {
+            // Avatar with green SYNAPTYC badge if on the app
+            ZStack(alignment: .bottomTrailing) {
+                Circle()
+                    .fill(contact.matchedUser != nil ? Color.darkGreen : Color.darkGreen.opacity(0.45))
+                    .frame(width: 42, height: 42)
+                    .overlay(Circle().stroke(
+                        contact.matchedUser != nil ? Color.neonGreen.opacity(0.6) : Color.gray.opacity(0.2),
+                        lineWidth: contact.matchedUser != nil ? 2 : 1
+                    ))
+                Text(String(contact.name.prefix(1)).uppercased())
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundColor(contact.matchedUser != nil ? .neonGreen : .matrixGreen.opacity(0.5))
+
+                // Green SYNAPTYC indicator badge
+                if contact.matchedUser != nil {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(.neonGreen)
+                        .background(Circle().fill(Color.deepBlack).padding(-2))
+                        .offset(x: 3, y: 3)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(contact.name)
+                        .font(.monoBody)
+                        .foregroundColor(contact.matchedUser != nil ? .neonGreen : .matrixGreen.opacity(0.7))
+                }
+                if let user = contact.matchedUser {
+                    Text("@\(user.username) · on SYNAPTYC")
+                        .font(.monoCaption)
+                        .foregroundColor(.neonGreen.opacity(0.55))
+                } else {
+                    Text(contact.phone)
+                        .font(.monoCaption)
+                        .foregroundColor(.matrixGreen.opacity(0.5))
+                }
+            }
+
+            Spacer()
+
+            // Action
+            if let user = contact.matchedUser {
+                let status: ContactRowStatus = vm.isContact(user.id) ? .accepted
+                    : vm.hasPendingRequest(to: user.id) ? .pendingOutgoing : .none
+                switch status {
+                case .accepted:
+                    Image(systemName: "checkmark.shield.fill")
+                        .foregroundColor(.neonGreen.opacity(0.6))
+                case .pendingOutgoing:
+                    Text("Pending")
+                        .font(.monoCaption).foregroundColor(.matrixGreen)
+                default:
+                    Button { Task { await vm.sendRequest(to: user) } } label: {
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 16)).foregroundColor(.neonGreen)
+                    }
+                }
+            } else {
+                Button { inviteContact = contact } label: {
+                    Text("Invite")
+                        .font(.monoCaption).foregroundColor(.matrixGreen)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.matrixGreen.opacity(0.35)))
+                }
+            }
         }
+        .padding(.horizontal, 16).padding(.vertical, 10)
     }
 
     private func loadPhoneContacts() async {
         let status = CNContactStore.authorizationStatus(for: .contacts)
         guard status == .authorized || status == .notDetermined else { return }
 
-        // Trigger sync to discover matched platform users
+        // Sync first — populates syncService.matchedUsers
         await syncService.syncIfAuthorized()
 
+        // Build name → AppUser lookup for correlation (case-insensitive)
+        let matchedByName: [String: AppUser] = Dictionary(
+            syncService.matchedUsers.map { ($0.name.lowercased().trimmingCharacters(in: .whitespaces), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
         // Enumerate device contacts off the main thread (blocking I/O)
-        let result = await Task.detached(priority: .userInitiated) {
+        let raw = await Task.detached(priority: .userInitiated) {
             let keys: [CNKeyDescriptor] = [
                 CNContactGivenNameKey as CNKeyDescriptor,
                 CNContactFamilyNameKey as CNKeyDescriptor,
@@ -288,10 +322,15 @@ struct ContactsView: View {
                 guard !name.isEmpty else { return }
                 contacts.append(PhoneContact(name: name, phone: number))
             }
-            return contacts.sorted { $0.name < $1.name }
+            return contacts
         }.value
 
-        phoneContacts = result  // back on main actor
+        // Tag each contact with their matched AppUser (back on main actor)
+        phoneContacts = raw.map { contact in
+            var c = contact
+            c.matchedUser = matchedByName[contact.name.lowercased().trimmingCharacters(in: .whitespaces)]
+            return c
+        }
     }
 
     private func emptyState(icon: String, text: String) -> some View {
