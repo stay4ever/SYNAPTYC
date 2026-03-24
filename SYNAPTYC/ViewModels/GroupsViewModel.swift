@@ -32,8 +32,12 @@ final class GroupsViewModel: ObservableObject {
         }
     }
 
-    func createGroup(name: String, description: String) async throws -> Group {
-        let g = try await APIService.shared.createGroup(name: name, description: description)
+    func createGroup(name: String, description: String, avatarData: Data? = nil) async throws -> Group {
+        var g = try await APIService.shared.createGroup(name: name, description: description)
+        if let data = avatarData,
+           let updated = try? await APIService.shared.uploadGroupAvatar(groupId: g.id, jpegData: data) {
+            g = updated
+        }
         groups.insert(g, at: 0)
         return g
     }

@@ -8,12 +8,14 @@ struct Group: Codable, Identifiable {
     let description: String
     let createdBy: Int
     let createdAt: String
+    var avatarURL: String?
     let members: [GroupMember]
 
     enum CodingKeys: String, CodingKey {
         case id, name, description, members
         case createdBy = "created_by"
         case createdAt = "created_at"
+        case avatarURL = "avatar_url"
     }
 
     var initials: String {

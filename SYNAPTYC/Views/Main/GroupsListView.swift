@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 struct GroupsListView: View {
     @StateObject private var vm = GroupsViewModel()
@@ -82,10 +84,10 @@ struct GroupsListView: View {
             }
         }
         .sheet(isPresented: $showCreateSheet) {
-            CreateGroupSheet { name, desc in
+            CreateGroupSheet { name, desc, avatarData in
                 Task {
                     do {
-                        _ = try await vm.createGroup(name: name, description: desc)
+                        _ = try await vm.createGroup(name: name, description: desc, avatarData: avatarData)
                         showCreateSheet = false
                     } catch {
                         vm.errorMessage = error.localizedDescription
@@ -113,16 +115,34 @@ struct GroupsListView: View {
 struct GroupRow: View {
     let group: Group
 
+    private var groupAvatar: some View {
+        ZStack {
+            Circle()
+                .fill(Color.darkGreen)
+                .frame(width: 46, height: 46)
+                .overlay(Circle().stroke(Color.neonGreen.opacity(0.3), lineWidth: 1.5))
+            Image(systemName: "person.3.fill")
+                .font(.system(size: 16))
+                .foregroundColor(.neonGreen)
+        }
+    }
+
     var body: some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Color.darkGreen)
-                    .frame(width: 46, height: 46)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.3), lineWidth: 1.5))
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.neonGreen)
+            if let urlStr = group.avatarURL, let url = URL(string: urlStr) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFill()
+                            .frame(width: 46, height: 46)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.neonGreen.opacity(0.3), lineWidth: 1.5))
+                    default:
+                        groupAvatar
+                    }
+                }
+            } else {
+                groupAvatar
             }
             VStack(alignment: .leading, spacing: 3) {
                 Text(group.name)
@@ -146,10 +166,13 @@ struct GroupRow: View {
 // MARK: - Create Group Sheet
 
 struct CreateGroupSheet: View {
-    var onConfirm: (String, String) -> Void
+    var onConfirm: (String, String, Data?) -> Void
     @Environment(\.dismiss) var dismiss
     @State private var name = ""
     @State private var desc = ""
+    @State private var avatarItem: PhotosPickerItem?
+    @State private var avatarData: Data?
+    @State private var avatarImage: Image?
 
     var body: some View {
         ZStack {
@@ -160,6 +183,40 @@ struct CreateGroupSheet: View {
                     .foregroundColor(.neonGreen)
                     .glowText()
                     .padding(.top, 8)
+
+                // Group avatar picker
+                PhotosPicker(selection: $avatarItem, matching: .images, photoLibrary: .shared()) {
+                    ZStack(alignment: .bottomTrailing) {
+                        if let img = avatarImage {
+                            img.resizable().scaledToFill()
+                                .frame(width: 72, height: 72).clipShape(Circle())
+                                .overlay(Circle().stroke(Color.neonGreen.opacity(0.5), lineWidth: 2))
+                        } else {
+                            ZStack {
+                                Circle().fill(Color.darkGreen).frame(width: 72, height: 72)
+                                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.3), lineWidth: 1.5))
+                                Image(systemName: "person.3.fill")
+                                    .font(.system(size: 24)).foregroundColor(.neonGreen.opacity(0.5))
+                            }
+                        }
+                        ZStack {
+                            Circle().fill(Color.neonGreen).frame(width: 22, height: 22)
+                            Image(systemName: "camera.fill").font(.system(size: 11)).foregroundColor(.deepBlack)
+                        }
+                        .offset(x: 2, y: 2)
+                    }
+                }
+                .onChange(of: avatarItem) { _, item in
+                    guard let item else { return }
+                    Task {
+                        guard let data = try? await item.loadTransferable(type: Data.self),
+                              let uiImg = UIImage(data: data),
+                              let resized = uiImg.resized(to: CGSize(width: 200, height: 200)),
+                              let jpeg = resized.jpegData(compressionQuality: 0.7) else { return }
+                        avatarData = jpeg
+                        avatarImage = Image(uiImage: UIImage(data: jpeg) ?? UIImage())
+                    }
+                }
 
                 NeonTextField(placeholder: "Group name", text: $name, icon: "person.3")
 
@@ -189,7 +246,9 @@ struct CreateGroupSheet: View {
 
                 NeonButton("CREATE", icon: "person.3.fill") {
                     guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                    onConfirm(name.trimmingCharacters(in: .whitespaces), desc.trimmingCharacters(in: .whitespaces))
+                    onConfirm(name.trimmingCharacters(in: .whitespaces),
+                              desc.trimmingCharacters(in: .whitespaces),
+                              avatarData)
                 }
                 .padding(.horizontal, 16)
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -198,7 +257,7 @@ struct CreateGroupSheet: View {
                     .padding(.horizontal, 16)
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.large])
     }
 }
 

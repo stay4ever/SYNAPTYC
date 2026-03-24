@@ -7,20 +7,43 @@ struct ContactRow: View {
 
     private var isOnline: Bool { user.isOnline ?? false }
 
+    private var avatarCircle: some View {
+        ZStack {
+            Circle()
+                .fill(isOnline ? Color.darkGreen : Color.darkGreen.opacity(0.5))
+                .frame(width: 42, height: 42)
+                .overlay(Circle().stroke(
+                    isOnline ? Color.neonGreen.opacity(0.7) : Color.gray.opacity(0.25),
+                    lineWidth: isOnline ? 2 : 1
+                ))
+            Text(user.initials)
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.5))
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            // Avatar with clear online/offline ring colour
+            // Avatar — photo if available, initials fallback
             ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .fill(isOnline ? Color.darkGreen : Color.darkGreen.opacity(0.5))
-                    .frame(width: 42, height: 42)
-                    .overlay(Circle().stroke(
-                        isOnline ? Color.neonGreen.opacity(0.7) : Color.gray.opacity(0.25),
-                        lineWidth: isOnline ? 2 : 1
-                    ))
-                Text(user.initials)
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.5))
+                if let urlStr = user.avatarURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let img):
+                            img.resizable().scaledToFill()
+                                .frame(width: 42, height: 42)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(
+                                    isOnline ? Color.neonGreen.opacity(0.7) : Color.gray.opacity(0.25),
+                                    lineWidth: isOnline ? 2 : 1
+                                ))
+                        default:
+                            avatarCircle
+                        }
+                    }
+                } else {
+                    avatarCircle
+                }
                 OnlineDot(isOnline: isOnline, size: 8)
                     .offset(x: 2, y: 2)
             }

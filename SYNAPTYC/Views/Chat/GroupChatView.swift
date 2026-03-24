@@ -14,91 +14,111 @@ struct GroupChatView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.deepBlack.ignoresSafeArea()
-            ScanlineOverlay()
+        Color.deepBlack.ignoresSafeArea()
+            .overlay(ScanlineOverlay())
+            .overlay(
+                VStack(spacing: 0) {
+                    // Member count bar
+                    HStack {
+                        Image(systemName: "person.3.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.matrixGreen)
+                        Text("\(group.members.count) member\(group.members.count != 1 ? "s" : "")")
+                            .font(.monoSmall)
+                            .foregroundColor(.matrixGreen)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.darkGreen.opacity(0.3))
 
-            VStack(spacing: 0) {
-                // Member count bar
-                HStack {
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 11))
-                        .foregroundColor(.matrixGreen)
-                    Text("\(group.members.count) member\(group.members.count != 1 ? "s" : "")")
-                        .font(.monoSmall)
-                        .foregroundColor(.matrixGreen)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.darkGreen.opacity(0.3))
-
-                // Messages
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(vm.messages) { msg in
-                                GroupMessageBubble(message: msg)
-                                    .id(msg.id)
-                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    // Messages
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(vm.messages) { msg in
+                                    GroupMessageBubble(message: msg)
+                                        .id(msg.id)
+                                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                }
+                                Color.clear.frame(height: 1).id("bottom")
+                            }
+                            .padding(.vertical, 10)
+                            .onChange(of: vm.messages.count) { _, _ in
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    proxy.scrollTo("bottom", anchor: .bottom)
+                                }
                             }
                         }
-                        .padding(.vertical, 10)
-                        .onChange(of: vm.messages.count) { _, _ in
-                            withAnimation {
-                                proxy.scrollTo(vm.messages.last?.id, anchor: .bottom)
+                        .scrollDismissesKeyboard(.interactively)
+                        .onChange(of: inputFocused) { _, focused in
+                            if focused {
+                                withAnimation(.easeOut(duration: 0.25)) {
+                                    proxy.scrollTo("bottom", anchor: .bottom)
+                                }
                             }
+                        }
+                        .onAppear {
+                            proxy.scrollTo("bottom", anchor: .bottom)
                         }
                     }
-                }
 
-                if let err = vm.errorMessage {
-                    Text("⚠ \(err)")
-                        .font(.monoCaption)
-                        .foregroundColor(.alertRed)
-                        .padding(.horizontal, 16)
-                }
+                    if let err = vm.errorMessage {
+                        Text("⚠ \(err)")
+                            .font(.monoCaption)
+                            .foregroundColor(.alertRed)
+                            .padding(.horizontal, 16)
+                    }
 
-                // Input bar
-                HStack(spacing: 10) {
-                    TextField("Message…", text: $inputText, axis: .vertical)
-                        .font(.monoBody)
-                        .foregroundColor(.neonGreen)
-                        .tint(.neonGreen)
-                        .lineLimit(1...5)
-                        .autocorrectionDisabled(false)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(Color.darkGreen.opacity(0.35))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20)
-                                .stroke(Color.neonGreen.opacity(0.2), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .focused($inputFocused)
-
-                    Button {
-                        let msg = inputText
-                        inputText = ""
-                        vm.send(msg)
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(
-                                inputText.trimmingCharacters(in: .whitespaces).isEmpty
-                                ? .matrixGreen.opacity(0.3) : .neonGreen
+                    // Input bar
+                    HStack(spacing: 10) {
+                        TextField("Message…", text: $inputText, axis: .vertical)
+                            .font(.monoBody)
+                            .foregroundColor(.neonGreen)
+                            .tint(.neonGreen)
+                            .lineLimit(1...5)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .background(Color.darkGreen.opacity(0.35))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .stroke(
+                                        inputFocused ? Color.neonGreen.opacity(0.45) : Color.neonGreen.opacity(0.2),
+                                        lineWidth: 1
+                                    )
                             )
-                            .shadow(color: .neonGreen.opacity(0.3), radius: 4)
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                            .focused($inputFocused)
+                            .onSubmit {
+                                guard !inputText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                                let msg = inputText
+                                inputText = ""
+                                vm.send(msg)
+                            }
+
+                        Button {
+                            let msg = inputText
+                            inputText = ""
+                            vm.send(msg)
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(
+                                    inputText.trimmingCharacters(in: .whitespaces).isEmpty
+                                    ? .matrixGreen.opacity(0.3) : .neonGreen
+                                )
+                                .shadow(color: .neonGreen.opacity(0.3), radius: 4)
+                                .animation(.easeInOut(duration: 0.15), value: inputText.isEmpty)
+                        }
+                        .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityLabel("Send message")
+                        .accessibilityAddTraits(.isButton)
                     }
-                    .disabled(inputText.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityLabel("Send message")
-                    .accessibilityAddTraits(.isButton)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(Color.darkGreen.opacity(0.5))
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(Color.darkGreen.opacity(0.5))
-            }
-        }
+            )
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)

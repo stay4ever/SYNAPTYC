@@ -281,6 +281,14 @@ actor APIService {
                               body: Body(userId: userId), responseType: Resp.self)
     }
 
+    func uploadGroupAvatar(groupId: Int, jpegData: Data) async throws -> Group {
+        struct Body: Encodable { let image: String }
+        let base64 = jpegData.base64EncodedString()
+        return try await request("\(Config.API.groups)/\(groupId)/avatar", method: "POST",
+                                 body: Body(image: base64),
+                                 responseType: Group.self)
+    }
+
     func deleteGroup(groupId: Int) async throws {
         struct Resp: Decodable { let deleted: Bool }
         _ = try await request("\(Config.API.groups)/\(groupId)", method: "DELETE",

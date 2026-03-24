@@ -141,9 +141,9 @@ struct ConversationsListView: View {
         }
         .task { await vm.loadUsers() }
         .sheet(isPresented: $showCreateGroup) {
-            CreateGroupSheet { name, desc in
+            CreateGroupSheet { name, desc, avatarData in
                 Task {
-                    _ = try? await groupsVM.createGroup(name: name, description: desc)
+                    _ = try? await groupsVM.createGroup(name: name, description: desc, avatarData: avatarData)
                     showCreateGroup = false
                 }
             }
@@ -213,10 +213,6 @@ struct ConversationCard: View {
                     } else {
                         initialsCircle(user: user)
                     }
-                    Text(user.initials)
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
-                        .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.5))
-                        .opacity(user.avatarURL == nil ? 1 : 0)
 
                     // Online indicator dot
                     if isOnline {
@@ -301,14 +297,19 @@ struct ConversationCard: View {
     }
 
     private func initialsCircle(user: AppUser) -> some View {
-        Circle()
-            .fill(LinearGradient(
-                colors: [Color.darkGreen, Color(white: 0.05)],
-                startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 52, height: 52)
-            .overlay(Circle().stroke(
-                isOnline ? Color.neonGreen.opacity(0.8) : Color.gray.opacity(0.25),
-                lineWidth: isOnline ? 2 : 1))
+        ZStack {
+            Circle()
+                .fill(LinearGradient(
+                    colors: [Color.darkGreen, Color(white: 0.05)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 52, height: 52)
+                .overlay(Circle().stroke(
+                    isOnline ? Color.neonGreen.opacity(0.8) : Color.gray.opacity(0.25),
+                    lineWidth: isOnline ? 2 : 1))
+            Text(user.initials)
+                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.5))
+        }
     }
 }
 
