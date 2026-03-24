@@ -3,6 +3,7 @@ import SwiftUI
 struct ContactRow: View {
     let user: AppUser
     let status: ContactRowStatus
+    var inPhoneContacts: Bool = false
     let onAction: (ContactRowAction) -> Void
 
     private var isOnline: Bool { user.isOnline ?? false }
@@ -22,11 +23,16 @@ struct ContactRow: View {
         }
     }
 
+    private func resolvedURL(_ urlStr: String) -> URL? {
+        if urlStr.hasPrefix("http") { return URL(string: urlStr) }
+        return URL(string: Config.baseURL + urlStr)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // Avatar — photo if available, initials fallback
             ZStack(alignment: .bottomTrailing) {
-                if let urlStr = user.avatarURL, let url = URL(string: urlStr) {
+                if let urlStr = user.avatarURL, let url = resolvedURL(urlStr) {
                     AsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let img):
@@ -49,9 +55,16 @@ struct ContactRow: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(user.name)
-                    .font(.monoBody)
-                    .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.7))
+                HStack(spacing: 6) {
+                    Text(user.name)
+                        .font(.monoBody)
+                        .foregroundColor(isOnline ? .neonGreen : .matrixGreen.opacity(0.7))
+                    if inPhoneContacts {
+                        Image(systemName: "phone.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.neonGreen.opacity(0.5))
+                    }
+                }
                 HStack(spacing: 4) {
                     Text("@\(user.username)").font(.monoCaption).foregroundColor(.matrixGreen.opacity(0.6))
                     if isOnline {

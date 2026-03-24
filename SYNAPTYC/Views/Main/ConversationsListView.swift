@@ -197,7 +197,8 @@ struct ConversationCard: View {
             VStack(spacing: 10) {
                 // Avatar
                 ZStack {
-                    if let urlStr = user.avatarURL, let url = URL(string: urlStr) {
+                    if let urlStr = user.avatarURL,
+                       let url = urlStr.hasPrefix("http") ? URL(string: urlStr) : URL(string: Config.baseURL + urlStr) {
                         AsyncImage(url: url) { phase in
                             switch phase {
                             case .success(let img):

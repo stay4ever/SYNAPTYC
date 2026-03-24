@@ -16,6 +16,8 @@ struct SettingsView: View {
     @StateObject private var groupsVM        = GroupsViewModel()
     @State private var avatarItem: PhotosPickerItem?
     @State private var avatarUploading       = false
+    @State private var localAvatarImage: UIImage?
+    @State private var avatarError: String?
 
     var body: some View {
         NavigationStack {
@@ -229,7 +231,14 @@ struct SettingsView: View {
         VStack(spacing: 12) {
             PhotosPicker(selection: $avatarItem, matching: .images, photoLibrary: .shared()) {
                 ZStack(alignment: .bottomTrailing) {
-                    if let urlStr = user.avatarURL, let url = URL(string: urlStr) {
+                    // Local preview takes priority; then server URL; then initials
+                    if let local = localAvatarImage {
+                        Image(uiImage: local)
+                            .resizable().scaledToFill()
+                            .frame(width: 72, height: 72).clipShape(Circle())
+                            .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1.5))
+                    } else if let urlStr = user.avatarURL,
+                              let url = resolvedURL(urlStr) {
                         AsyncImage(url: url) { phase in
                             switch phase {
                             case .success(let img):
@@ -240,6 +249,7 @@ struct SettingsView: View {
                                 initialsCircle(user)
                             }
                         }
+                        .id(urlStr)  // force reload when URL changes
                     } else {
                         initialsCircle(user)
                     }
@@ -256,6 +266,10 @@ struct SettingsView: View {
             .onChange(of: avatarItem) { _, item in
                 guard let item else { return }
                 Task { await uploadAvatar(item) }
+            }
+            if let err = avatarError {
+                Text(err).font(.monoCaption).foregroundColor(.alertRed)
+                    .multilineTextAlignment(.center).padding(.horizontal, 8)
             }
 
             Text(user.name).font(.monoHeadline).foregroundColor(.neonGreen).glowText()
@@ -280,16 +294,32 @@ struct SettingsView: View {
         }
     }
 
+    private func resolvedURL(_ urlStr: String) -> URL? {
+        if urlStr.hasPrefix("http") { return URL(string: urlStr) }
+        // Relative path — prepend base URL
+        return URL(string: Config.baseURL + urlStr)
+    }
+
     private func uploadAvatar(_ item: PhotosPickerItem) async {
+        avatarError = nil
         guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-        // Resize and compress to JPEG for efficient upload
         guard let uiImage = UIImage(data: data),
               let resized = uiImage.resized(to: CGSize(width: 200, height: 200)),
               let jpeg = resized.jpegData(compressionQuality: 0.7) else { return }
+
+        // Show local preview immediately so the user sees feedback right away
+        localAvatarImage = UIImage(data: jpeg)
+
         avatarUploading = true
         defer { avatarUploading = false; avatarItem = nil }
-        if let updatedUser = try? await APIService.shared.uploadAvatar(jpegData: jpeg) {
+        do {
+            let updatedUser = try await APIService.shared.uploadAvatar(jpegData: jpeg)
             auth.updateCurrentUser(updatedUser)
+            // Keep local image until server URL is confirmed loaded
+        } catch {
+            avatarError = "Upload failed: \(error.localizedDescription)"
+            // Revert local preview on failure
+            localAvatarImage = nil
         }
     }
 

@@ -129,7 +129,8 @@ struct GroupRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            if let urlStr = group.avatarURL, let url = URL(string: urlStr) {
+            if let urlStr = group.avatarURL,
+               let url = urlStr.hasPrefix("http") ? URL(string: urlStr) : URL(string: Config.baseURL + urlStr) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let img):

@@ -19,6 +19,11 @@ struct ContactsView: View {
     @State private var phoneContacts: [PhoneContact] = []
     @State private var inviteContact: PhoneContact?
 
+    /// IDs of users that are also in your phone contacts (matched via phone number hash)
+    private var phoneMatchedIds: Set<Int> {
+        Set(syncService.matchedUsers.map { $0.id })
+    }
+
     var filteredUsers: [AppUser] {
         let me = AuthViewModel.shared.currentUser?.id ?? 0
         let list = vm.allUsers.filter { $0.id != me }
@@ -29,12 +34,13 @@ struct ContactsView: View {
         }
     }
 
-    // Online users first, then alphabetical within each group
+    // Phone contacts first, then online, then alphabetical
     var sortedUsers: [AppUser] {
         filteredUsers.sorted {
-            if ($0.isOnline ?? false) != ($1.isOnline ?? false) {
-                return ($0.isOnline ?? false)
-            }
+            let l0 = phoneMatchedIds.contains($0.id)
+            let l1 = phoneMatchedIds.contains($1.id)
+            if l0 != l1 { return l0 }
+            if ($0.isOnline ?? false) != ($1.isOnline ?? false) { return ($0.isOnline ?? false) }
             return $0.name < $1.name
         }
     }
@@ -105,7 +111,8 @@ struct ContactsView: View {
                                         ForEach(sortedUsers) { user in
                                             let status: ContactRowStatus = vm.isContact(user.id) ? .accepted
                                                 : vm.hasPendingRequest(to: user.id) ? .pendingOutgoing : .none
-                                            ContactRow(user: user, status: status) { action in
+                                            let inPhoneContacts = phoneMatchedIds.contains(user.id)
+                                            ContactRow(user: user, status: status, inPhoneContacts: inPhoneContacts) { action in
                                                 if action == .sendRequest {
                                                     Task { await vm.sendRequest(to: user) }
                                                 }
@@ -155,7 +162,12 @@ struct ContactsView: View {
                 }
             }
         }
-        .task { await vm.load() }
+        .task {
+            await vm.load()
+            // Pre-sync contacts in the background so Phone tab is ready immediately
+            await syncService.syncIfAuthorized()
+            await loadPhoneContacts()
+        }
         .onChange(of: selectedTab) { _, tab in
             if tab == 2 { Task { await loadPhoneContacts() } }
         }
@@ -186,7 +198,12 @@ struct ContactsView: View {
             .frame(maxWidth: .infinity).padding(.top, 60)
 
         default:
-            if phoneContacts.isEmpty {
+            let matched = syncService.matchedUsers
+            let unmatched = phoneContacts.filter { c in
+                !matched.contains { $0.id == c.matchedUser?.id }
+            }
+
+            if matched.isEmpty && unmatched.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "person.crop.circle.badge.questionmark")
                         .font(.system(size: 36)).foregroundColor(.matrixGreen.opacity(0.4))
@@ -203,16 +220,40 @@ struct ContactsView: View {
                 }
                 .frame(maxWidth: .infinity).padding(.top, 60)
             } else {
-                // Single unified list — matched contacts float to the top,
-                // each showing a green SYNAPTYC badge so the user can see at a glance
-                // who already has the app installed.
-                let sorted = phoneContacts.sorted {
-                    if ($0.matchedUser != nil) != ($1.matchedUser != nil) { return $0.matchedUser != nil }
-                    return $0.name < $1.name
+                // Section 1: Matched users — directly from server response (reliable)
+                if !matched.isEmpty {
+                    HStack {
+                        Text("ON SYNAPTYC")
+                            .font(.monoSmall).foregroundColor(.matrixGreen).tracking(2)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
+
+                    ForEach(matched) { user in
+                        let status: ContactRowStatus = vm.isContact(user.id) ? .accepted
+                            : vm.hasPendingRequest(to: user.id) ? .pendingOutgoing : .none
+                        ContactRow(user: user, status: status, inPhoneContacts: true) { action in
+                            if action == .sendRequest {
+                                Task { await vm.sendRequest(to: user) }
+                            }
+                        }
+                        Divider().background(Color.neonGreen.opacity(0.07))
+                    }
                 }
-                ForEach(sorted) { contact in
-                    phoneContactRow(contact)
-                    Divider().background(Color.neonGreen.opacity(0.07))
+
+                // Section 2: Device contacts without a SYNAPTYC account (invite them)
+                if !unmatched.isEmpty {
+                    HStack {
+                        Text("INVITE")
+                            .font(.monoSmall).foregroundColor(.matrixGreen).tracking(2)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 4)
+
+                    ForEach(unmatched) { contact in
+                        phoneContactRow(contact)
+                        Divider().background(Color.neonGreen.opacity(0.07))
+                    }
                 }
             }
         }

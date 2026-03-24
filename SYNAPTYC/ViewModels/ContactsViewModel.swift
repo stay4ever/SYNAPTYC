@@ -34,6 +34,8 @@ final class ContactsViewModel: ObservableObject {
                 c.otherUser = users.first { $0.id == otherId }
                 return c
             }
+        } catch is CancellationError {
+            // Pull-to-refresh task was cancelled — not a user-visible error
         } catch {
             errorMessage = error.localizedDescription
         }
