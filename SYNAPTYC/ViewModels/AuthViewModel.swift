@@ -9,7 +9,13 @@ final class AuthViewModel: ObservableObject {
     @Published var currentUser: AppUser?
     @Published var isLoading        = false
     @Published var errorMessage: String?
-    private var biometricsEnabled: Bool { UserDefaults.standard.bool(forKey: "biometrics_enabled") }
+    // L4: Store biometrics toggle in Keychain — UserDefaults is unencrypted and modifiable.
+    private var biometricsEnabled: Bool {
+        KeychainService.load("synaptyc_biometrics_enabled") == "true"
+    }
+    func setBiometricsEnabled(_ enabled: Bool) {
+        KeychainService.save(enabled ? "true" : "false", for: "synaptyc_biometrics_enabled")
+    }
 
     static let shared = AuthViewModel()
     private init() { tryRestore() }
@@ -102,6 +108,11 @@ final class AuthViewModel: ObservableObject {
                   displayName: String, phoneNumber: String = "") async {
         isLoading = true; errorMessage = nil
         defer { isLoading = false }
+        // L2: Minimum password length check before hitting the network.
+        guard password.count >= 8 else {
+            errorMessage = "Password must be at least 8 characters."
+            return
+        }
         let phoneHashes = phoneNumber.isEmpty ? nil : ContactSyncService.hashVariants(phoneNumber: phoneNumber)
         let phoneHash   = phoneHashes?.first
         do {

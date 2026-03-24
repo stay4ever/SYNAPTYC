@@ -18,10 +18,9 @@ struct LoginView: View {
                 VStack(spacing: 32) {
                     // Header
                     VStack(spacing: 10) {
-                        Image(systemName: "vault.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(.neonGreen)
-                            .shadow(color: .neonGreen, radius: 12)
+                        VaultLogo()
+                            .frame(width: 80, height: 80)
+                            .shadow(color: .neonGreen.opacity(0.6), radius: 16)
                             .accessibilityHidden(true)
 
                         Text("SYNAPTYC")

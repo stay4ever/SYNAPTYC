@@ -20,6 +20,7 @@ db.exec(`
     email         TEXT    NOT NULL UNIQUE,
     password_hash TEXT    NOT NULL,
     display_name  TEXT,
+    bio           TEXT,
     is_approved   INTEGER NOT NULL DEFAULT 0,
     online        INTEGER NOT NULL DEFAULT 0,
     last_seen     TEXT,

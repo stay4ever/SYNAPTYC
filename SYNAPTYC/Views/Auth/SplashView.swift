@@ -12,7 +12,7 @@ struct SplashView: View {
             ScanlineOverlay()
 
             VStack(spacing: 28) {
-                // ── Neon chat-bubbles logo (build-75 design) ──────────────
+                // ── Neon vault logo ───────────────────────────────────────
                 ZStack {
                     // Outer pulse ring
                     Circle()
@@ -25,9 +25,8 @@ struct SplashView: View {
                         .stroke(Color.neonGreen.opacity(0.25), lineWidth: 1)
                         .frame(width: 100, height: 100)
 
-                    // Chat bubbles icon
-                    ChatBubblesLogo()
-                        .frame(width: 56, height: 46)
+                    VaultLogo()
+                        .frame(width: 60, height: 60)
                         .accessibilityIdentifier("splash_logo")
                 }
 
@@ -64,76 +63,84 @@ struct SplashView: View {
     }
 }
 
-// MARK: - Chat Bubbles Logo (native drawn, matching build-75 aesthetic)
+// MARK: - Vault Logo (shared between SplashView and LoginView)
+// Canvas-drawn vault door in the neon-green Matrix aesthetic.
 
-struct ChatBubblesLogo: View {
+struct VaultLogo: View {
     var body: some View {
         Canvas { ctx, size in
             let w = size.width
             let h = size.height
-            let accent = Color.neonGreen
-            let dim    = Color.neonGreen.opacity(0.45)
+            let green  = Color.neonGreen
+            let dimmed = Color.neonGreen.opacity(0.35)
+            let fill   = Color.neonGreen.opacity(0.07)
+            let lw: CGFloat = 2.0
 
-            // Left bubble (incoming)
-            let leftBubble = Path { p in
-                let r: CGFloat = 9
-                let bx: CGFloat = 0, by: CGFloat = h * 0.26
-                let bw: CGFloat = w * 0.58, bh: CGFloat = h * 0.44
-                p.move(to: CGPoint(x: bx + r, y: by))
-                p.addLine(to: CGPoint(x: bx + bw - r, y: by))
-                p.addArc(center: CGPoint(x: bx + bw - r, y: by + r), radius: r,
-                         startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
-                p.addLine(to: CGPoint(x: bx + bw, y: by + bh - r))
-                p.addArc(center: CGPoint(x: bx + bw - r, y: by + bh - r), radius: r,
-                         startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-                // Tail bottom-left
-                p.addLine(to: CGPoint(x: bx + 18, y: by + bh))
-                p.addLine(to: CGPoint(x: bx, y: by + bh + 8))
-                p.addLine(to: CGPoint(x: bx + r, y: by + bh))
-                p.addLine(to: CGPoint(x: bx + r, y: by + bh))
-                p.addArc(center: CGPoint(x: bx + r, y: by + bh - r), radius: r,
-                         startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
-                p.addLine(to: CGPoint(x: bx, y: by + r))
-                p.addArc(center: CGPoint(x: bx + r, y: by + r), radius: r,
-                         startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+            // ── Outer vault door frame ──────────────────────────────────
+            let margin: CGFloat = w * 0.04
+            let frameRect = CGRect(x: margin, y: margin,
+                                   width: w - margin * 2, height: h - margin * 2)
+            let frameRadius: CGFloat = w * 0.12
+            let frameShape = Path(roundedRect: frameRect, cornerRadius: frameRadius)
+            ctx.fill(frameShape, with: .color(fill))
+            ctx.stroke(frameShape, with: .color(green), style: StrokeStyle(lineWidth: lw))
+
+            // ── Hinge rectangles (left side) ───────────────────────────
+            let hingeW: CGFloat = w * 0.10
+            let hingeH: CGFloat = h * 0.14
+            let hingeX: CGFloat = margin
+            for yFrac in [CGFloat(0.25), CGFloat(0.62)] {
+                let hingeRect = CGRect(x: hingeX, y: h * yFrac - hingeH / 2,
+                                      width: hingeW, height: hingeH)
+                let hinge = Path(roundedRect: hingeRect, cornerRadius: 2)
+                ctx.fill(hinge, with: .color(dimmed.opacity(0.4)))
+                ctx.stroke(hinge, with: .color(dimmed), style: StrokeStyle(lineWidth: 1))
             }
-            ctx.fill(leftBubble, with: .color(dim.opacity(0.18)))
-            ctx.stroke(leftBubble, with: .color(dim), lineWidth: 1.5)
 
-            // Right bubble (outgoing)
-            let rightBubble = Path { p in
-                let r: CGFloat = 9
-                let bx: CGFloat = w * 0.38, by: CGFloat = 0
-                let bw: CGFloat = w * 0.62, bh: CGFloat = h * 0.46
-                p.move(to: CGPoint(x: bx + r, y: by))
-                p.addLine(to: CGPoint(x: bx + bw - r, y: by))
-                p.addArc(center: CGPoint(x: bx + bw - r, y: by + r), radius: r,
-                         startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
-                p.addLine(to: CGPoint(x: bx + bw, y: by + bh - r))
-                p.addArc(center: CGPoint(x: bx + bw - r, y: by + bh - r), radius: r,
-                         startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-                p.addLine(to: CGPoint(x: bx + r, y: by + bh))
-                p.addArc(center: CGPoint(x: bx + r, y: by + bh - r), radius: r,
-                         startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
-                p.addLine(to: CGPoint(x: bx, y: by + r))
-                p.addArc(center: CGPoint(x: bx + r, y: by + r), radius: r,
-                         startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
-                // Tail bottom-right
-                p.move(to: CGPoint(x: bx + bw - 18, y: by + bh))
-                p.addLine(to: CGPoint(x: bx + bw, y: by + bh + 8))
-                p.addLine(to: CGPoint(x: bx + bw - r, y: by + bh))
+            // ── Bolt holes (right side) ─────────────────────────────────
+            let boltR: CGFloat = w * 0.045
+            let boltX: CGFloat = w - margin - boltR * 1.2
+            for yFrac in [CGFloat(0.28), CGFloat(0.50), CGFloat(0.72)] {
+                let boltRect = CGRect(x: boltX - boltR, y: h * yFrac - boltR,
+                                     width: boltR * 2, height: boltR * 2)
+                let bolt = Path(ellipseIn: boltRect)
+                ctx.fill(bolt, with: .color(dimmed.opacity(0.5)))
+                ctx.stroke(bolt, with: .color(green), style: StrokeStyle(lineWidth: 1))
             }
-            ctx.fill(rightBubble, with: .color(accent.opacity(0.12)))
-            ctx.stroke(rightBubble, with: .color(accent), lineWidth: 1.5)
 
-            // Lock dot inside right bubble (encryption indicator)
-            let lockCenter = CGPoint(x: bx_right(w) + rw(w) * 0.5, y: h * 0.22)
-            let lockPath = Path(ellipseIn: CGRect(x: lockCenter.x - 3, y: lockCenter.y - 3, width: 6, height: 6))
-            ctx.fill(lockPath, with: .color(accent))
+            // ── Central locking wheel ───────────────────────────────────
+            let cx = w * 0.50, cy = h * 0.50
+            let outerR: CGFloat = w * 0.26
+            let innerR: CGFloat = w * 0.13
+            let hubR:   CGFloat = w * 0.06
+
+            let outerWheel = Path(ellipseIn: CGRect(x: cx - outerR, y: cy - outerR,
+                                                    width: outerR * 2, height: outerR * 2))
+            ctx.fill(outerWheel, with: .color(fill))
+            ctx.stroke(outerWheel, with: .color(green), style: StrokeStyle(lineWidth: lw))
+
+            let innerWheel = Path(ellipseIn: CGRect(x: cx - innerR, y: cy - innerR,
+                                                    width: innerR * 2, height: innerR * 2))
+            ctx.stroke(innerWheel, with: .color(dimmed), style: StrokeStyle(lineWidth: 1))
+
+            // Spokes (4 at 45°, 90°, 135°, 180°)
+            for deg in stride(from: 0.0, through: 135.0, by: 45.0) {
+                let rad = deg * .pi / 180.0
+                let x1 = cx + CGFloat(cos(rad)) * innerR
+                let y1 = cy + CGFloat(sin(rad)) * innerR
+                let x2 = cx - CGFloat(cos(rad)) * innerR
+                let y2 = cy - CGFloat(sin(rad)) * innerR
+                var spoke = Path()
+                spoke.move(to: CGPoint(x: x1, y: y1))
+                spoke.addLine(to: CGPoint(x: x2, y: y2))
+                ctx.stroke(spoke, with: .color(dimmed), style: StrokeStyle(lineWidth: 1.2))
+            }
+
+            let hub = Path(ellipseIn: CGRect(x: cx - hubR, y: cy - hubR,
+                                             width: hubR * 2, height: hubR * 2))
+            ctx.fill(hub, with: .color(green.opacity(0.25)))
+            ctx.stroke(hub, with: .color(green), style: StrokeStyle(lineWidth: lw))
         }
-        .shadow(color: .neonGreen.opacity(0.5), radius: 8)
+        .shadow(color: .neonGreen.opacity(0.5), radius: 10)
     }
-
-    private func bx_right(_ w: CGFloat) -> CGFloat { w * 0.38 }
-    private func rw(_ w: CGFloat) -> CGFloat { w * 0.62 }
 }

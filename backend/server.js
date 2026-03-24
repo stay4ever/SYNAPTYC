@@ -23,7 +23,12 @@ const Anthropic = require("@anthropic-ai/sdk");
 // ---------------------------------------------------------------------------
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
-const JWT_SECRET = process.env.JWT_SECRET || "nano-synapsys-dev-secret-change-in-production";
+// C6: Fail fast if JWT_SECRET is not set — never use a known-public fallback in production.
+if (!process.env.JWT_SECRET) {
+  console.error("FATAL: JWT_SECRET environment variable is not set. Refusing to start.");
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES = process.env.JWT_EXPIRES || "30d";
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "nano-synapsys.db");
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
@@ -33,7 +38,8 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",")
   : null; // null = allow all (dev), set in production
 const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
-const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "100", 10);
+const RATE_LIMIT_MAX     = parseInt(process.env.RATE_LIMIT_MAX     || "100", 10);
+const BOT_RATE_LIMIT_MAX = parseInt(process.env.BOT_RATE_LIMIT_MAX || "10",  10);
 
 // ---------------------------------------------------------------------------
 // Database
@@ -62,6 +68,12 @@ try {
 try {
   db.prepare("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT NULL").run();
   console.log("Migrated: added avatar_url column");
+} catch (_) { /* column already exists */ }
+
+// M2: Add bio column if it doesn't exist
+try {
+  db.prepare("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT NULL").run();
+  console.log("Migrated: added bio column");
 } catch (_) { /* column already exists */ }
 
 // Ensure uploads directory exists
@@ -99,8 +111,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting (in-memory, per-IP)
-const rateLimitMap = new Map();
+// Rate limiting (in-memory, per-IP for global; per-userId for bot)
+const rateLimitMap    = new Map();
+const botRateLimitMap = new Map();
 app.use((req, res, next) => {
   const ip = req.ip || req.socket.remoteAddress;
   const now = Date.now();
@@ -116,13 +129,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Clean up stale rate limit entries every 5 minutes
+// L8: Clean up stale rate-limit entries every minute (prune entries older than 1 window).
 setInterval(() => {
-  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS * 2;
+  const cutoff = Date.now() - RATE_LIMIT_WINDOW_MS;
   for (const [ip, entry] of rateLimitMap) {
     if (entry.windowStart < cutoff) rateLimitMap.delete(ip);
   }
-}, 300_000);
+  for (const [uid, entry] of botRateLimitMap) {
+    if (entry.windowStart < cutoff) botRateLimitMap.delete(uid);
+  }
+}, 60_000);
 
 app.use(express.json({ limit: "5mb" })); // allow base64 avatar payloads
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -187,7 +203,7 @@ app.post("/auth/register", (req, res) => {
 
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(info.lastInsertRowid);
   const token = signToken(user.id);
-  res.status(201).json({ token, user: sanitizeUser(user) });
+  res.status(201).json({ token, user: { ...sanitizeUser(user), email: user.email } });
 });
 
 app.post("/auth/login", (req, res) => {
@@ -200,13 +216,13 @@ app.post("/auth/login", (req, res) => {
     return res.status(401).json({ error: "Invalid credentials" });
   }
   const token = signToken(user.id);
-  res.json({ token, user: sanitizeUser(user) });
+  res.json({ token, user: { ...sanitizeUser(user), email: user.email } });
 });
 
 app.get("/auth/me", authMiddleware, (req, res) => {
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
   if (!user) return res.status(404).json({ error: "User not found" });
-  res.json({ user: sanitizeUser(user) });
+  res.json({ user: { ...sanitizeUser(user), email: user.email } });
 });
 
 app.post("/auth/password-reset", (req, res) => {
@@ -228,14 +244,22 @@ app.get("/api/users", authMiddleware, (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.get("/api/messages/:userId", authMiddleware, (req, res) => {
-  const otherId = parseInt(req.params.userId, 10);
-  const messages = db
-    .prepare(
-      `SELECT * FROM messages
-       WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
-       ORDER BY created_at ASC`
-    )
-    .all(req.userId, otherId, otherId, req.userId);
+  const otherId  = parseInt(req.params.userId, 10);
+  // M9: Paginate with before_id cursor (newest 200 messages by default).
+  const beforeId = parseInt(req.query.before_id || "0", 10);
+  const limit    = Math.min(parseInt(req.query.limit || "200", 10), 200);
+  const messages = beforeId > 0
+    ? db.prepare(
+        `SELECT * FROM messages
+         WHERE ((from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?))
+           AND id < ?
+         ORDER BY created_at DESC LIMIT ?`
+      ).all(req.userId, otherId, otherId, req.userId, beforeId, limit).reverse()
+    : db.prepare(
+        `SELECT * FROM messages
+         WHERE (from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?)
+         ORDER BY created_at DESC LIMIT ?`
+      ).all(req.userId, otherId, otherId, req.userId, limit).reverse();
   res.json({ messages: messages.map(sanitizeMessage) });
 });
 
@@ -320,19 +344,20 @@ app.patch("/api/contacts/:id", authMiddleware, (req, res) => {
   if (!["accepted", "blocked", "pending", "rejected"].includes(status)) {
     return res.status(400).json({ error: "Invalid status" });
   }
+  // C1: Verify caller is party to this contact before any mutation.
+  const contactRow = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
+  if (!contactRow) return res.status(404).json({ error: "Contact not found" });
+  if (contactRow.requester_id !== req.userId && contactRow.receiver_id !== req.userId) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   // "rejected" maps to a hard delete — no need to keep the row
   if (status === "rejected") {
-    const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
-    if (!contact) return res.status(404).json({ error: "Contact not found" });
-    if (contact.requester_id !== req.userId && contact.receiver_id !== req.userId) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
     db.prepare("DELETE FROM contacts WHERE id = ?").run(req.params.id);
     return res.json({ deleted: true });
   }
   db.prepare("UPDATE contacts SET status = ? WHERE id = ?").run(status, req.params.id);
   const contact = db.prepare("SELECT * FROM contacts WHERE id = ?").get(req.params.id);
-  if (!contact) return res.status(404).json({ error: "Contact not found" });
   res.json({ contact });
 });
 
@@ -404,6 +429,10 @@ app.get("/api/groups", authMiddleware, (req, res) => {
 app.post("/api/groups", authMiddleware, (req, res) => {
   const { name, description } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
+  // M8: Enforce maximum group name length.
+  if (typeof name !== "string" || name.length > 100) {
+    return res.status(400).json({ error: "Group name must be 1–100 characters" });
+  }
 
   const creator = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
   const info = db
@@ -421,6 +450,12 @@ app.post("/api/groups", authMiddleware, (req, res) => {
 });
 
 app.get("/api/groups/:groupId/messages", authMiddleware, (req, res) => {
+  // C2: Only members may read group messages.
+  const membership = db
+    .prepare("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?")
+    .get(req.params.groupId, req.userId);
+  if (!membership) return res.status(403).json({ error: "Not a member of this group" });
+
   const messages = db
     .prepare("SELECT * FROM group_messages WHERE group_id = ? ORDER BY created_at ASC")
     .all(req.params.groupId);
@@ -430,6 +465,15 @@ app.get("/api/groups/:groupId/messages", authMiddleware, (req, res) => {
 app.post("/api/groups/:groupId/members", authMiddleware, (req, res) => {
   const { user_id } = req.body;
   const groupId = parseInt(req.params.groupId, 10);
+
+  // C3: Only group admins may add members.
+  const callerRole = db
+    .prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?")
+    .get(groupId, req.userId);
+  if (!callerRole || callerRole.role !== "admin") {
+    return res.status(403).json({ error: "Only group admins can add members" });
+  }
+
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(user_id);
   if (!user) return res.status(404).json({ error: "User not found" });
 
@@ -444,18 +488,28 @@ app.post("/api/groups/:groupId/members", authMiddleware, (req, res) => {
 
 app.delete("/api/groups/:groupId/members", authMiddleware, (req, res) => {
   const { user_id } = req.body;
-  db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(
-    req.params.groupId,
-    user_id
-  );
+  const groupId = parseInt(req.params.groupId, 10);
+  const targetId = parseInt(user_id, 10);
+
+  // C4: Allow if caller is an admin, or caller is removing themselves.
+  const callerMember = db
+    .prepare("SELECT role FROM group_members WHERE group_id = ? AND user_id = ?")
+    .get(groupId, req.userId);
+  if (!callerMember) return res.status(403).json({ error: "Not a member of this group" });
+  if (callerMember.role !== "admin" && targetId !== req.userId) {
+    return res.status(403).json({ error: "Only admins can remove other members" });
+  }
+
+  db.prepare("DELETE FROM group_members WHERE group_id = ? AND user_id = ?").run(groupId, targetId);
   res.json({ removed: true });
 });
 
 app.delete("/api/groups/:groupId", authMiddleware, (req, res) => {
-  db.prepare("DELETE FROM groups_ WHERE id = ? AND created_by = ?").run(
-    req.params.groupId,
-    req.userId
-  );
+  // M3: Return meaningful errors instead of silent success on no-op.
+  const group = db.prepare("SELECT * FROM groups_ WHERE id = ?").get(req.params.groupId);
+  if (!group) return res.status(404).json({ error: "Group not found" });
+  if (group.created_by !== req.userId) return res.status(403).json({ error: "Only the group creator can delete it" });
+  db.prepare("DELETE FROM groups_ WHERE id = ?").run(req.params.groupId);
   res.json({ deleted: true });
 });
 
@@ -466,7 +520,7 @@ app.delete("/api/groups/:groupId", authMiddleware, (req, res) => {
 app.get("/api/profile", authMiddleware, (req, res) => {
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
   if (!user) return res.status(404).json({ error: "User not found" });
-  res.json({ user: sanitizeUser(user) });
+  res.json({ user: { ...sanitizeUser(user), email: user.email } });
 });
 
 app.put("/api/profile", authMiddleware, (req, res) => {
@@ -510,24 +564,12 @@ app.put("/api/profile", authMiddleware, (req, res) => {
 
   if (updates.length === 0) return res.status(400).json({ error: "Nothing to update" });
 
+  // M1/M2: bio column is now always present (inline migration above). No retry needed.
   values.push(req.userId);
-  // Ignore "bio" column gracefully if it doesn't exist yet (migration may not have added it)
-  try {
-    db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
-  } catch {
-    // bio column missing — retry without it
-    const safeUpdates = updates.filter((u) => !u.startsWith("bio"));
-    const safeValues = safeUpdates.map((u) => {
-      if (u.startsWith("display_name")) return display_name.slice(0, 100);
-      return undefined;
-    }).filter(Boolean);
-    if (safeUpdates.length === 0) return res.status(400).json({ error: "Nothing to update" });
-    safeValues.push(req.userId);
-    db.prepare(`UPDATE users SET ${safeUpdates.join(", ")} WHERE id = ?`).run(...safeValues);
-  }
+  db.prepare(`UPDATE users SET ${updates.join(", ")} WHERE id = ?`).run(...values);
 
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
-  res.json({ user: sanitizeUser(user) });
+  res.json({ user: { ...sanitizeUser(user), email: user.email } });
 });
 
 // POST /api/profile/avatar — accept base64-encoded JPEG, store to disk, return URL
@@ -542,13 +584,18 @@ app.post("/api/profile/avatar", authMiddleware, (req, res) => {
     return res.status(400).json({ error: "Image too large (max 375KB compressed)" });
   }
   const buffer = Buffer.from(base64Data, "base64");
+
+  // M4: Validate JPEG magic bytes (FF D8 FF) before writing to disk.
+  if (buffer.length < 3 || buffer[0] !== 0xFF || buffer[1] !== 0xD8 || buffer[2] !== 0xFF) {
+    return res.status(400).json({ error: "Invalid image format. Only JPEG is accepted." });
+  }
   const filename = `${req.userId}.jpg`;
   const filepath = path.join(UPLOADS_DIR, filename);
   fs.writeFileSync(filepath, buffer);
   const avatarUrl = `${BASE_URL}/uploads/avatars/${filename}`;
   db.prepare("UPDATE users SET avatar_url = ? WHERE id = ?").run(avatarUrl, req.userId);
   const user = db.prepare("SELECT * FROM users WHERE id = ?").get(req.userId);
-  res.json({ user: sanitizeUser(user) });
+  res.json({ user: { ...sanitizeUser(user), email: user.email } });
 });
 
 // ---------------------------------------------------------------------------
@@ -591,6 +638,22 @@ app.post("/api/push-token", authMiddleware, (req, res) => {
 // BANNER AI — Claude-powered agent with device context + tool use
 // ---------------------------------------------------------------------------
 
+// H4: Per-user rate limit for bot endpoint — map and constant defined near top of file.
+function botRateLimit(req, res, next) {
+  const key = req.userId; // keyed by authenticated user, not IP
+  const now = Date.now();
+  let entry = botRateLimitMap.get(key);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    entry = { windowStart: now, count: 0 };
+    botRateLimitMap.set(key, entry);
+  }
+  entry.count++;
+  if (entry.count > BOT_RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: "Too many Banner requests. Try again in a minute." });
+  }
+  next();
+}
+
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
@@ -626,8 +689,18 @@ const BANNER_TOOLS = [
   },
 ];
 
-app.post("/api/bot/chat", authMiddleware, async (req, res) => {
-  const { message = "", conversation = [], device_context = {}, tool_results = [] } = req.body;
+app.post("/api/bot/chat", authMiddleware, botRateLimit, async (req, res) => {
+  let { message = "", conversation = [], device_context = {}, tool_results = [] } = req.body;
+
+  // H5: Cap conversation history to last 20 turns and each message content to 4096 chars.
+  if (Array.isArray(conversation)) {
+    conversation = conversation.slice(-20).map((m) => ({
+      role: m.role,
+      content: typeof m.content === "string" ? m.content.slice(0, 4096) : "",
+    }));
+  } else {
+    conversation = [];
+  }
 
   if (!anthropic) {
     return res.json({
@@ -839,7 +912,8 @@ wss.on("connection", (ws) => {
       // DM chat message (sent via WS as alternative to REST)
       // -----------------------------------------------------------------
       case "chat_message": {
-        if (!msg.to || !msg.content) break;
+        // H3: Enforce same 64 KB content limit as REST endpoint.
+        if (!msg.to || typeof msg.content !== "string" || msg.content.length === 0 || msg.content.length > 65536) break;
         const info = db
           .prepare("INSERT INTO messages (from_user, to_user, content) VALUES (?, ?, ?)")
           .run(userId, msg.to, msg.content);
@@ -880,6 +954,12 @@ wss.on("connection", (ws) => {
         const groupId = msg.group_id;
         if (!groupId || typeof msg.content !== "string" || msg.content.length === 0) break;
         if (msg.content.length > 65536) break;
+
+        // C5: Verify sender is a member of this group before persisting.
+        const membershipCheck = db
+          .prepare("SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?")
+          .get(groupId, userId);
+        if (!membershipCheck) break;
 
         const sender = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
         const info = db
@@ -949,16 +1029,12 @@ wss.on("connection", (ws) => {
         break;
       }
 
-      // -----------------------------------------------------------------
-      // Unknown types — relay as-is if they have a 'to' field
-      // This future-proofs the server for new client message types.
-      // -----------------------------------------------------------------
-      default: {
-        if (msg.to) {
-          sendToUser(msg.to, { ...msg, from: userId });
-        }
+      // H2: Unknown message types are silently dropped.
+      // Do NOT relay arbitrary payloads — a malicious client could fabricate
+      // system message types (user_list, mark_read, message_deleted) and inject
+      // them into another user's WebSocket stream.
+      default:
         break;
-      }
     }
   });
 
@@ -990,7 +1066,8 @@ wss.on("connection", (ws) => {
 // ---------------------------------------------------------------------------
 
 app.get("/health", (_, res) => {
-  res.json({ status: "ok", service: "nano-SYNAPSYS", version: "1.5.1" });
+  const pkg = (() => { try { return require("./package.json"); } catch { return {}; } })();
+  res.json({ status: "ok", service: "nano-SYNAPSYS", version: pkg.version || "1.5.2" });
 });
 
 // ---------------------------------------------------------------------------
@@ -1053,10 +1130,12 @@ function sanitizeMessage(m) {
 }
 
 function sanitizeUser(row) {
+  // H1: email is returned only for the user themselves (auth routes).
+  // Public-facing calls (GET /api/users, contacts) use this same function but
+  // email must not be visible to peers — callers that need email add it manually.
   return {
     id: row.id,
     username: row.username,
-    email: row.email,
     display_name: row.display_name,
     is_approved: !!row.is_approved,
     online: !!row.online,

@@ -32,7 +32,7 @@ enum Config {
     enum App {
         static let name             = "SYNAPTYC"
         static let version          = "1.5.2"
-        static let build            = "202603240514"
+        static let build            = "202603241849"
         static let encryptionLabel  = "Signal Double Ratchet · AES-256-GCM · ECDH-P384"
         static let backendHost      = "nano-synapsys-server.fly.dev"
     }

@@ -73,6 +73,14 @@ final class WebSocketService: ObservableObject {
 
     private init() {}
 
+    // L3: Shared formatter — ISO8601DateFormatter is expensive to allocate per-message.
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static func nowISO() -> String { isoFormatter.string(from: Date()) }
+
     // MARK: - Connection
 
     func connect() {
@@ -194,7 +202,7 @@ final class WebSocketService: ObservableObject {
                 let message = Message(
                     id: id, fromUser: from, toUser: to,
                     content: content, read: msg.read ?? false,
-                    createdAt: msg.createdAt ?? ISO8601DateFormatter().string(from: Date())
+                    createdAt: msg.createdAt ?? Self.nowISO()
                 )
                 incomingMessage = message
             }
@@ -217,7 +225,7 @@ final class WebSocketService: ObservableObject {
                     id: id, groupId: gid,
                     fromUser: from, fromUsername: username, fromDisplay: display,
                     content: content,
-                    createdAt: msg.createdAt ?? ISO8601DateFormatter().string(from: Date())
+                    createdAt: msg.createdAt ?? Self.nowISO()
                 )
                 incomingGroupMessage = gm
             }
@@ -227,7 +235,7 @@ final class WebSocketService: ObservableObject {
                 var readMsg = Message(
                     id: id, fromUser: from, toUser: to,
                     content: "", read: true,
-                    createdAt: msg.createdAt ?? ISO8601DateFormatter().string(from: Date())
+                    createdAt: msg.createdAt ?? Self.nowISO()
                 )
                 readMsg.isEncrypted = false
                 incomingMessage = readMsg

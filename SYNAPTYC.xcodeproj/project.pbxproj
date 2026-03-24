@@ -38,7 +38,6 @@
 		949D00ED5FF743BEBA38CE34 /* NeonButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D1CD3607194721801043F3 /* NeonButton.swift */; };
 		9594D9DCB1274D3987E629D1 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2AE83A3B254D8781867FB6 /* APIService.swift */; };
 		99230B05E97445E18AA9DE0E /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2278B719207A4E5CBB982D7C /* KeychainService.swift */; };
-		AA01ENV1BF0000000000E001 /* Environment.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01ENV1FR0000000000E001 /* Environment.swift */; };
 		AA01LOC1BF0000000000E005 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = AA01LOC1FR0000000000E005 /* Localizable.strings */; };
 		AA01SLC1BF0000000000E004 /* String+Localized.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01SLC1FR0000000000E004 /* String+Localized.swift */; };
 		AA01SVC1BF0000000000E002 /* ServiceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01SVC1FR0000000000E002 /* ServiceProtocols.swift */; };
@@ -111,7 +110,6 @@
 		A1439888075443F78D6DDB11 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		A24B53544DCA3CBB7EA1EA23 /* ThemeManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ThemeManager.swift; path = ThemeManager.swift; sourceTree = "<group>"; };
 		A4D4E490C2434BAEB5169C13 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
-		AA01ENV1FR0000000000E001 /* Environment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Environment.swift; sourceTree = "<group>"; };
 		AA01LOC1FR0000000000E005 /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = Resources/en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		AA01SLC1FR0000000000E004 /* String+Localized.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "String+Localized.swift"; sourceTree = "<group>"; };
 		AA01SVC1FR0000000000E002 /* ServiceProtocols.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceProtocols.swift; sourceTree = "<group>"; };
@@ -365,7 +363,6 @@
 			isa = PBXGroup;
 			children = (
 				2C6662E259B6438A929C0820 /* Config.swift */,
-				AA01ENV1FR0000000000E001 /* Environment.swift */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -539,7 +536,6 @@
 				BC40967AEBC747208E752EF0 /* GroupsViewModel.swift in Sources */,
 				EE550D7DBF964742A5A6E265 /* GroupChatView.swift in Sources */,
 				8F4CD8A59C4848038A571EA9 /* GroupsListView.swift in Sources */,
-				AA01ENV1BF0000000000E001 /* Environment.swift in Sources */,
 				AA01SVC1BF0000000000E002 /* ServiceProtocols.swift in Sources */,
 				AA01VAC1BF0000000000E003 /* View+Accessibility.swift in Sources */,
 				AA01SLC1BF0000000000E004 /* String+Localized.swift in Sources */,
@@ -594,7 +590,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				DEVELOPMENT_TEAM = LF9DXU9P25;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -616,7 +612,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				DEVELOPMENT_TEAM = LF9DXU9P25;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SYNAPTYC/Info.plist;
@@ -641,7 +637,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -665,7 +661,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.2;
@@ -683,7 +679,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.2;
@@ -700,7 +696,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.2;
@@ -717,7 +713,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.5.2;
@@ -740,7 +736,7 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 202603240014;
+				CURRENT_PROJECT_VERSION = 202603241849;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

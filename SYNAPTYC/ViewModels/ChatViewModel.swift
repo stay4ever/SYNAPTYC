@@ -334,7 +334,18 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Delete message
 
     func deleteMessage(id: Int) {
+        // L6: Save the message so we can restore it if the server rejects the delete.
+        guard let removed = messages.first(where: { $0.id == id }) else { return }
         messages.removeAll { $0.id == id }
-        Task { try? await APIService.shared.deleteMessage(id: id) }
+        Task {
+            do {
+                try await APIService.shared.deleteMessage(id: id)
+            } catch {
+                // Restore the message if server-side delete fails.
+                messages.append(removed)
+                messages.sort { $0.id < $1.id }
+                errorMessage = "Could not delete message: \(error.localizedDescription)"
+            }
+        }
     }
 }
