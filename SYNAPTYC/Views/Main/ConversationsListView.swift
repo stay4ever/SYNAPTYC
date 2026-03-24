@@ -5,6 +5,7 @@ struct ConversationsListView: View {
     @StateObject private var groupsVM   = GroupsViewModel()
     @State private var searchText       = ""
     @State private var showCreateGroup  = false
+    @State private var selectedPeer: AppUser? = nil
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -83,16 +84,16 @@ struct ConversationsListView: View {
                                     .padding(.top, 20)
                                 } else {
                                     ForEach(filtered) { user in
-                                        NavigationLink(destination: ChatView(peer: user)) {
+                                        Button {
+                                            vm.clearUnread(for: user.id)
+                                            selectedPeer = user
+                                        } label: {
                                             ConversationCard(
                                                 user: user,
                                                 unread: vm.unreadCounts[user.id] ?? 0
                                             )
                                         }
                                         .buttonStyle(.plain)
-                                        .simultaneousGesture(TapGesture().onEnded {
-                                            vm.clearUnread(for: user.id)
-                                        })
                                         .contextMenu {
                                             Button(role: .destructive) {
                                                 vm.hideConversation(userId: user.id)
@@ -147,6 +148,13 @@ struct ConversationsListView: View {
                     showCreateGroup = false
                 }
             }
+        }
+        .sheet(item: $selectedPeer) { peer in
+            NavigationStack {
+                ChatView(peer: peer)
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
     }
 }

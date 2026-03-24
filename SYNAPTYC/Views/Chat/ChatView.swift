@@ -175,6 +175,9 @@ struct ChatView: View {
             }
         }
         .task { await vm.load() }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+            withAnimation(.easeOut(duration: 0.4)) { vm.purgeExpired() }
+        }
         .confirmationDialog("Disappearing Messages", isPresented: $showTimerPicker) {
             ForEach(DisappearTimer.allCases) { timer in
                 Button(timer.label) { vm.disappearTimer = timer }

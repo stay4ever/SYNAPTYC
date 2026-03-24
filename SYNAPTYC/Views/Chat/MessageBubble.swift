@@ -17,15 +17,21 @@ struct MessageBubble: View {
                     .foregroundColor(isMine ? .neonGreen : Color.white.opacity(0.9))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(
-                        UnevenRoundedRectangle(
+                    .background {
+                        let shape = UnevenRoundedRectangle(
                             topLeadingRadius:     isMine ? 18 : 4,
                             bottomLeadingRadius:  18,
                             bottomTrailingRadius: 18,
                             topTrailingRadius:    isMine ? 4 : 18
                         )
-                        .fill(isMine ? Color.panelGreen : Color.surfaceGreen)
-                    )
+                        ZStack {
+                            shape.fill(isMine ? Color.panelGreen : Color.surfaceGreen)
+                            if let exp = message.disappearsAt {
+                                DisappearArc(expiresAt: exp, sentAt: message.timestamp)
+                                    .clipShape(shape)
+                            }
+                        }
+                    }
 
                 HStack(spacing: 4) {
                     if let exp = message.disappearsAt {
@@ -60,6 +66,39 @@ struct MessageBubble: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Disappear arc countdown
+
+/// Canvas-drawn arc that drains clockwise as the message timer expires.
+struct DisappearArc: View {
+    let expiresAt: Date
+    let sentAt: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0)) { _ in
+            Canvas { ctx, size in
+                let total = expiresAt.timeIntervalSince(sentAt)
+                guard total > 0 else { return }
+                let remaining = max(0, expiresAt.timeIntervalSinceNow)
+                let fraction = remaining / total
+                guard fraction > 0 else { return }
+
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let radius = min(size.width, size.height) / 2 - 4
+
+                var path = Path()
+                path.addArc(
+                    center: center,
+                    radius: radius,
+                    startAngle: .degrees(-90),
+                    endAngle: .degrees(-90 + 360 * fraction),
+                    clockwise: false
+                )
+                ctx.stroke(path, with: .color(Color.neonGreen.opacity(0.3)), lineWidth: 2)
             }
         }
     }
