@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Contacts
 
 private struct PhoneContact: Identifiable {
@@ -157,7 +158,7 @@ struct ContactsView: View {
             if tab == 2 { Task { await loadPhoneContacts() } }
         }
         .sheet(item: $inviteContact) { contact in
-            ShareSheet(items: ["Hey! Join me on SYNAPTYC — a private, encrypted messenger. Download it and find me. 🔐"])
+            InviteShareSheet(items: ["Hey! Join me on SYNAPTYC — a private, encrypted messenger. Download it and find me. 🔐"])
         }
     }
 
@@ -306,9 +307,7 @@ struct ContactsView: View {
 
 // MARK: - Share Sheet
 
-import UIKit
-
-private struct ShareSheet: UIViewControllerRepresentable {
+private struct InviteShareSheet: UIViewControllerRepresentable {
     let items: [Any]
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
