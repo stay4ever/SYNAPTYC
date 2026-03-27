@@ -80,6 +80,13 @@ final class ChatViewModel: ObservableObject {
         do {
             let fetched = try await APIService.shared.messages(with: peer.id)
 
+            // Snapshot whether a ratchet existed BEFORE we process any KEX.
+            // If the ratchet is freshly established during this load() (was nil, now set),
+            // old messages from a PREVIOUS session will legitimately fail to decrypt
+            // (forward secrecy). Those failures are expected and must NOT trigger a reset
+            // that would destroy the brand-new ratchet.
+            let hadRatchetBeforeKEX = ratchetState != nil
+
             // Attempt key exchange using the most recent KEX from the peer in history.
             // completeKeyExchange has its own guard logic to skip if the session is already
             // up-to-date and avoid destroying a live ratchet.
@@ -103,10 +110,10 @@ final class ChatViewModel: ObservableObject {
             // would corrupt the ratchet making subsequent messages unreadable. We therefore
             // cache every decrypted plaintext by server message-ID on first decrypt, and
             // serve from that cache on all subsequent loads.
+            //
             // Track fresh (not previously cached) DR2 decryption failures from the peer.
-            // If the count is high, the ratchet is permanently desynced and we need to
-            // reset — this is the ONLY way to detect desync from history, since
-            // handleIncoming's counter only fires for real-time WS messages.
+            // If the count is high AND the ratchet existed before this load (not freshly
+            // established), the session is permanently desynced and needs a reset.
             var freshDR2Failures = 0
 
             let display: [Message] = fetched.compactMap { msg in
@@ -153,11 +160,19 @@ final class ChatViewModel: ObservableObject {
             }
 
             // Detect permanent session desync from history.
-            // If 2+ fresh DR2 messages from the peer failed to decrypt, the ratchet is
-            // irrecoverably out of sync. Wipe everything and start a fresh key exchange
-            // so the next conversation heals automatically without user intervention.
-            if freshDR2Failures >= 2 {
+            // Only reset if the ratchet EXISTED before this load — if it was freshly
+            // established (e.g. from a KEX in history or during initiateKeyExchange),
+            // old messages from a previous session will legitimately fail (forward secrecy)
+            // and those failures must not destroy the brand-new session.
+            if freshDR2Failures >= 2 && hadRatchetBeforeKEX {
                 await resetSession()
+                // Schedule a delayed re-load so the peer's key exchange response
+                // (which may arrive in the next 1-3 seconds via WS or REST) gets
+                // picked up without requiring the user to close and reopen the chat.
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    await self?.load()
+                }
             }
 
             // Merge WebSocket-arrived messages that came in during the async API fetch.
