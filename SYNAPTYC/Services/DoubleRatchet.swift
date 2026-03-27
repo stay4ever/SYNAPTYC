@@ -82,12 +82,11 @@ enum DoubleRatchet {
 
     /// Bob side: holds the keypair whose public key was given to Alice.
     /// No sending chain yet — Bob obtains one after the first DH ratchet step on receive.
-    static func initBob(sharedSecret: Data, ourPrivateKeyData: Data) -> RatchetState {
-        let pub = (try? P384.KeyAgreement.PrivateKey(rawRepresentation: ourPrivateKeyData))?
-                        .publicKey.rawRepresentation ?? Data()
+    static func initBob(sharedSecret: Data, ourPrivateKeyData: Data) throws -> RatchetState {
+        let privKey = try P384.KeyAgreement.PrivateKey(rawRepresentation: ourPrivateKeyData)
         return RatchetState(
             dhsPriv: ourPrivateKeyData,
-            dhsPub:  pub,
+            dhsPub:  privKey.publicKey.rawRepresentation,
             dhr:     nil,
             rk:      sharedSecret,
             cks:     nil,

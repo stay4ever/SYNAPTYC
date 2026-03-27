@@ -144,7 +144,13 @@ final class ChatViewModel: ObservableObject {
                     // Both are stored as "" so future loads skip without re-touching the ratchet.
                     guard let plain = decryptContent(m.content, isMine: false),
                           plain != "·· ··" else {
-                        cachePlaintext(messageId: msg.id, text: "")
+                        // Only permanently cache failures when we actually have a ratchet.
+                        // If ratchetState is nil, the KEX hasn't completed yet — these
+                        // messages may become decryptable once the ratchet is established.
+                        // Leaving them uncached lets the next load() retry them.
+                        if ratchetState != nil {
+                            cachePlaintext(messageId: msg.id, text: "")
+                        }
                         if msg.content.hasPrefix("DR2:") { freshDR2Failures += 1 }
                         return nil
                     }
@@ -235,23 +241,26 @@ final class ChatViewModel: ObservableObject {
         let isMine2 = m.fromUser == myId2
         guard let plain = decryptContent(m.content, isMine: isMine2) else {
             // decryptContent returned nil → bootstrap sentinel (DR2 from peer, decrypted as zero-width space).
-            // Cache the ID as empty so load() skips it without re-running the ratchet.
-            if !isMine2 && m.content.hasPrefix("DR2:") {
+            // Only cache if we actually have a ratchet — if ratchetState is nil the
+            // decrypt failed because KEX hasn't completed, and caching would permanently
+            // hide the message even after the ratchet is established (cache poisoning).
+            if !isMine2 && m.content.hasPrefix("DR2:") && ratchetState != nil {
                 cachePlaintext(messageId: m.id, text: "")
             }
             return
         }
         // Filter undecryptable real-time messages (ratchet out of sync).
-        // Track consecutive failures from the peer — after 3 in a row the sessions are
-        // permanently desynced (one party lost their ratchet state). Auto-reset wipes
-        // all local ECDH/ratchet state and kicks off a fresh key exchange so messaging
-        // resumes automatically without user intervention.
+        // Only cache and count failures when we actually HAVE a ratchet — failures
+        // during the KEX window (ratchetState nil) are expected and transient.
+        // Those messages will be retried on the next load() after the ratchet is ready.
         if plain == "·· ··" {
             if !isMine2 {
-                cachePlaintext(messageId: m.id, text: "")
-                flushPlaintextCache()
+                if ratchetState != nil {
+                    cachePlaintext(messageId: m.id, text: "")
+                    flushPlaintextCache()
+                }
                 consecutiveDecryptFailures += 1
-                if consecutiveDecryptFailures >= 2 {
+                if consecutiveDecryptFailures >= 3 {
                     consecutiveDecryptFailures = 0
                     Task { await self.resetSession() }
                 }
@@ -392,10 +401,13 @@ final class ChatViewModel: ObservableObject {
             }
         } else {
             // Bob role — cks comes after receiving Alice's bootstrap DH ratchet message
-            let state = DoubleRatchet.initBob(
+            guard let state = try? DoubleRatchet.initBob(
                 sharedSecret: sk,
                 ourPrivateKeyData: privateKey.rawRepresentation
-            )
+            ) else {
+                errorMessage = "Encryption setup failed (Bob init)"
+                return
+            }
             ratchetState    = state
             DoubleRatchet.save(state, for: peer.id)
             _ = KeychainService.saveData(theirPublicKeyData, for: ecdhKeyTag)
@@ -410,7 +422,9 @@ final class ChatViewModel: ObservableObject {
         guard let encrypted = try? DoubleRatchet.encrypt(state: &state, plaintext: Self.kBootstrapSentinel) else { return }
         ratchetState = state
         DoubleRatchet.save(state, for: peer.id)
-        _ = try? await APIService.shared.sendMessage(toUser: peer.id, content: encrypted)
+        // Bootstrap is critical — without it Bob never gets his sending chain key.
+        // Use the same retry logic as regular messages to survive transient failures.
+        _ = try? await sendWithRetry(content: encrypted)
     }
 
     // MARK: - Encrypted send with retry
