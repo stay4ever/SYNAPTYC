@@ -143,7 +143,13 @@ final class ChatViewModel: ObservableObject {
                 m.content = plain
                 return m
             }
-            messages = display
+            // Merge WebSocket-arrived messages that came in during the async API fetch.
+            // handleIncoming() may have appended messages to `messages` while we were
+            // awaiting the HTTP response; those IDs won't be in `fetched`, so a plain
+            // `messages = display` would discard them.
+            let fetchedIds = Set(fetched.map { $0.id })
+            let wsArrived  = messages.filter { $0.id > 0 && !fetchedIds.contains($0.id) }
+            messages = display + wsArrived
             purgeExpired()
         } catch {
             errorMessage = error.localizedDescription
@@ -327,8 +333,13 @@ final class ChatViewModel: ObservableObject {
             DoubleRatchet.save(state, for: peer.id)
             _ = KeychainService.saveData(theirPublicKeyData, for: ecdhKeyTag)
             encryptionReady = true
-            Task { await sendBootstrap() }
-            flushPending()
+            // Bootstrap MUST arrive at server before any regular messages so Bob's
+            // DH ratchet step fires and gives him his sending chain key (cks).
+            // flushPending() is deferred inside the same Task so ordering is guaranteed.
+            Task {
+                await sendBootstrap()
+                flushPending()
+            }
         } else {
             // Bob role — cks comes after receiving Alice's bootstrap DH ratchet message
             let state = DoubleRatchet.initBob(
