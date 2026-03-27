@@ -14,9 +14,28 @@ struct ConversationsListView: View {
         GridItem(.flexible(), spacing: 12)
     ]
 
-    /// Accepted contacts mapped to their AppUser, filtered by search
+    /// Users to show in the Chats grid:
+    ///   1. Accepted contacts (have mutually added each other)
+    ///   2. Anyone with an unread badge (received a message from them even without contact)
+    /// This ensures messages are always findable regardless of contact status.
     private var chatUsers: [AppUser] {
-        let users = contactsVM.acceptedContacts.compactMap { $0.otherUser }
+        var seen = Set<Int>()
+        var users: [AppUser] = []
+
+        // 1. Accepted contacts
+        for user in contactsVM.acceptedContacts.compactMap({ $0.otherUser }) {
+            if seen.insert(user.id).inserted { users.append(user) }
+        }
+
+        // 2. Users with unread messages who aren't already in the list
+        let unreadSenderIds = convoVM.unreadCounts.keys.filter { $0 != 0 }
+        for senderId in unreadSenderIds where !seen.contains(senderId) {
+            if let user = contactsVM.allUsers.first(where: { $0.id == senderId }) {
+                seen.insert(senderId)
+                users.append(user)
+            }
+        }
+
         if searchText.isEmpty { return users }
         return users.filter {
             $0.name.localizedCaseInsensitiveContains(searchText) ||

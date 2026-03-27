@@ -66,6 +66,11 @@ struct SYNAPTYCApp: App {
             withAnimation {
                 isBlurred = (newPhase == .background || newPhase == .inactive) && auth.isLoggedIn
             }
+            // Reconnect WebSocket when returning to foreground — resets any exhausted retry
+            // backoff and re-arms delivery for real-time messages and group messages.
+            if newPhase == .active && auth.isLoggedIn {
+                WebSocketService.shared.connect()
+            }
         }
     }
 

@@ -3,12 +3,23 @@ import Combine
 
 @MainActor
 final class ConversationsViewModel: ObservableObject {
+
+    // MARK: - Singleton
+    // Single shared instance so MainTabView and ConversationsListView observe the same state.
+    static let shared = ConversationsViewModel()
+
     @Published var users: [AppUser]          = []
     @Published var recentConversations: [AppUser] = []
     @Published var isLoading                 = false
     @Published var errorMessage: String?
-    /// Unread message counts per sender user ID — drives red notification bubbles
-    @Published var unreadCounts: [Int: Int]  = [:]
+
+    /// Unread message counts per sender user ID — drives red notification bubbles.
+    /// Persisted to UserDefaults so counts survive app restarts.
+    @Published var unreadCounts: [Int: Int]  = {
+        let stored = UserDefaults.standard.dictionary(forKey: "unread_counts") as? [String: Int] ?? [:]
+        return Dictionary(uniqueKeysWithValues: stored.compactMap { k, v in Int(k).map { ($0, v) } })
+    }()
+
     /// Locally hidden conversation user IDs (persisted across launches)
     @Published var hiddenUserIds: Set<Int>   = {
         let arr = UserDefaults.standard.array(forKey: "hidden_conversations") as? [Int] ?? []
@@ -17,7 +28,7 @@ final class ConversationsViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
-    init() {
+    private init() {
         // Update online status from user_list events
         WebSocketService.shared.$onlineUserIds
             .receive(on: RunLoop.main)
@@ -28,20 +39,32 @@ final class ConversationsViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Track unread counts for red notification bubbles
-        WebSocketService.shared.$incomingMessage
-            .compactMap { $0 }
+        // Track unread counts for red notification bubbles.
+        // Filter out ECDH key-exchange (KEX:) protocol messages — they are not
+        // real chat messages and must not increment the badge counter.
+        WebSocketService.shared.incomingMessage
             .receive(on: RunLoop.main)
             .sink { [weak self] message in
                 guard let self else { return }
                 let me = AuthViewModel.shared.currentUser?.id
-                // Only count messages sent TO the current user
-                guard message.toUser == me, !message.content.isEmpty else { return }
+                guard message.toUser == me,
+                      !message.content.isEmpty,
+                      !message.content.hasPrefix("KEX:") else { return }
                 let count = (self.unreadCounts[message.fromUser] ?? 0) + 1
                 self.unreadCounts[message.fromUser] = count
+                self.persistUnreadCounts()
             }
             .store(in: &cancellables)
     }
+
+    // MARK: - Computed
+
+    /// Total unread messages across all conversations — drives the CHATS tab badge.
+    var totalUnread: Int {
+        unreadCounts.values.reduce(0, +)
+    }
+
+    // MARK: - Load
 
     func loadUsers() async {
         isLoading = true
@@ -55,9 +78,22 @@ final class ConversationsViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Unread management
+
     func clearUnread(for userId: Int) {
         unreadCounts[userId] = nil
+        persistUnreadCounts()
     }
+
+    /// Call on logout so stale badge counts are not shown for the next user.
+    func reset() {
+        users = []
+        unreadCounts = [:]
+        hiddenUserIds = []
+        UserDefaults.standard.removeObject(forKey: "unread_counts")
+    }
+
+    // MARK: - Hidden conversations
 
     func hideConversation(userId: Int) {
         hiddenUserIds.insert(userId)
@@ -67,5 +103,12 @@ final class ConversationsViewModel: ObservableObject {
     func unhideConversation(userId: Int) {
         hiddenUserIds.remove(userId)
         UserDefaults.standard.set(Array(hiddenUserIds), forKey: "hidden_conversations")
+    }
+
+    // MARK: - Private
+
+    private func persistUnreadCounts() {
+        let stringKeyed = Dictionary(uniqueKeysWithValues: unreadCounts.map { ("\($0.key)", $0.value) })
+        UserDefaults.standard.set(stringKeyed, forKey: "unread_counts")
     }
 }

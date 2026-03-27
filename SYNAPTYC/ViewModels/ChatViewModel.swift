@@ -33,8 +33,7 @@ final class ChatViewModel: ObservableObject {
         encryptionReady = ratchetState?.cks != nil
 
         // MARK: Incoming DM messages
-        WebSocketService.shared.$incomingMessage
-            .compactMap { $0 }
+        WebSocketService.shared.incomingMessage
             .filter { [weak self] msg in
                 guard let self else { return false }
                 let me = AuthViewModel.shared.currentUser?.id ?? 0
@@ -46,8 +45,7 @@ final class ChatViewModel: ObservableObject {
             .store(in: &cancellables)
 
         // MARK: Incoming key-exchange events (real-time via WebSocket)
-        WebSocketService.shared.$incomingKeyExchange
-            .compactMap { $0 }
+        WebSocketService.shared.incomingKeyExchange
             .filter { [weak self] kex in kex.from == self?.peer.id }
             .receive(on: RunLoop.main)
             .sink { [weak self] kex in self?.completeKeyExchange(theirPublicKeyData: kex.publicKeyData) }
@@ -60,8 +58,7 @@ final class ChatViewModel: ObservableObject {
             .assign(to: &$isTyping)
 
         // MARK: Real-time message deletion
-        WebSocketService.shared.$deletedMessageId
-            .compactMap { $0 }
+        WebSocketService.shared.deletedMessageId
             .receive(on: RunLoop.main)
             .sink { [weak self] deletedId in
                 self?.messages.removeAll { $0.id == deletedId }
@@ -73,28 +70,76 @@ final class ChatViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
-        defer { isLoading = false }
+        // Flush plaintext cache to Keychain once after all decryptions in this load cycle,
+        // not on every individual cachePlaintext call (avoids O(n²) Keychain writes).
+        defer {
+            isLoading = false
+            flushPlaintextCache()
+        }
         do {
             let fetched = try await APIService.shared.messages(with: peer.id)
 
-            // Use the MOST RECENT KEX from peer (handles reinstall / re-key scenarios)
+            // Attempt key exchange using the most recent KEX from the peer in history.
+            // completeKeyExchange has its own guard logic to skip if the session is already
+            // up-to-date and avoid destroying a live ratchet.
             let latestPeerKex = fetched.last { $0.content.hasPrefix("KEX:") && $0.fromUser == peer.id }
             if let kexMsg = latestPeerKex,
                let pubKeyData = Data(base64Encoded: String(kexMsg.content.dropFirst(4))) {
                 completeKeyExchange(theirPublicKeyData: pubKeyData)
             }
 
-            // If still no ratchet, kick off ECDH exchange
+            // If still no ratchet, kick off our own ECDH exchange
             if ratchetState == nil {
                 await initiateKeyExchange()
             }
 
-            // Decrypt and filter protocol messages (nil = sentinel or undecryptable outgoing)
             let myId = AuthViewModel.shared.currentUser?.id ?? 0
+
+            // Decrypt and filter protocol messages.
+            //
+            // IMPORTANT: The Double Ratchet is stateful — each successful decrypt advances the
+            // chain key. Re-running decryptContent on the same messages (e.g. pull-to-refresh)
+            // would corrupt the ratchet making subsequent messages unreadable. We therefore
+            // cache every decrypted plaintext by server message-ID on first decrypt, and
+            // serve from that cache on all subsequent loads.
             let display: [Message] = fetched.compactMap { msg in
                 if msg.content.hasPrefix("KEX:") { return nil }
                 var m = msg
-                guard let plain = decryptContent(m.content, isMine: msg.fromUser == myId) else { return nil }
+                let isMine = msg.fromUser == myId
+                let isEncrypted = msg.content.hasPrefix("DR2:") || msg.content.hasPrefix("ENC:")
+
+                if isEncrypted {
+                    // Cache-hit → serve without touching the ratchet.
+                    // Empty string is a sentinel meaning "already processed/filtered" (e.g. bootstrap).
+                    if let cached = loadCachedPlaintext(messageId: msg.id) {
+                        if cached.isEmpty { return nil }
+                        m.content = cached
+                        return m
+                    }
+                    // Cache-miss for own messages: sender cannot re-decrypt their own DR2
+                    // ciphertext (forward secrecy — sending chain key is one-way).
+                    // Cache as "" so future loads skip without touching the ratchet, then hide.
+                    if isMine {
+                        cachePlaintext(messageId: msg.id, text: "")
+                        return nil
+                    }
+                    // Cache-miss for received message: run the ratchet exactly once, then cache.
+                    // guard covers two filtered cases:
+                    //   nil      → bootstrap sentinel (\u{200B})
+                    //   "·· ··"  → ratchet advanced past this key (forward secrecy, can't re-derive)
+                    // Both are stored as "" so future loads skip without re-touching the ratchet.
+                    guard let plain = decryptContent(m.content, isMine: false),
+                          plain != "·· ··" else {
+                        cachePlaintext(messageId: msg.id, text: "")
+                        return nil
+                    }
+                    cachePlaintext(messageId: msg.id, text: plain)
+                    m.content = plain
+                    return m
+                }
+
+                // Not encrypted (plaintext or unrecognised prefix)
+                guard let plain = decryptContent(m.content, isMine: isMine) else { return nil }
                 m.content = plain
                 return m
             }
@@ -149,12 +194,34 @@ final class ChatViewModel: ObservableObject {
         }
 
         let myId2 = AuthViewModel.shared.currentUser?.id ?? 0
-        guard let plain = decryptContent(m.content, isMine: m.fromUser == myId2) else { return }
+        let isMine2 = m.fromUser == myId2
+        guard let plain = decryptContent(m.content, isMine: isMine2) else {
+            // decryptContent returned nil → bootstrap sentinel (DR2 from peer, decrypted as zero-width space).
+            // Cache the ID as empty so load() skips it without re-running the ratchet.
+            if !isMine2 && m.content.hasPrefix("DR2:") {
+                cachePlaintext(messageId: m.id, text: "")
+            }
+            return
+        }
+        // Filter undecryptable real-time messages (ratchet out of sync).
+        // Cache as "" so load() doesn't re-try the ratchet on history reload.
+        if plain == "·· ··" {
+            if !isMine2 { cachePlaintext(messageId: m.id, text: ""); flushPlaintextCache() }
+            return
+        }
+
         m.content = plain
+
+        // Cache the decrypted plaintext so load() doesn't re-run the ratchet on history reload.
+        // Flush to Keychain immediately (real-time messages, not a batch operation).
+        if !isMine2 {
+            cachePlaintext(messageId: m.id, text: plain)
+            flushPlaintextCache()
+        }
 
         if !messages.contains(where: { $0.id == m.id }) {
             messages.append(m)
-            applyDisappearTimer(to: &messages[messages.count - 1])
+            // disappearsAt is populated from the server's expires_at field (M5).
         }
 
         if m.fromUser == peer.id {
@@ -179,7 +246,8 @@ final class ChatViewModel: ObservableObject {
                 return plain == Self.kBootstrapSentinel ? nil : plain
             }
             return isMine ? nil : "·· ··"
-        } else if content.hasPrefix("ENC:"), let key = legacyKey {
+        } else if content.hasPrefix("ENC:") {
+            guard let key = legacyKey else { return nil }
             return (try? EncryptionService.decrypt(content, using: key)) ?? "·· ··"
         }
         return content
@@ -208,13 +276,18 @@ final class ChatViewModel: ObservableObject {
     /// Called when we receive the peer's ECDH public key.
     /// Derives the shared secret and bootstraps the Double Ratchet with correct Alice/Bob roles.
     private func completeKeyExchange(theirPublicKeyData: Data) {
-        // Skip if this is the same ECDH key we already used to set up the current ratchet.
-        // (Alice uses dhr == theirPublicKeyData; Bob stores the key separately in Keychain
-        //  because Bob's dhr becomes the DR key after the bootstrap step, not the ECDH key.)
+        // Guard: skip re-initialization when we can verify this is the same session.
+        //
+        // Decision table:
+        //   ecdhKeyTag == theirPublicKeyData  → same session, no-op
+        //   ecdhKeyTag  != theirPublicKeyData → peer re-keyed, fall through to re-init
+        //   ecdhKeyTag  missing               → cannot verify; treat as re-key, fall through
         let ecdhKeyTag = "\(Config.Keychain.privateKeyTag).ecdh.peer.\(peer.id)"
-        if ratchetState != nil {
-            if let stored = KeychainService.loadData(ecdhKeyTag), stored == theirPublicKeyData { return }
+        if let stored = KeychainService.loadData(ecdhKeyTag) {
+            if stored == theirPublicKeyData { return }   // Same session — no-op
+            // Different key → peer re-keyed; fall through to re-initialize
         }
+        // ecdhKeyTag missing or peer re-keyed — fall through to (re-)initialize
 
         var privateKey: P384.KeyAgreement.PrivateKey
         if let existing = EncryptionService.loadPrivateKey(conversationId: peer.id) {
@@ -288,10 +361,19 @@ final class ChatViewModel: ObservableObject {
             ratchetState  = state
             DoubleRatchet.save(state, for: peer.id)
 
-            let sent = try await sendWithRetry(content: encrypted)
+            // M5: Pass the expire date to the server so TTL is enforced server-side.
+            let expiresAt = disappearTimer.interval.map { Date().addingTimeInterval($0) }
+            let sent = try await sendWithRetry(content: encrypted, expiresAt: expiresAt)
             var msg  = sent
             msg.content = text          // display plaintext locally
-            applyDisappearTimer(to: &msg)
+
+            // Cache plaintext by server message ID so we can restore it from history
+            // on future loads (DR2 ciphertext cannot be decrypted by the sender).
+            // Flush immediately so the cache survives if the app is killed right after send.
+            cachePlaintext(messageId: sent.id, text: text)
+            flushPlaintextCache()
+
+            // disappearsAt is now populated by the server response decoder — no local override needed.
             messages.append(msg)
         } catch {
             errorMessage = error.localizedDescription
@@ -299,15 +381,86 @@ final class ChatViewModel: ObservableObject {
     }
 
     /// Exponential-backoff retry: 1 s, 2 s, 4 s
-    private func sendWithRetry(content: String, attempt: Int = 0) async throws -> Message {
+    private func sendWithRetry(content: String, expiresAt: Date? = nil, attempt: Int = 0) async throws -> Message {
         do {
-            return try await APIService.shared.sendMessage(toUser: peer.id, content: content)
+            return try await APIService.shared.sendMessage(toUser: peer.id, content: content, expiresAt: expiresAt)
         } catch {
             guard attempt < Self.maxRetries else { throw error }
             let delay = UInt64(pow(2.0, Double(attempt))) * 1_000_000_000
             try? await Task.sleep(nanoseconds: delay)
-            return try await sendWithRetry(content: content, attempt: attempt + 1)
+            return try await sendWithRetry(content: content, expiresAt: expiresAt, attempt: attempt + 1)
         }
+    }
+
+    // MARK: - Sent-message plaintext cache (Keychain-backed, survives reinstall)
+    //
+    // DR2-encrypted messages cannot be decrypted by the sender or after the ratchet
+    // advances past their key (forward secrecy). We persist plaintexts keyed by server
+    // message ID in the Keychain so load() can restore them across app launches AND
+    // reinstalls (Keychain persists; UserDefaults does not).
+    //
+    // Performance: mutations are accumulated in _plaintextCache (in-memory) and flushed
+    // to Keychain in one batch via flushPlaintextCache(). Call flush at the end of load()
+    // and immediately after each real-time send/receive.
+
+    private var _plaintextCache: [String: String]?
+    private var _plaintextCacheDirty = false
+
+    private var plaintextCacheKey: String {
+        "\(Config.Keychain.privateKeyTag).ptcache.\(peer.id)"
+    }
+
+    /// Returns the in-memory cache, loading from Keychain on first access.
+    /// Performs a one-time migration from UserDefaults → Keychain for existing installs.
+    private func plaintextCacheLoaded() -> [String: String] {
+        if let c = _plaintextCache { return c }
+
+        // 1. Try Keychain (survives app reinstall)
+        if let data = KeychainService.loadData(plaintextCacheKey),
+           let dict = try? JSONDecoder().decode([String: String].self, from: data) {
+            _plaintextCache = dict
+            return dict
+        }
+
+        // 2. One-time migration: move UserDefaults cache → Keychain
+        let udKey = "sent_plaintexts_\(peer.id)"
+        if let udDict = UserDefaults.standard.dictionary(forKey: udKey) as? [String: String],
+           !udDict.isEmpty {
+            _plaintextCache = udDict
+            _plaintextCacheDirty = true   // will be written to Keychain on next flush
+            UserDefaults.standard.removeObject(forKey: udKey)
+            return udDict
+        }
+
+        _plaintextCache = [:]
+        return [:]
+    }
+
+    /// Writes the in-memory cache to Keychain if dirty. Safe to call multiple times.
+    private func flushPlaintextCache() {
+        guard _plaintextCacheDirty, let cache = _plaintextCache else { return }
+        if let data = try? JSONEncoder().encode(cache) {
+            KeychainService.saveData(data, for: plaintextCacheKey)
+        }
+        _plaintextCacheDirty = false
+    }
+
+    private func cachePlaintext(messageId: Int, text: String) {
+        var cache = plaintextCacheLoaded()
+        cache["\(messageId)"] = text
+        // Keep only the 500 most recent entries to cap Keychain storage growth
+        if cache.count > 500 {
+            let overflow = cache.count - 500
+            let oldest = cache.keys.compactMap { Int($0) }.sorted().prefix(overflow)
+            oldest.forEach { cache.removeValue(forKey: "\($0)") }
+        }
+        _plaintextCache = cache
+        _plaintextCacheDirty = true
+        // Callers responsible for calling flushPlaintextCache() at an appropriate batch boundary
+    }
+
+    private func loadCachedPlaintext(messageId: Int) -> String? {
+        return plaintextCacheLoaded()["\(messageId)"]
     }
 
     // MARK: - Flush pending messages (queued while encryption was being established)

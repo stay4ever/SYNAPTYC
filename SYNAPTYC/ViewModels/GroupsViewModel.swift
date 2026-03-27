@@ -14,8 +14,7 @@ final class GroupsViewModel: ObservableObject {
     init() {
         // Only reload groups when we receive a structural group event (GKEX = key distribution,
         // not a chat message). Regular chat messages do NOT need a full groups reload.
-        WebSocketService.shared.$incomingGroupMessage
-            .compactMap { $0 }
+        WebSocketService.shared.incomingGroupMessage
             .filter { $0.content.hasPrefix("GKEX:") }
             .debounce(for: .seconds(1), scheduler: RunLoop.main)
             .sink { [weak self] _ in Task { await self?.load() } }

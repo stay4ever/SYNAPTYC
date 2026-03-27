@@ -21,6 +21,8 @@ struct WSMessage: Decodable {
     let encryptedKey: String?
     // User list
     let users: [WSUser]?
+    // M5: Server-side TTL
+    let expiresAt: String?
 
     enum CodingKeys: String, CodingKey {
         case type, id, content, from, to, users, read
@@ -31,6 +33,7 @@ struct WSMessage: Decodable {
         case fromUsername  = "from_username"
         case fromDisplay   = "from_display"
         case encryptedKey  = "encrypted_key"
+        case expiresAt     = "expires_at"
     }
 }
 
@@ -56,20 +59,28 @@ struct KeyExchangeEvent {
 final class WebSocketService: ObservableObject {
     static let shared = WebSocketService()
 
+    // --- State publishers (CurrentValueSubject semantics — replay current value) ---
     @Published var onlineUserIds: Set<Int>          = []
-    @Published var incomingMessage: Message?
-    @Published var incomingGroupMessage: GroupMessage?
-    @Published var incomingKeyExchange: KeyExchangeEvent?
-    @Published var deletedMessageId: Int?
     @Published var typingUsers: Set<Int>            = []
     @Published var isConnected                      = false
+
+    // --- Event publishers (PassthroughSubject — no replay, each event fires once) ---
+    // Using PassthroughSubject prevents stale message replay when a new ChatViewModel
+    // subscribes: a @Published/@CurrentValueSubject would re-deliver the last message
+    // immediately, causing the ratchet to attempt a second decrypt on an already-consumed
+    // ciphertext, corrupting the plaintext cache and hiding messages from history.
+    let incomingMessage      = PassthroughSubject<Message, Never>()
+    let incomingGroupMessage = PassthroughSubject<GroupMessage, Never>()
+    let incomingKeyExchange  = PassthroughSubject<KeyExchangeEvent, Never>()
+    let deletedMessageId     = PassthroughSubject<Int, Never>()
 
     private var webSocketTask: URLSessionWebSocketTask?
     private var pingTimer: Timer?
     private var reconnectTask: Task<Void, Never>?
     private var reconnectAttempt = 0
     private static let maxReconnectDelay: UInt64 = 30_000_000_000 // 30 s cap
-    private static let maxReconnectAttempts = 10
+    // No hard cap — WebSocket retries indefinitely (capped only by delay, not count).
+    // Foreground re-entry resets the counter via connect() → scheduleReconnect rearms.
 
     private init() {}
 
@@ -170,7 +181,6 @@ final class WebSocketService: ObservableObject {
     }
 
     private func scheduleReconnect() {
-        guard reconnectAttempt < Self.maxReconnectAttempts else { return }
         reconnectTask?.cancel()
         let delay = min(
             UInt64(pow(2.0, Double(reconnectAttempt + 1))) * 1_000_000_000,
@@ -199,19 +209,26 @@ final class WebSocketService: ObservableObject {
         switch msg.type {
         case "chat_message":
             if let from = msg.from, let to = msg.to, let content = msg.content, let id = msg.id {
-                let message = Message(
+                var message = Message(
                     id: id, fromUser: from, toUser: to,
                     content: content, read: msg.read ?? false,
                     createdAt: msg.createdAt ?? Self.nowISO()
                 )
-                incomingMessage = message
+                // M5: Populate disappearsAt from the server-provided expires_at field.
+                if let expiresStr = msg.expiresAt {
+                    let fFrac = ISO8601DateFormatter()
+                    fFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    message.disappearsAt = fFrac.date(from: expiresStr)
+                        ?? ISO8601DateFormatter().date(from: expiresStr)
+                }
+                incomingMessage.send(message)
             }
 
         case "key_exchange":
             if let from = msg.from,
                let pubKeyStr = msg.publicKey,
                let pubKeyData = Data(base64Encoded: pubKeyStr) {
-                incomingKeyExchange = KeyExchangeEvent(from: from, publicKeyData: pubKeyData)
+                incomingKeyExchange.send(KeyExchangeEvent(from: from, publicKeyData: pubKeyData))
             }
 
         case "group_message":
@@ -227,7 +244,7 @@ final class WebSocketService: ObservableObject {
                     content: content,
                     createdAt: msg.createdAt ?? Self.nowISO()
                 )
-                incomingGroupMessage = gm
+                incomingGroupMessage.send(gm)
             }
 
         case "mark_read":
@@ -238,7 +255,7 @@ final class WebSocketService: ObservableObject {
                     createdAt: msg.createdAt ?? Self.nowISO()
                 )
                 readMsg.isEncrypted = false
-                incomingMessage = readMsg
+                incomingMessage.send(readMsg)
             }
 
         case "user_list":
@@ -249,7 +266,7 @@ final class WebSocketService: ObservableObject {
 
         case "message_deleted":
             if let id = msg.id {
-                deletedMessageId = id
+                deletedMessageId.send(id)
             }
 
         case "typing":

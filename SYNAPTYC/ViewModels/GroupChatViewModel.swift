@@ -25,8 +25,7 @@ final class GroupChatViewModel: ObservableObject {
         self.encryptionReady = groupKey != nil
 
         // MARK: Incoming group messages
-        WebSocketService.shared.$incomingGroupMessage
-            .compactMap { $0 }
+        WebSocketService.shared.incomingGroupMessage
             .filter { $0.groupId == group.id }
             .receive(on: RunLoop.main)
             .sink { [weak self] gm in
@@ -59,12 +58,10 @@ final class GroupChatViewModel: ObservableObject {
         do {
             let fetched = try await APIService.shared.groupMessages(groupId: group.id)
 
-            // Scan for group key if we don't have one yet
-            if groupKey == nil {
-                for msg in fetched where msg.content.hasPrefix("GKEX:") {
-                    handleGroupKeyMessage(msg)
-                    if groupKey != nil { break }
-                }
+            // Use the MOST RECENT GKEX to get the current group key.
+            // (Multiple members may distribute keys; the last one wins.)
+            if let latestGkex = fetched.last(where: { $0.content.hasPrefix("GKEX:") }) {
+                handleGroupKeyMessage(latestGkex, force: true)
             }
 
             // Generate and distribute a fresh key if still missing
@@ -134,8 +131,8 @@ final class GroupChatViewModel: ObservableObject {
         flushPending(using: key)
     }
 
-    private func handleGroupKeyMessage(_ gm: GroupMessage) {
-        guard groupKey == nil else { return }
+    private func handleGroupKeyMessage(_ gm: GroupMessage, force: Bool = false) {
+        guard force || groupKey == nil else { return }
         let base64 = String(gm.content.dropFirst(5)) // strip "GKEX:"
         guard let keyData = Data(base64Encoded: base64), keyData.count == 32 else { return }
 
