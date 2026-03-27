@@ -20,6 +20,7 @@ final class ChatViewModel: ObservableObject {
     private var cancellables                  = Set<AnyCancellable>()
     private var pendingOutgoing: [String]     = []
     private var keyExchangeInFlight           = false
+    private var consecutiveDecryptFailures    = 0
     private static let maxRetries             = 3
     /// Zero-width space — silent bootstrap message sent by Alice after initAlice so Bob gets his cks
     private static let kBootstrapSentinel     = "\u{200B}"
@@ -210,11 +211,23 @@ final class ChatViewModel: ObservableObject {
             return
         }
         // Filter undecryptable real-time messages (ratchet out of sync).
-        // Cache as "" so load() doesn't re-try the ratchet on history reload.
+        // Track consecutive failures from the peer — after 3 in a row the sessions are
+        // permanently desynced (one party lost their ratchet state). Auto-reset wipes
+        // all local ECDH/ratchet state and kicks off a fresh key exchange so messaging
+        // resumes automatically without user intervention.
         if plain == "·· ··" {
-            if !isMine2 { cachePlaintext(messageId: m.id, text: ""); flushPlaintextCache() }
+            if !isMine2 {
+                cachePlaintext(messageId: m.id, text: "")
+                flushPlaintextCache()
+                consecutiveDecryptFailures += 1
+                if consecutiveDecryptFailures >= 3 {
+                    consecutiveDecryptFailures = 0
+                    Task { await self.resetSession() }
+                }
+            }
             return
         }
+        consecutiveDecryptFailures = 0
 
         m.content = plain
 
@@ -290,10 +303,14 @@ final class ChatViewModel: ObservableObject {
         //   ecdhKeyTag  missing               → cannot verify; treat as re-key, fall through
         let ecdhKeyTag = "\(Config.Keychain.privateKeyTag).ecdh.peer.\(peer.id)"
         if let stored = KeychainService.loadData(ecdhKeyTag) {
-            if stored == theirPublicKeyData { return }   // Same session — no-op
-            // Different key → peer re-keyed; fall through to re-initialize
+            // Only treat as same session when ratchetState is also intact.
+            // If ratchetState is nil (cleared by reinstall / Keychain wipe) we must
+            // re-init even if their public key hasn't changed, otherwise we remain
+            // stuck with no ratchet and every message fails.
+            if stored == theirPublicKeyData && ratchetState != nil { return }
+            // Different key OR ratchet lost → fall through to re-initialize
         }
-        // ecdhKeyTag missing or peer re-keyed — fall through to (re-)initialize
+        // ecdhKeyTag missing or peer re-keyed or ratchet lost — fall through to (re-)initialize
 
         var privateKey: P384.KeyAgreement.PrivateKey
         if let existing = EncryptionService.loadPrivateKey(conversationId: peer.id) {
@@ -301,11 +318,13 @@ final class ChatViewModel: ObservableObject {
         } else {
             privateKey = EncryptionService.generateKeyPair()
             EncryptionService.storePrivateKey(privateKey, conversationId: peer.id)
-            // Send our key back so the peer can complete their side
-            let pubBase64 = EncryptionService.publicKeyData(from: privateKey).base64EncodedString()
-            WebSocketService.shared.sendKeyExchange(to: peer.id, publicKey: pubBase64)
-            Task { _ = try? await APIService.shared.sendMessage(toUser: peer.id, content: "KEX:\(pubBase64)") }
         }
+        // ALWAYS send our public key back so the peer can complete their side.
+        // Previously this was only done when generating a NEW key, meaning any peer
+        // who reset their session would never get our response and stay stuck.
+        let pubBase64 = EncryptionService.publicKeyData(from: privateKey).base64EncodedString()
+        WebSocketService.shared.sendKeyExchange(to: peer.id, publicKey: pubBase64)
+        Task { _ = try? await APIService.shared.sendMessage(toUser: peer.id, content: "KEX:\(pubBase64)") }
 
         guard let sharedSymKey = try? EncryptionService.deriveSharedKey(
             myPrivateKey: privateKey,
@@ -472,6 +491,26 @@ final class ChatViewModel: ObservableObject {
 
     private func loadCachedPlaintext(messageId: Int) -> String? {
         return plaintextCacheLoaded()["\(messageId)"]
+    }
+
+    // MARK: - Session reset (auto-recovery from permanent desync)
+
+    /// Wipes all local ECDH and ratchet state for this conversation and kicks off a
+    /// fresh key exchange.  Called automatically after 3 consecutive decrypt failures,
+    /// which signals that one party's ratchet is permanently out of sync with the other's
+    /// (typically caused by a reinstall or Keychain wipe on one device).
+    private func resetSession() async {
+        DoubleRatchet.delete(for: peer.id)
+        ratchetState  = nil
+        encryptionReady = false
+        consecutiveDecryptFailures = 0
+        // Wipe the stored ECDH peer-key tag so completeKeyExchange doesn't
+        // treat the next KEX as a no-op same-session check.
+        let ecdhKeyTag = "\(Config.Keychain.privateKeyTag).ecdh.peer.\(peer.id)"
+        KeychainService.delete(ecdhKeyTag)
+        // Wipe our own ECDH private key so we generate a fresh one in initiateKeyExchange.
+        KeychainService.delete("\(Config.Keychain.privateKeyTag).\(peer.id)")
+        await initiateKeyExchange()
     }
 
     // MARK: - Flush pending messages (queued while encryption was being established)
