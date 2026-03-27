@@ -87,13 +87,19 @@ final class ChatViewModel: ObservableObject {
             // that would destroy the brand-new ratchet.
             let hadRatchetBeforeKEX = ratchetState != nil
 
-            // Attempt key exchange using the most recent KEX from the peer in history.
-            // completeKeyExchange has its own guard logic to skip if the session is already
-            // up-to-date and avoid destroying a live ratchet.
-            let latestPeerKex = fetched.last { $0.content.hasPrefix("KEX:") && $0.fromUser == peer.id }
-            if let kexMsg = latestPeerKex,
-               let pubKeyData = Data(base64Encoded: String(kexMsg.content.dropFirst(4))) {
-                completeKeyExchange(theirPublicKeyData: pubKeyData)
+            // Only attempt key exchange from history when we DON'T have a working
+            // ratchet.  If we already have a valid ratchetState, processing a historical
+            // KEX can needlessly re-initialize the ratchet (destroying the working
+            // session) when the ecdhKeyTag happens to differ due to accumulated KEX
+            // messages from a previous ping-pong cycle.  Real-time re-keying is handled
+            // by the WebSocket subscription (line 49–53 above), which is the correct
+            // path for live session negotiation.
+            if ratchetState == nil {
+                let latestPeerKex = fetched.last { $0.content.hasPrefix("KEX:") && $0.fromUser == peer.id }
+                if let kexMsg = latestPeerKex,
+                   let pubKeyData = Data(base64Encoded: String(kexMsg.content.dropFirst(4))) {
+                    completeKeyExchange(theirPublicKeyData: pubKeyData)
+                }
             }
 
             // If still no ratchet, kick off our own ECDH exchange
@@ -359,12 +365,18 @@ final class ChatViewModel: ObservableObject {
             privateKey = EncryptionService.generateKeyPair()
             EncryptionService.storePrivateKey(privateKey, conversationId: peer.id)
         }
-        // ALWAYS send our public key back so the peer can complete their side.
-        // Previously this was only done when generating a NEW key, meaning any peer
-        // who reset their session would never get our response and stay stuck.
+        // Send our public key back via WebSocket ONLY so the peer can complete
+        // their side in real-time.  Do NOT persist KEX responses as REST messages
+        // because they accumulate in the message history and cause the peer's next
+        // load() to re-find them, fall through completeKeyExchange, re-initialize
+        // the ratchet (destroying the working session), and send yet another REST
+        // KEX back — creating a slow-motion ping-pong that prevents any messages
+        // from being delivered.
+        //
+        // Only initiateKeyExchange() persists the KEX via REST (one-time, to seed
+        // the conversation so the offline peer can bootstrap on their first load).
         let pubBase64 = EncryptionService.publicKeyData(from: privateKey).base64EncodedString()
         WebSocketService.shared.sendKeyExchange(to: peer.id, publicKey: pubBase64)
-        Task { _ = try? await APIService.shared.sendMessage(toUser: peer.id, content: "KEX:\(pubBase64)") }
 
         guard let sharedSymKey = try? EncryptionService.deriveSharedKey(
             myPrivateKey: privateKey,
