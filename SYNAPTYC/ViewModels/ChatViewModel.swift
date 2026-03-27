@@ -103,6 +103,12 @@ final class ChatViewModel: ObservableObject {
             // would corrupt the ratchet making subsequent messages unreadable. We therefore
             // cache every decrypted plaintext by server message-ID on first decrypt, and
             // serve from that cache on all subsequent loads.
+            // Track fresh (not previously cached) DR2 decryption failures from the peer.
+            // If the count is high, the ratchet is permanently desynced and we need to
+            // reset — this is the ONLY way to detect desync from history, since
+            // handleIncoming's counter only fires for real-time WS messages.
+            var freshDR2Failures = 0
+
             let display: [Message] = fetched.compactMap { msg in
                 if msg.content.hasPrefix("KEX:") { return nil }
                 var m = msg
@@ -132,6 +138,7 @@ final class ChatViewModel: ObservableObject {
                     guard let plain = decryptContent(m.content, isMine: false),
                           plain != "·· ··" else {
                         cachePlaintext(messageId: msg.id, text: "")
+                        if msg.content.hasPrefix("DR2:") { freshDR2Failures += 1 }
                         return nil
                     }
                     cachePlaintext(messageId: msg.id, text: plain)
@@ -144,6 +151,15 @@ final class ChatViewModel: ObservableObject {
                 m.content = plain
                 return m
             }
+
+            // Detect permanent session desync from history.
+            // If 2+ fresh DR2 messages from the peer failed to decrypt, the ratchet is
+            // irrecoverably out of sync. Wipe everything and start a fresh key exchange
+            // so the next conversation heals automatically without user intervention.
+            if freshDR2Failures >= 2 {
+                await resetSession()
+            }
+
             // Merge WebSocket-arrived messages that came in during the async API fetch.
             // handleIncoming() may have appended messages to `messages` while we were
             // awaiting the HTTP response; those IDs won't be in `fetched`, so a plain
@@ -220,7 +236,7 @@ final class ChatViewModel: ObservableObject {
                 cachePlaintext(messageId: m.id, text: "")
                 flushPlaintextCache()
                 consecutiveDecryptFailures += 1
-                if consecutiveDecryptFailures >= 3 {
+                if consecutiveDecryptFailures >= 2 {
                     consecutiveDecryptFailures = 0
                     Task { await self.resetSession() }
                 }
