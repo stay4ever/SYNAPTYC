@@ -1,10 +1,12 @@
 import SwiftUI
 
+// MARK: - Conversations List (DMs)
+
 struct ConversationsListView: View {
-    @StateObject private var vm         = ConversationsViewModel()
-    @StateObject private var groupsVM   = GroupsViewModel()
-    @State private var searchText       = ""
-    @State private var showCreateGroup  = false
+    @StateObject private var contactsVM = ContactsViewModel()
+    @ObservedObject private var convoVM  = ConversationsViewModel.shared
+    @State private var searchText        = ""
+    @State private var showCompose       = false
     @State private var selectedPeer: AppUser? = nil
 
     private let columns = [
@@ -12,39 +14,59 @@ struct ConversationsListView: View {
         GridItem(.flexible(), spacing: 12)
     ]
 
-    var filtered: [AppUser] {
-        let visible = vm.users.filter { !vm.hiddenUserIds.contains($0.id) }
-        if searchText.isEmpty { return visible }
-        return visible.filter {
+    /// Accepted contacts mapped to their AppUser, filtered by search
+    private var chatUsers: [AppUser] {
+        let users = contactsVM.acceptedContacts.compactMap { $0.otherUser }
+        if searchText.isEmpty { return users }
+        return users.filter {
             $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.username.localizedCaseInsensitiveContains(searchText) ||
-            $0.displayName?.localizedCaseInsensitiveContains(searchText) == true
+            $0.username.localizedCaseInsensitiveContains(searchText)
         }
     }
 
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
-                // Metallic background
-                MetallicBackground()
+                Color.deepBlack.ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    // Pending requests banner
+                    if !contactsVM.pendingIncoming.isEmpty {
+                        Button { showCompose = true } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "person.crop.circle.badge.clock")
+                                    .foregroundColor(.amber)
+                                    .font(.system(size: 14))
+                                Text("\(contactsVM.pendingIncoming.count) pending contact request\(contactsVM.pendingIncoming.count != 1 ? "s" : "")")
+                                    .font(.monoCaption)
+                                    .foregroundColor(.amber)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.amber.opacity(0.6))
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.amber.opacity(0.1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     // Search bar
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass")
-                            .foregroundColor(.matrixGreen)
+                            .foregroundColor(.matrixGreen.opacity(0.55))
                             .font(.system(size: 14))
-                        TextField("Search conversations…", text: $searchText)
+                        TextField("Search chats…", text: $searchText)
                             .font(.monoBody)
                             .foregroundColor(.neonGreen)
                             .tint(.neonGreen)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
-                            .submitLabel(.search)
                         if !searchText.isEmpty {
                             Button { searchText = "" } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.matrixGreen.opacity(0.6))
+                                    .foregroundColor(.matrixGreen.opacity(0.5))
                             }
                         }
                     }
@@ -56,50 +78,45 @@ struct ConversationsListView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
 
-                    if vm.isLoading && vm.users.isEmpty {
+                    if contactsVM.isLoading && contactsVM.acceptedContacts.isEmpty {
                         Spacer()
                         ProgressView().tint(.neonGreen)
+                        Spacer()
+                    } else if chatUsers.isEmpty {
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 40))
+                                .foregroundColor(.matrixGreen.opacity(0.3))
+                            Text(searchText.isEmpty ? "No contacts yet" : "No match")
+                                .font(.monoHeadline)
+                                .foregroundColor(.matrixGreen.opacity(0.6))
+                            if searchText.isEmpty {
+                                Text("Tap the pencil icon to find people")
+                                    .font(.monoCaption)
+                                    .foregroundColor(.matrixGreen.opacity(0.4))
+                            }
+                        }
                         Spacer()
                     } else {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 12) {
-                                // Banner AI card (always first)
-                                NavigationLink(destination: BotChatView()) {
-                                    BotCard()
-                                }
-                                .buttonStyle(.plain)
-
-                                // User cards
-                                if filtered.isEmpty && !searchText.isEmpty {
-                                    // empty search result spans both columns
-                                    VStack(spacing: 8) {
-                                        Image(systemName: "magnifyingglass")
-                                            .font(.system(size: 24))
-                                            .foregroundColor(.matrixGreen.opacity(0.3))
-                                        Text("No match")
-                                            .font(.monoCaption)
-                                            .foregroundColor(.matrixGreen.opacity(0.5))
+                                ForEach(chatUsers) { user in
+                                    Button {
+                                        convoVM.clearUnread(for: user.id)
+                                        selectedPeer = user
+                                    } label: {
+                                        ConversationCard(
+                                            user: user,
+                                            unread: convoVM.unreadCounts[user.id] ?? 0
+                                        )
                                     }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.top, 20)
-                                } else {
-                                    ForEach(filtered) { user in
-                                        Button {
-                                            vm.clearUnread(for: user.id)
-                                            selectedPeer = user
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            // Nothing to hide — contacts managed in Contacts tab
                                         } label: {
-                                            ConversationCard(
-                                                user: user,
-                                                unread: vm.unreadCounts[user.id] ?? 0
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                        .contextMenu {
-                                            Button(role: .destructive) {
-                                                vm.hideConversation(userId: user.id)
-                                            } label: {
-                                                Label("Delete Conversation", systemImage: "trash")
-                                            }
+                                            Label("Open Chat", systemImage: "bubble.left")
                                         }
                                     }
                                 }
@@ -107,92 +124,53 @@ struct ConversationsListView: View {
                             .padding(.horizontal, 14)
                             .padding(.bottom, 20)
                         }
-                        .refreshable { await vm.loadUsers() }
+                        .refreshable { await contactsVM.load() }
                     }
                 }
 
-                // Floating + button to create a group
-                Button { showCreateGroup = true } label: {
+                // Compose button — opens Contacts to find people / manage requests
+                Button { showCompose = true } label: {
                     ZStack {
                         Circle()
                             .fill(Color.darkGreen.opacity(0.75))
-                            .frame(width: 46, height: 46)
-                            .overlay(
-                                Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1)
-                            )
+                            .frame(width: 50, height: 50)
+                            .overlay(Circle().stroke(Color.neonGreen.opacity(0.4), lineWidth: 1))
                             .shadow(color: Color.neonGreen.opacity(0.25), radius: 8)
-                        Image(systemName: "plus")
-                            .font(.system(size: 18, weight: .semibold))
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(.neonGreen)
                     }
                 }
-                .padding(.trailing, 82)
+                .padding(.trailing, 18)
                 .padding(.bottom, 16)
+                .accessibilityLabel("Find people")
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("SYNAPTYC")
+                    Text("CHATS")
                         .font(.monoHeadline)
                         .foregroundColor(.neonGreen)
                         .glowText()
                 }
             }
         }
-        .task { await vm.loadUsers() }
-        .sheet(isPresented: $showCreateGroup) {
-            CreateGroupSheet { name, desc, avatarData in
-                Task {
-                    _ = try? await groupsVM.createGroup(name: name, description: desc, avatarData: avatarData)
-                    showCreateGroup = false
-                }
-            }
+        .task { await contactsVM.load() }
+        .sheet(isPresented: $showCompose) {
+            ContactsView()
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(item: $selectedPeer) { peer in
-            NavigationStack {
-                ChatView(peer: peer)
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+            NavigationStack { ChatView(peer: peer) }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 }
 
-// MARK: - Metallic background
-
-struct MetallicBackground: View {
-    var body: some View {
-        ZStack {
-            // Base dark gradient
-            LinearGradient(
-                colors: [Color(white: 0.11), Color(white: 0.05)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            // Subtle vertical gloss band
-            LinearGradient(
-                colors: [Color(white: 1.0, opacity: 0.04), Color.clear],
-                startPoint: .top,
-                endPoint: .center
-            )
-            // Fine noise texture via repeating diagonal lines (lightweight)
-            Canvas { ctx, size in
-                var y: CGFloat = 0
-                while y < size.height {
-                    var path = Path()
-                    path.move(to: CGPoint(x: 0, y: y))
-                    path.addLine(to: CGPoint(x: size.width, y: y))
-                    ctx.stroke(path, with: .color(white: 1.0, opacity: 0.012), lineWidth: 1)
-                    y += 3
-                }
-            }
-        }
-        .ignoresSafeArea()
-    }
-}
-
-// MARK: - Conversation Card
+// MARK: - Conversation Card (square grid tile)
 
 struct ConversationCard: View {
     let user: AppUser
@@ -223,7 +201,7 @@ struct ConversationCard: View {
                         initialsCircle(user: user)
                     }
 
-                    // Online indicator dot
+                    // Online dot
                     if isOnline {
                         Circle()
                             .fill(Color.neonGreen)
@@ -259,35 +237,24 @@ struct ConversationCard: View {
             .background(
                 ZStack {
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(white: 0.18), Color(white: 0.07)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(LinearGradient(
+                            colors: [Color(white: 0.18), Color(white: 0.07)],
+                            startPoint: .topLeading, endPoint: .bottomTrailing))
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(white: 1.0, opacity: 0.09), Color.clear],
-                                startPoint: .top,
-                                endPoint: .center
-                            )
-                        )
-                    // Green border glow for online, muted for offline
+                        .fill(LinearGradient(
+                            colors: [Color(white: 1.0, opacity: 0.09), Color.clear],
+                            startPoint: .top, endPoint: .center))
                     RoundedRectangle(cornerRadius: 20)
                         .stroke(
                             isOnline ? Color.neonGreen.opacity(0.35) : Color.neonGreen.opacity(0.08),
-                            lineWidth: isOnline ? 1.5 : 1
-                        )
+                            lineWidth: isOnline ? 1.5 : 1)
                 }
             )
             .shadow(
                 color: isOnline ? Color.neonGreen.opacity(0.12) : Color.black.opacity(0.4),
-                radius: isOnline ? 8 : 5, x: 0, y: 3
-            )
+                radius: isOnline ? 8 : 5, x: 0, y: 3)
 
-            // Red notification bubble
+            // Unread badge
             if unread > 0 {
                 ZStack {
                     Circle()
@@ -322,61 +289,5 @@ struct ConversationCard: View {
     }
 }
 
-// MARK: - Bot Card
-
-struct BotCard: View {
-    var body: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.darkGreen, Color(white: 0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 52, height: 52)
-                    .overlay(Circle().stroke(Color.neonGreen.opacity(0.5), lineWidth: 1.5))
-                Image(systemName: "cpu.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(.neonGreen)
-            }
-
-            Text("Banner AI")
-                .font(.monoCaption).fontWeight(.semibold)
-                .foregroundColor(.neonGreen)
-
-            PulsatingDot(color: .neonGreen, size: 5)
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(white: 0.18), Color(white: 0.07)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(white: 1.0, opacity: 0.09), Color.clear],
-                            startPoint: .top,
-                            endPoint: .center
-                        )
-                    )
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color.neonGreen.opacity(0.25), lineWidth: 1)
-            }
-        )
-        .shadow(color: Color.black.opacity(0.5), radius: 6, x: 0, y: 3)
-    }
-}
-
-// Keep old row types available for any remaining references
+// Legacy alias
 typealias ConversationRow = ConversationCard
