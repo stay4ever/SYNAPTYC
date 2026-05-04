@@ -19,6 +19,7 @@ struct SettingsView: View {
     @State private var localAvatarImage: UIImage?
     @State private var avatarError: String?
     @State private var showPhoneSheet        = false
+    @State private var showTrippyCamera      = false
 
     var body: some View {
         NavigationStack {
@@ -133,6 +134,27 @@ struct SettingsView: View {
                             }
                         }
 
+                        // Mushroom Trip Camera (experimental)
+                        settingsSection(title: "TRIPPY CAM") {
+                            Button { showTrippyCamera = true } label: {
+                                HStack {
+                                    Image(systemName: "camera.aperture")
+                                        .foregroundColor(.matrixGreen).frame(width: 22)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Mushroom Trip Camera").font(.monoBody).foregroundColor(.neonGreen)
+                                        Text("Live psychedelic filter")
+                                            .font(.monoCaption)
+                                            .foregroundColor(.matrixGreen.opacity(0.6))
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.matrixGreen.opacity(0.5))
+                                        .font(.system(size: 12))
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+
                         // Security section
                         settingsSection(title: "SECURITY") {
                             settingsRow(icon: "lock.shield.fill", label: "Encryption", value: "End-to-end")
@@ -241,6 +263,9 @@ struct SettingsView: View {
             Text("Your encryption keys remain stored on this device.")
         }
         .sheet(isPresented: $showChangePassword) { ChangePasswordSheet() }
+        .fullScreenCover(isPresented: $showTrippyCamera) {
+            MushroomTripCameraView()
+        }
         .sheet(isPresented: $showPhoneSheet) {
             PhoneNumberSheet { phone in
                 Task {
