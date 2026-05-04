@@ -24,6 +24,7 @@
 		598727CF52404A1EAAE5AF21 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = B348EF163F84408F8382F22B /* MessageBubble.swift */; };
 		61187D622416452D8942AFB5 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 359DA86FE2F146548C8B14BA /* ConversationsListView.swift */; };
 		65C0CC61AA0D48E187404C6E /* EncryptionBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E15081408C4DBF87A64CA7 /* EncryptionBadge.swift */; };
+		MTC1BF000000000000ABCD1 /* MushroomTripCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = MTC1FR000000000000ABCD1 /* MushroomTripCameraView.swift */; };
 		6A8B3D7C81094F768DBD4F12 /* ConversationsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF6BBB0A568841268135A65D /* ConversationsViewModel.swift */; };
 		7936ECE0D8C04B1783F17328 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C6662E259B6438A929C0820 /* Config.swift */; };
 		7A17230F27CFEC7BACBA5EB1 /* BannerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7060643B8FBE9D1270A8B298 /* BannerService.swift */; };
@@ -143,6 +144,7 @@
 		F18C7510F9BD47D3BD0FC1C0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F4D76F8A330F49528BCFE3ED /* BotChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BotChatView.swift; sourceTree = "<group>"; };
 		F6E15081408C4DBF87A64CA7 /* EncryptionBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptionBadge.swift; sourceTree = "<group>"; };
+		MTC1FR000000000000ABCD1 /* MushroomTripCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MushroomTripCameraView.swift; sourceTree = "<group>"; };
 		FF2297550EB34F2CA0CF05FA /* NeonTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeonTextField.swift; sourceTree = "<group>"; };
 		FF6BBB0A568841268135A65D /* ConversationsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationsViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -265,6 +267,7 @@
 				FF2297550EB34F2CA0CF05FA /* NeonTextField.swift */,
 				B202E1F5D7EE4CB7B5DBEC4B /* OnlineDot.swift */,
 				F6E15081408C4DBF87A64CA7 /* EncryptionBadge.swift */,
+				MTC1FR000000000000ABCD1 /* MushroomTripCameraView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -531,6 +534,7 @@
 				D66FE9CADEE64638AC3B2F72 /* NeonTextField.swift in Sources */,
 				450EE32A63CB4BED873DA79A /* OnlineDot.swift in Sources */,
 				65C0CC61AA0D48E187404C6E /* EncryptionBadge.swift in Sources */,
+				MTC1BF000000000000ABCD1 /* MushroomTripCameraView.swift in Sources */,
 				91762E2F6FF146D7A3A4B1BC /* Group.swift in Sources */,
 				26D6E481816344369547B5AF /* GroupChatViewModel.swift in Sources */,
 				BC40967AEBC747208E752EF0 /* GroupsViewModel.swift in Sources */,
